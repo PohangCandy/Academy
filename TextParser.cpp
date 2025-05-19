@@ -16,6 +16,7 @@ class CParser
 	//int MaxUser = 0;
 	char* filedata = (char*)malloc(sizeof(char));
 	int* filesize = (int*)malloc(sizeof(int));
+	char* current = nullptr;
 
 public: CParser() {}
 
@@ -36,8 +37,8 @@ public: CParser() {}
 		  fseek(f, 0, SEEK_END);
 		  *filesize = ftell(f);
 		  fseek(f, 0, SEEK_SET);
-		  //¿øº»À» °¡¸®Å³ ¹öÆÛ¿Í ¹®ÀÚ¸¦ ÀúÀåÇÒ ¹öÆÛ
-		  //ÀúÀåÇÑ ¹®ÀÚ¸¦ ´ãÀ» ¹öÆÛ°¡ ÀÖ¾î¾ßÇÔ.
+		  //ì›ë³¸ì„ ê°€ë¦¬í‚¬ ë²„í¼ì™€ ë¬¸ìë¥¼ ì €ì¥í•  ë²„í¼
+		  //ì €ì¥í•œ ë¬¸ìë¥¼ ë‹´ì„ ë²„í¼ê°€ ìˆì–´ì•¼í•¨.
 		  filedata = (char*)malloc(*filesize + 1);
 		  char* buf = (char*)malloc(1);
 		  for (int i = 0; i < *filesize; i++)
@@ -45,67 +46,115 @@ public: CParser() {}
 			  fread(buf, 1, 1, f);
 			  filedata[i] = *buf;
 		  }
-		  filedata[*filesize + 1] = '/0';
+		  filedata[*filesize] = '/0';
 		  fclose(f);
 		  for (int i = 0; i < *filesize; i++)
 		  {
 			  printf("%c", filedata[i]);
 		  }
+
+		  current = filedata;
 	  }
+
+	  //bool CParser::GetNextWord(char** buf, int* length)
+	  //{
+		 // char** pfiledata;
+		 // *length = 0;
+		 // if (buf == nullptr)
+		 // {
+			//  *buf = filedata;
+		 // }
+
+		 // pfiledata = buf;
+
+		 // if (isalpha(**pfiledata))
+		 // {
+			//  while (isalpha(**pfiledata++))
+			//  {
+			//	  *length++;
+			//  }
+		 //}
+		 // else if (isdigit(**pfiledata))
+		 // {
+			//  while (isdigit(**pfiledata++))
+			//  {
+			//	  *length++;
+			//  }
+		 // }
+		 // else if (**pfiledata == '=')
+		 // {
+
+		 // }
+		 // else
+		 // {
+
+		 // }
+
+		 // return false;
+	  //}
 
 	  bool CParser::GetNextWord(char** buf, int* length)
 	  {
-		  char** pfiledata;
-		  if (buf == nullptr)
+		  // ê³µë°± ë¬¸ì ê±´ë„ˆë›°ê¸°
+		  while (*current && isspace(*current))
 		  {
-			  buf = &filedata;
+			  current++;
 		  }
 
-		  pfiledata = buf;
+		  if (*current == '\0') return false;
 
-		  if (isalpha(**pfiledata))
-		  {
+		  *buf = current;
+		  *length = 0;
 
-		 }
-		  else if (isdigit(**pfiledata))
-		  {
-
+		  if (isalpha(*current)) {
+			  while (*current != '\0' && isalpha(*current)) {
+				  (*length)++;
+				  current++;
+			  }
 		  }
-		  else if (isdigit(**pfiledata))
-		  {
-
+		  else if (isdigit(*current)) {
+			  while (*current != '\0' && isdigit(*current)) {
+				  (*length)++;
+				  current++;
+			  }
 		  }
-		  else
-		  {
-
+		  else if (*current == '=') {
+			  *length = 1;
+			  current++;
+		  }
+		  else {
+			  // ê¸°íƒ€ ë¬¸ì í•˜ë‚˜
+			  *length = 1;
+			  current++;
 		  }
 
-		  return false;
+		  return true;
 	  }
+
 
 	  BOOL CParser::GetValue(const char* szName, int* ipValue)
 	  {
-		  //filedata ¾È¿¡¼­ ´Ü¾î¸¦ Ã£´Â´Ù.
-		 //Ã£Àº ´Ü¾î¸¦ ÀúÀåÇÒ ¹öÆÛ
+		  //filedata ì•ˆì—ì„œ ë‹¨ì–´ë¥¼ ì°¾ëŠ”ë‹¤.
+		 //ì°¾ì€ ë‹¨ì–´ë¥¼ ì €ì¥í•  ë²„í¼
 		  char* chpBuff, chWord[256];
 		  int	iLength;
-		  // Ã£°íÀÚ ÇÏ´Â ´Ü¾î°¡ ³ª¿Ã¶§±îÁö °è¼Ó Ã£À» °ÍÀÌ¹Ç·Î while ¹®À¸·Î °Ë»ç.
+		  // ì°¾ê³ ì í•˜ëŠ” ë‹¨ì–´ê°€ ë‚˜ì˜¬ë•Œê¹Œì§€ ê³„ì† ì°¾ì„ ê²ƒì´ë¯€ë¡œ while ë¬¸ìœ¼ë¡œ ê²€ì‚¬.
 		  while (GetNextWord(&chpBuff, &iLength))
 		  {
-			  // Word ¹öÆÛ¿¡ Ã£Àº ´Ü¾î¸¦ ÀúÀåÇÑ´Ù.
+			  // Word ë²„í¼ì— ì°¾ì€ ë‹¨ì–´ë¥¼ ì €ì¥í•œë‹¤.
 			  memset(chWord, 0, 256);
 			  memcpy(chWord, chpBuff, iLength);
-			  // ÀÎÀÚ·Î ÀÔ·Â ¹ŞÀº ´Ü¾î¿Í °°ÀºÁö °Ë»çÇÑ´Ù.
+			  // ì¸ìë¡œ ì…ë ¥ ë°›ì€ ë‹¨ì–´ì™€ ê°™ì€ì§€ ê²€ì‚¬í•œë‹¤.
 			  if (0 == strcmp(szName, chWord))
 			  {
-				  // ¸Â´Ù¸é ¹Ù·Î µÚ¿¡ = À» Ã£ÀÚ.
+				  // ë§ë‹¤ë©´ ë°”ë¡œ ë’¤ì— = ì„ ì°¾ì.
 				  if (GetNextWord(&chpBuff, &iLength))
 				  {
 					  memset(chWord, 0, 256);
 					  memcpy(chWord, chpBuff, iLength);
 					  if (0 == strcmp(chWord, "="))
 					  {
-						  // = ´ÙÀ½ÀÇ µ¥ÀÌÅÍ ºÎºĞÀ» ¾òÀÚ.
+						  // = ë‹¤ìŒì˜ ë°ì´í„° ë¶€ë¶„ì„ ì–»ì.
 						  if (GetNextWord(&chpBuff, &iLength))
 						  {
 							  memset(chWord, 0, 256);
@@ -131,3 +180,139 @@ int main()
 
 	return 0;
 }
+
+//#define _CRT_SECURE_NO_WARNINGS
+//#undef UNICODE
+//#undef _UNICODE
+//
+//#include <iostream>
+//#include <Windows.h>
+//using namespace std;
+//
+//class CParser
+//{
+//    char* filedata = nullptr;
+//    int filesize = 0;
+//    char* current = nullptr;
+//
+//public:
+//    CParser() {}
+//    ~CParser() {
+//        if (filedata) free(filedata);
+//    }
+//
+//    void LoadFile(const char* filename);
+//    bool GetNextWord(char** buf, int* length);
+//    BOOL GetValue(const char* szName, int* ipValue);
+//};
+//
+//void CParser::LoadFile(const char* filename)
+//{
+//    FILE* f = fopen(filename, "rb");
+//    if (!f) {
+//        cout << "íŒŒì¼ ì—´ê¸° ì‹¤íŒ¨" << endl;
+//        return;
+//    }
+//
+//    fseek(f, 0, SEEK_END);
+//    filesize = ftell(f);
+//    fseek(f, 0, SEEK_SET);
+//
+//    filedata = (char*)malloc(filesize + 1);  // +1 for null terminator
+//    fread(filedata, 1, filesize, f);
+//    filedata[filesize] = '\0';  // null terminator ì¶”ê°€
+//
+//    fclose(f);
+//
+//    printf("íŒŒì¼ ë‚´ìš©:\n%s\n", filedata);  // ë””ë²„ê¹…ìš© ì¶œë ¥
+//    current = filedata;
+//}
+//
+//bool CParser::GetNextWord(char** buf, int* length)
+//{
+//    // ê³µë°± ë¬¸ì ê±´ë„ˆë›°ê¸°
+//    while (*current && isspace(*current)) {
+//        current++;
+//    }
+//
+//    if (*current == '\0') return false;
+//
+//    *buf = current;
+//    *length = 0;
+//
+//    if (isalpha(*current)) {
+//        while (*current != '\0' && isalpha(*current)) {
+//            (*length)++;
+//            current++;
+//        }
+//    }
+//    else if (isdigit(*current)) {
+//        while (*current != '\0' && isdigit(*current)) {
+//            (*length)++;
+//            current++;
+//        }
+//    }
+//    else if (*current == '=') {
+//        *length = 1;
+//        current++;
+//    }
+//    else {
+//        *length = 1;
+//        current++;
+//    }
+//
+//    return true;
+//}
+//
+//BOOL CParser::GetValue(const char* szName, int* ipValue)
+//{
+//    char* chpBuff, chWord[256];
+//    int iLength;
+//
+//    while (GetNextWord(&chpBuff, &iLength))
+//    {
+//        memset(chWord, 0, 256);
+//        memcpy(chWord, chpBuff, iLength);
+//
+//        if (strcmp(szName, chWord) == 0)
+//        {
+//            if (GetNextWord(&chpBuff, &iLength))
+//            {
+//                memset(chWord, 0, 256);
+//                memcpy(chWord, chpBuff, iLength);
+//
+//                if (strcmp(chWord, "=") == 0)
+//                {
+//                    if (GetNextWord(&chpBuff, &iLength))
+//                    {
+//                        memset(chWord, 0, 256);
+//                        memcpy(chWord, chpBuff, iLength);
+//                        *ipValue = atoi(chWord);
+//                        return TRUE;
+//                    }
+//                }
+//            }
+//            return FALSE;
+//        }
+//    }
+//    return FALSE;
+//}
+//
+//int main()
+//{
+//    CParser Parser;
+//    int iValue1 = 0;
+//
+//    Parser.LoadFile("test.txt");
+//
+//    if (Parser.GetValue("Version", &iValue1))
+//    {
+//        cout << "Version ê°’: " << iValue1 << endl;
+//    }
+//    else
+//    {
+//        cout << "Version í‚¤ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤." << endl;
+//    }
+//
+//    return 0;
+//}
