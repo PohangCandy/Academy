@@ -59,6 +59,79 @@ void EnemyFire(tag_Enemy* ep, tag_Bullet* bp)
 
 }
 
+void LoadEnemy(tag_Enemy* e)
+{
+
+	static CParser Parser;
+	char fshape = '@';
+	int fx = 0;
+	int fy = 0;
+	int fdirectionX = 0;
+	int fhp = 0;
+	int ffirePassability = 0;
+	int fbActive = 0;
+
+	bool bSuccess = false;
+
+	if (!Parser.LoadFile("EnemyA.txt"))
+	{
+		printf("파일 로딩 실패\n");
+	};
+
+	do {
+		if (!Parser.GetValue("EnemyAXpos", &fx))
+		{
+			break;
+		}
+		if (!Parser.GetValue("EnemyAYpos", &fy))
+		{
+			break;
+		}
+		if (!Parser.GetCharacter("EnemyAshape", &fshape))
+		{
+			break;
+		}
+		if (!Parser.GetValue("EnemyAdirectionX", &fdirectionX))
+		{
+			break;
+		}
+		if (!Parser.GetValue("EnemyAhp", &fhp))
+		{
+			break;
+		}
+		if (!Parser.GetValue("EnemyAfirePassability", &ffirePassability))
+		{
+			break;
+		}
+		if (!Parser.GetValue("EnemyAActive", &fbActive))
+		{
+			break;
+		}
+
+		bSuccess = true;
+	} while (0);
+
+	if (!bSuccess)
+	{
+		printf("데이터 값 로딩 실패\n");
+		return;
+	}
+
+	if (fx < 0 || fx >= dfSCREEN_WIDTH || fy < 0 || fy >= dfSCREEN_HEIGHT)
+	{
+		printf("잘못된 플레이어 위치\n");
+		return;
+	}
+
+	e->x = fx;
+	e->y = fy;
+	e->shape = fshape;
+	e->directionX = fdirectionX;
+	e->hp = fhp;
+	e->firePassability = ffirePassability;
+	e->Active = (bool)fbActive;
+}
+
 
 //--------------------------------------------------------------------
 // 총알 충돌 체크

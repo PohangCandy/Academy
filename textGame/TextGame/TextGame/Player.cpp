@@ -58,7 +58,7 @@ void LoadPlayer(tag_Player* p)
 
 	if (!Parser.LoadFile("test.txt"))
 	{
-		printf("파일 로딩 실패\n");
+		printf("플레이어 파일 로딩 실패\n");
 	};
 
 	do {
