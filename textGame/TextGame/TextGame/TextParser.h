@@ -24,5 +24,7 @@ public: CParser() {}
 
 	  bool GetCharacter(const char* szName, char* cdata);
 
+	  bool GetStringWord(const char** chppBuffer, int* ipLength);
+
 	  bool IsValid();
 };

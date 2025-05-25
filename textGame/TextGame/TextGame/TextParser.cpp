@@ -38,6 +38,7 @@
 
 	  bool CParser::GetNextWord(char** buf, int* length)
 	  {
+		  //커서가 가리키는 단어가 널 문자일 경우
 		  if (!IsValid()) return false;
 		  // 공백 문자 건너뛰기
 		  while (IsValid() && isspace(*current))
@@ -49,6 +50,7 @@
 		  *buf = current;
 		  *length = 0;
 
+		  //숫자랑 문자가 다른 단어로 취급됨.
 		  if (isalpha(*current)) {
 			  while (IsValid() && isalpha(*current)) {
 				  (*length)++;
@@ -62,6 +64,18 @@
 			  }
 		  }
 		  else if (*current == '=') {
+			  *length = 1;
+			  current++;
+		  }
+		  else if (*current == '(') {
+			  *length = 1;
+			  current++;
+		  }
+		  else if (*current == ')') {
+			  *length = 1;
+			  current++;
+		  }
+		  else if (*current == ',') {
 			  *length = 1;
 			  current++;
 		  }
@@ -82,7 +96,7 @@
 		  char* chpBuff, chWord[256];
 		  int	iLength;
 
-		  //커서 초기화
+		  //탐색을 시작할 커서를 파일 데이터 가장 앞으로 초기화
 		  current = filedata;
 
 		  // 찾고자 하는 단어가 나올때까지 계속 찾을 것이므로 while 문으로 검사.
@@ -160,6 +174,13 @@
 		  }
 
 		  return FALSE;
+	  }
+
+	  bool CParser::GetStringWord(const char** chppBuffer, int* ipLength)
+	  {
+
+
+		  return false;
 	  }
 
 	  bool CParser::IsValid()

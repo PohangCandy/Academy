@@ -116,14 +116,18 @@ void main(void)
 	//적의 개수보다 하나 더 많이 나눠야 적이 화면 끝에 위치하지 않는다.	
 	int divide = dfSCREEN_WIDTH / (MAXENEMYNUM + 1);
 
-	for (int i = 0; i < MAXENEMYNUM; i++)
-	{
-		EP[i].shape = 'E';
-		EP[i].y = 3;
-		EP[i].x = divide * (i + 1);
-		EP[i].hp = 3;
-		EP[i].Active = 1;
-	}
+	tag_Enemy E;
+	LoadEnemy(&E);
+	EP[0] = E;
+
+	//for (int i = 0; i < MAXENEMYNUM; i++)
+	//{
+	//	EP[i].shape = 'E';
+	//	EP[i].y = 3;
+	//	EP[i].x = divide * (i + 1);
+	//	EP[i].hp = 3;
+	//	EP[i].Active = 1;
+	//}
 
 	//for (int i = 0; i < MAXBULLETNUM; i++)
 	//{
@@ -150,6 +154,7 @@ void main(void)
 		// 1. 키보드 입력부
 		MovePlayer(&P,BP);
 		EnemyFire(EP, BP);
+		//EnemyFire(&E, BP);
 		// 
 		// 2. 로직부 
 		MoveBullet(BP);
