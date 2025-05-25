@@ -1,7 +1,5 @@
-Version = 12
-ServerID = 34
-MaxUser = 100
 PlayerXPos = 40
 PlayerYPos = 23
 PlayerShape = A
-
+PlayerHp = 5
+PlayerActive = 1
