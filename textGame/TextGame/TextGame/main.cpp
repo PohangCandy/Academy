@@ -108,6 +108,8 @@ struct tag_Player
 	char shape = '@';
 	int x = 0;
 	int y = 0;
+	int hp = 0;
+	bool Active = 0;
 };
 
 //--------------------------------------------------------------------
@@ -122,7 +124,11 @@ struct tag_Enemy
 	int x = 0;
 	int y = 0;
 	int directionX = 1;
+	int hp = 3;
+	int firePassability = 50;
+	bool Active = 0;
 };
+tag_Enemy EP[MAXENEMYNUM];
 
 //--------------------------------------------------------------------
 // 총알의 정보
@@ -152,7 +158,7 @@ tag_Bullet BP[MAXBULLETNUM];
 //--------------------------------------------------------------------
 // 키 입력에 따라 플레이어의 위치 좌표 이동
 //--------------------------------------------------------------------
-void MovePlayer(tag_Player* p);
+void MovePlayer(tag_Player* p, tag_Bullet* bp);
 
 //--------------------------------------------------------------------
 // 자동으로 적 위치 좌표 이동
@@ -175,6 +181,16 @@ void MoveBullet(tag_Bullet* bp);
 tag_Bullet* FindBullet(tag_Bullet* bp);
 
 //--------------------------------------------------------------------
+// 적과 총알 충돌 체크
+//--------------------------------------------------------------------
+void CheckBulletCollision(tag_Bullet* bp, tag_Enemy* ep);
+
+//--------------------------------------------------------------------
+// 플레이어와 총알 충돌 체크
+//--------------------------------------------------------------------
+void CheckPlayerHit(tag_Bullet* bp, tag_Player* p);
+
+//--------------------------------------------------------------------
 // 플레이어 파일 데이터 로드
 //--------------------------------------------------------------------
 void LoadPlayer(tag_Player* p);
@@ -182,7 +198,13 @@ void LoadPlayer(tag_Player* p);
 //--------------------------------------------------------------------
 // 플레이어 총알 발사
 //--------------------------------------------------------------------
-void PlayerFire(tag_Player* p);
+void PlayerFire(tag_Player* p, tag_Bullet* bp);
+
+//--------------------------------------------------------------------
+// 적 총알 발사
+//--------------------------------------------------------------------
+void EnemyFire(tag_Enemy* ep, tag_Bullet* bp);
+
 
 
 void main(void)
@@ -192,26 +214,27 @@ void main(void)
 	tag_Player P;
 	LoadPlayer(&P);
 
-	tag_Enemy E[MAXENEMYNUM];
 	//적의 개수보다 하나 더 많이 나눠야 적이 화면 끝에 위치하지 않는다.	
 	int divide = dfSCREEN_WIDTH / (MAXENEMYNUM + 1);
 
 	for (int i = 0; i < MAXENEMYNUM; i++)
 	{
-		E[i].shape = 'E';
-		E[i].y = 3;
-		E[i].x = divide * (i + 1);
+		EP[i].shape = 'E';
+		EP[i].y = 3;
+		EP[i].x = divide * (i + 1);
+		EP[i].hp = 3;
+		EP[i].Active = 1;
 	}
 
-	for (int i = 0; i < MAXBULLETNUM; i++)
-	{
-		BP[i].Active = false;
-		BP[i].shape = 'O';
-		BP[i].bEnemy = false;
-		BP[i].x = 0;
-		BP[i].y = 0;
-		BP[i].directionY = -1;
-	}
+	//for (int i = 0; i < MAXBULLETNUM; i++)
+	//{
+	//	BP[i].Active = false;
+	//	BP[i].shape = 'O';
+	//	BP[i].bEnemy = false;
+	//	BP[i].x = 0;
+	//	BP[i].y = 0;
+	//	BP[i].directionY = -1;
+	//}
 
 	//-------------------------------------------------------------------
 	// 게임의 메인 루프
@@ -226,15 +249,18 @@ void main(void)
 		// GameUpdate() 내부 예시
 		// 
 		// 1. 키보드 입력부
-		MovePlayer(&P);
+		MovePlayer(&P,BP);
+		EnemyFire(EP, BP);
 		// 
 		// 2. 로직부 
+		MoveBullet(BP);
+		MoveEnemy(EP);
+		CheckBulletCollision(BP, EP);
+		CheckPlayerHit(BP, &P);
 		// 3. 랜더부
 			  //예시
 				// 스크린 버퍼를 지움
 				Buffer_Clear();
-				MoveBullet(BP);
-				MoveEnemy(E);
 				// 스크린 버퍼에 객체들 출력
 				//DrawBullet
 				for (int i = 0; i < MAXBULLETNUM; i++)
@@ -248,11 +274,17 @@ void main(void)
 				//DrawEnemy
 				for (int i = 0; i < MAXENEMYNUM; i++)
 				{
-					Sprite_Draw(E[i].x, E[i].y, E[i].shape);
+					if (EP[i].Active)
+					{
+						Sprite_Draw(EP[i].x, EP[i].y, EP[i].shape);
+					}
 				}
 
 				//DrawPlayer
-				Sprite_Draw(P.x, P.y, P.shape);
+				if (P.Active)
+				{
+					Sprite_Draw(P.x, P.y, P.shape);
+				}
 				// 스크린 버퍼를 화면으로 출력
 				Buffer_Flip();
 			
@@ -316,7 +348,7 @@ void Sprite_Draw(int iX, int iY, char chSprite)
 //--------------------------------------------------------------------
 // 키 입력에 따라 플레이어의 위치 좌표 이동
 //--------------------------------------------------------------------
-void MovePlayer(tag_Player* p)
+void MovePlayer(tag_Player* p, tag_Bullet* bp)
 {
 	int dx = 0;
 	int dy = 0;
@@ -339,13 +371,16 @@ void MovePlayer(tag_Player* p)
 	}
 	if (GetAsyncKeyState(VK_SPACE) & 0x8001)
 	{
-		PlayerFire(p);
+		if (p->Active)
+		{
+			PlayerFire(p, bp);
+		}
 	}
 
 	int nx = p->x + dx;
 	int ny = p->y + dy;
 
-	if (nx >= 0 && nx < dfSCREEN_WIDTH - 1 && ny >= 0 && ny < dfSCREEN_HEIGHT)
+	if (p->Active  && nx >= 0 && nx < dfSCREEN_WIDTH - 1 && ny >= 0 && ny < dfSCREEN_HEIGHT)
 	{
 		p->x = p->x + dx;
 		p->y = p->y + dy;
@@ -399,10 +434,12 @@ void MoveBullet(tag_Bullet* bp)
 		{
 			if (bp[i].bEnemy)
 			{
+				bp[i].shape = 'x';
 				bp[i].directionY = 1;
 			}
 			else
 			{
+				bp[i].shape = 'o';
 				bp[i].directionY = -1;
 			}
 
@@ -446,6 +483,8 @@ void LoadPlayer(tag_Player* p)
 	int fx = 0;
 	int fy = 0;
 	char fshape = '@';
+	int fhp = 0;
+	int fbActive = 0;
 
 	bool bSuccess = false;
 
@@ -464,6 +503,14 @@ void LoadPlayer(tag_Player* p)
 			break;
 		}
 		if (!Parser.GetCharacter("PlayerShape", &fshape))
+		{
+			break;
+		}
+		if (!Parser.GetValue("PlayerHp", &fhp))
+		{
+			break;
+		}
+		if (!Parser.GetValue("PlayerActive", &fbActive))
 		{
 			break;
 		}
@@ -486,6 +533,8 @@ void LoadPlayer(tag_Player* p)
 	p->x = fx;
 	p->y = fy;
 	p->shape = fshape;
+	p->hp = fhp;
+	p->Active = (bool)fbActive;
 }
 
 //--------------------------------------------------------------------
@@ -493,9 +542,9 @@ void LoadPlayer(tag_Player* p)
 // 
 // 총알을 플레이어 위치에 생성
 //--------------------------------------------------------------------
-void PlayerFire(tag_Player* p)
+void PlayerFire(tag_Player* p, tag_Bullet* bp)
 {
-	tag_Bullet* tb = FindBullet(BP);
+	tag_Bullet* tb = FindBullet(bp);
 	if (!tb)
 	{
 		printf("남은 총알 없음\n");
@@ -507,3 +556,75 @@ void PlayerFire(tag_Player* p)
 	tb->y = p->y;
 }
 
+//--------------------------------------------------------------------
+// 적 총알 발사
+//--------------------------------------------------------------------
+void EnemyFire(tag_Enemy* ep, tag_Bullet* bp)
+{
+	tag_Bullet* tb;
+	for (int i = 0; i < MAXENEMYNUM; i++)
+	{
+		if (ep[i].Active && (rand() % 100 < ep[i].firePassability))
+		{
+			tb = FindBullet(bp);
+			if (!tb)
+			{
+				printf("남은 총알 없음\n");
+				return;
+			}
+			tb->bEnemy = true;
+			tb->x = ep[i].x;
+			tb->y = ep[i].y;
+		}
+	}
+
+}
+
+
+//--------------------------------------------------------------------
+// 총알 충돌 체크
+//--------------------------------------------------------------------
+void CheckBulletCollision(tag_Bullet* bp, tag_Enemy* ep)
+{
+	for (int i = 0; i < MAXBULLETNUM; i++)
+	{
+		if (!bp[i].Active || bp[i].bEnemy) continue;
+		for (int j = 0; j < MAXENEMYNUM; j++)
+		{
+			if (!ep[j].Active) continue;
+			
+			if (bp[i].x == ep[j].x && bp[i].y == ep[j].y)
+			{
+				bp[i].Active = false;
+				ep[j].hp -= 1;
+				if (ep[j].hp <= 0)
+				{
+					ep[j].Active = false;
+				}
+			}
+		}
+	}
+}
+
+//--------------------------------------------------------------------
+// 플레이어와 총알 충돌 체크
+//--------------------------------------------------------------------
+void CheckPlayerHit(tag_Bullet* bp, tag_Player* p)
+{
+	for (int i = 0; i < MAXBULLETNUM; i++)
+	{
+		if (!bp[i].Active || !bp[i].bEnemy) continue;
+		
+		if (!p->Active) return;
+
+		if (p->x == bp[i].x && p->y == bp[i].y)
+		{
+			bp[i].Active = false;
+			p->hp -= 1;
+			if (p->hp <= 0)
+			{
+				p->Active = false;
+			}
+		}
+	}
+}
