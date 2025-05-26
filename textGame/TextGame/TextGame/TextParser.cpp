@@ -50,40 +50,71 @@
 		  *buf = current;
 		  *length = 0;
 
-		  //숫자랑 문자가 다른 단어로 취급됨.
-		  if (isalpha(*current)) {
-			  while (IsValid() && isalpha(*current)) {
-				  (*length)++;
-				  current++;
+		  bool bIsSymbol = true;
+
+		  do {
+			  if (*current == '=') {
+				  break;
 			  }
-		  }
-		  else if (isdigit(*current)) {
-			  while (IsValid() && isdigit(*current)) {
-				  (*length)++;
-				  current++;
+			  else if (*current == '(') {
+				  break;
 			  }
-		  }
-		  else if (*current == '=') {
+			  else if (*current == ')') {
+				  break;
+			  }
+			  else if (*current == ',') {
+				  break;
+			  }
+
+			  bIsSymbol = false;
+		  } while (0);
+		
+		  if (bIsSymbol)
+		 {
 			  *length = 1;
 			  current++;
-		  }
-		  else if (*current == '(') {
-			  *length = 1;
+			  return true;
+     	 }
+
+		  while (IsValid() && (isalpha(*current) || isdigit(*current) || *current == '-'))
+		  {
+			  (*length)++;
 			  current++;
 		  }
-		  else if (*current == ')') {
-			  *length = 1;
-			  current++;
-		  }
-		  else if (*current == ',') {
-			  *length = 1;
-			  current++;
-		  }
-		  else {
-			  // 기타 문자 하나
-			  *length = 1;
-			  current++;
-		  }
+
+		  //if (isalpha(*current)) {
+			 // while (IsValid() && isalpha(*current)) {
+				//  (*length)++;
+				//  current++;
+			 // }
+		  //}
+		  //else if (isdigit(*current)) {
+			 // while (IsValid() && isdigit(*current)) {
+				//  (*length)++;
+				//  current++;
+			 // }
+		  //}
+		  //else if (*current == '=') {
+			 // *length = 1;
+			 // current++;
+		  //}
+		  //else if (*current == '(') {
+			 // *length = 1;
+			 // current++;
+		  //}
+		  //else if (*current == ')') {
+			 // *length = 1;
+			 // current++;
+		  //}
+		  //else if (*current == ',') {
+			 // *length = 1;
+			 // current++;
+		  //}
+		  //else {
+			 // // 기타 문자 하나
+			 // *length = 1;
+			 // current++;
+		  //}
 
 		  return true;
 	  }

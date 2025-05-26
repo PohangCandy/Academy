@@ -1,0 +1,8 @@
+Enemyshape= A
+EnemyXpos= 40
+EnemyYpos= 3
+EnemydirectionX= 1
+Enemyhp= 3
+EnemyfirePassability= 5
+EnemyActive= 1
+EnemyPattern= pattern0

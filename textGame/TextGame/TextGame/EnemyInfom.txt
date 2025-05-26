@@ -1,0 +1,3 @@
+EnemyNum = 2
+Enemy1
+Enemy2

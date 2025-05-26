@@ -1,6 +1,6 @@
 #include "MovePattern.h"
 
-void LoadPattern()
+bool LoadPattern(tag_Pattern pattern[])
 {
 	static CParser Parser;
 	int typeNum = 0;
@@ -29,18 +29,21 @@ void LoadPattern()
 	if (!bSuccess)
 	{
 		printf("패턴 데이터 값 로딩 실패\n");
-		return;
+		return false;
 	}
 
 	for (int i = 0; i < typeNum; i++)
 	{
 		char p[12];
 		sprintf(p, "pattern%d", i);
-		GetPattern(Parser,p, &PatternP[i], stepNum);
+		strcpy(pattern[i].name, p);
+		pattern[i].stepCount = stepNum;
+		return GetPattern(Parser,p, &pattern[i], stepNum);
 	}
-
 }
 
+//아직 패턴을 추가했을때 오류 잡는부분이 부족함
+//ex) (-1-,1)오류 안나고 정상작동
 bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, int patternSize)
 {
 	//filedata 안에서 단어를 찾는다.
@@ -81,6 +84,13 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 							{
 								memset(chWord, 0, 256);
 								memcpy(chWord, chpBuff, iLength);
+								if (!isdigit(*chWord)) {
+									if (!(*chWord == '-' && isdigit(*(chWord + 1))))
+									{
+										printf("잘못된 행동 패턴 양식\n");
+										return false;
+									}
+								}
 								pattern->Steps[i].x = atoi(chWord);
 							}
 							//,를 찾는다
@@ -95,6 +105,10 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 									{
 										memset(chWord, 0, 256);
 										memcpy(chWord, chpBuff, iLength);
+										if (!isdigit(*chWord)) {
+											printf("잘못된 행동 패턴 양식\n");
+											return false;
+										}
 										pattern->Steps[i].y = atoi(chWord);
 										i++;
 									}
@@ -102,11 +116,16 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 							}
 						}
 					}
-					return false;
+					if (i == patternSize)
+					{
+						return true;
+					}
 				}
 			}
+			printf("잘못된 행동 패턴 양식\n");
 			return false;
 		}
 	}
+	printf("잘못된 행동 패턴 양식\n");
 	return false;
 }

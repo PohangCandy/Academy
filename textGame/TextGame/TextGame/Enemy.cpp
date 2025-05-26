@@ -5,31 +5,68 @@
 // 적들이 단체로 좌우 움직임 반복
 // 가장 오른쪽 적과 왼쪽 적의 x좌표를 기준으로 움직임의 방향 바꿔준다.
 //--------------------------------------------------------------------
-void MoveEnemy(tag_Enemy* E)
+void MoveEnemys(tag_Enemy E[])
 {
-	//우로 이동
-	if (E->directionX == 1)
-	{
-		//dfSCREEN_WIDTH에 \n 들어가므로 dfSCREEN_WIDTH - 1까지만 이동하게 만든다. 
-		if (E[MAXENEMYNUM - 1].x + 1 >= dfSCREEN_WIDTH - 1)
-		{
-			E->directionX = -1;
-		}
-	}
-	//좌로 이동
-	else
-	{
-		if (E[0].x - 1 < 0)
-		{
-			E->directionX = 1;
-		}
-	}
-
-	int nx = E->directionX;
-
 	for (int i = 0; i < MAXENEMYNUM; i++)
 	{
-		E[i].x += nx;
+		if (E[i].Active)
+		{
+			MoveEnemy(&E[i]);
+		}
+
+		//MoveEnemy(&E[i]);
+	}
+}
+
+//--------------------------------------------------------------------
+// 자동으로 적 위치 좌표 이동
+// 적들이 각각 패턴을 기반으로 움직이도록 해준다.
+//--------------------------------------------------------------------
+void MoveEnemy(tag_Enemy* E)
+{
+	////우로 이동
+	//if (E->directionX == 1)
+	//{
+	//	//dfSCREEN_WIDTH에 \n 들어가므로 dfSCREEN_WIDTH - 1까지만 이동하게 만든다. 
+	//	if (E[MAXENEMYNUM - 1].x + 1 >= dfSCREEN_WIDTH - 1)
+	//	{
+	//		E->directionX = -1;
+	//	}
+	//}
+	////좌로 이동
+	//else
+	//{
+	//	if (E[0].x - 1 < 0)
+	//	{
+	//		E->directionX = 1;
+	//	}
+	//}
+
+	//int nx = E->directionX;
+
+	//for (int i = 0; i < MAXENEMYNUM; i++)
+	//{
+	//	E[i].x += nx;
+	//}
+	int Ecurstep = E->pattern.curStep;
+	int ex = E->x;
+	int ey = E->y;
+	int dx = E->pattern.Steps[Ecurstep].x;
+	int dy = E->pattern.Steps[Ecurstep].y;
+
+	if (ex + dx >= 0 && ex + dx < dfSCREEN_WIDTH - 1)
+	{
+		E->x += dx;
+	}
+	if (ey + dy >= 0 && ey + dy < dfSCREEN_HEIGHT)
+	{
+		E->y += dy;
+	}
+
+	E->pattern.curStep++;
+	if (E->pattern.curStep >= E->pattern.stepCount)
+	{
+		E->pattern.curStep = 0;
 	}
 }
 
@@ -59,7 +96,7 @@ void EnemyFire(tag_Enemy* ep, tag_Bullet* bp)
 
 }
 
-void LoadEnemy(tag_Enemy* e)
+bool LoadEnemy(tag_Enemy* e)
 {
 
 	static CParser Parser;
@@ -70,46 +107,46 @@ void LoadEnemy(tag_Enemy* e)
 	int fhp = 0;
 	int ffirePassability = 0;
 	int fbActive = 0;
-	char patternName[12];
+	char patternName[12] = { 0, };
 	tag_Pattern fp;
 
 	bool bSuccess = false;
 
-	if (!Parser.LoadFile("EnemyA.txt"))
+	if (!Parser.LoadFile("Enemy1.txt"))
 	{
 		printf("파일 로딩 실패\n");
 	};
 
 	do {
-		if (!Parser.GetValue("EnemyAXpos", &fx))
+		if (!Parser.GetValue("EnemyXpos", &fx))
 		{
 			break;
 		}
-		if (!Parser.GetValue("EnemyAYpos", &fy))
+		if (!Parser.GetValue("EnemyYpos", &fy))
 		{
 			break;
 		}
-		if (!Parser.GetCharacter("EnemyAshape", &fshape))
+		if (!Parser.GetCharacter("Enemyshape", &fshape))
 		{
 			break;
 		}
-		if (!Parser.GetValue("EnemyAdirectionX", &fdirectionX))
+		if (!Parser.GetValue("EnemydirectionX", &fdirectionX))
 		{
 			break;
 		}
-		if (!Parser.GetValue("EnemyAhp", &fhp))
+		if (!Parser.GetValue("Enemyhp", &fhp))
 		{
 			break;
 		}
-		if (!Parser.GetValue("EnemyAfirePassability", &ffirePassability))
+		if (!Parser.GetValue("EnemyfirePassability", &ffirePassability))
 		{
 			break;
 		}
-		if (!Parser.GetValue("EnemyAActive", &fbActive))
+		if (!Parser.GetValue("EnemyActive", &fbActive))
 		{
 			break;
 		}
-		if (!Parser.GetCharacter("EnemyAPattern", patternName))
+		if (!Parser.GetCharacter("EnemyPattern", patternName))
 		{
 			break;
 		}
@@ -120,13 +157,13 @@ void LoadEnemy(tag_Enemy* e)
 	if (!bSuccess)
 	{
 		printf("적 데이터 값 로딩 실패\n");
-		return;
+		return false;
 	}
 
 	if (fx < 0 || fx >= dfSCREEN_WIDTH || fy < 0 || fy >= dfSCREEN_HEIGHT)
 	{
 		printf("잘못된 적 위치\n");
-		return;
+		return false;
 	}
 
 	e->x = fx;
@@ -140,18 +177,15 @@ void LoadEnemy(tag_Enemy* e)
 	bool findpattern = false;
 	for (int i = 0; i < MAXPATTERNTYPENUM; i++)
 	{
-		if (strcmp(PatternP[i].name, patternName) == 0)
+		if (strcmp(PatternType[i].name, patternName) == 0)
 		{
-			fp = PatternP[i];
+			fp = PatternType[i];
 			e->pattern = fp;
-			findpattern = true;
+			return true;
 		}
 	}
-	if (!findpattern)
-	{
-		printf("패턴 값 못 읽음.\n");
-		return;
-	}
+	printf("패턴 값 못 읽음.\n");
+	return false;
 }
 
 
