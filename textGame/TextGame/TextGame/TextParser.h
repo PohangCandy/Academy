@@ -10,11 +10,12 @@ using namespace std;
 
 class CParser
 {
+public:
 	char* filedata = nullptr;
 	int* filesize = nullptr;
 	char* current = nullptr;
 
-public: CParser() {}
+	 CParser() {}
 
 	  bool LoadFile(const char* filename);
 

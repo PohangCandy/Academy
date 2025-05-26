@@ -6,6 +6,7 @@
 #include "Player.h"
 #include "Bullet.h"
 #include "Enemy.h"
+#include "MovePattern.h"
 
 /*
 * 
@@ -104,6 +105,11 @@ tag_Enemy EP[MAXENEMYNUM];
 //--------------------------------------------------------------------
 tag_Bullet BP[MAXBULLETNUM];
 
+//--------------------------------------------------------------------
+//패턴 메모리풀
+//--------------------------------------------------------------------
+tag_Pattern PatternP[MAXPATTERNTYPENUM];
+
 
 
 void main(void)
@@ -116,9 +122,13 @@ void main(void)
 	//적의 개수보다 하나 더 많이 나눠야 적이 화면 끝에 위치하지 않는다.	
 	int divide = dfSCREEN_WIDTH / (MAXENEMYNUM + 1);
 
+	LoadPattern();
+
 	tag_Enemy E;
 	LoadEnemy(&E);
 	EP[0] = E;
+
+	//LoadPattern();
 
 	//for (int i = 0; i < MAXENEMYNUM; i++)
 	//{
