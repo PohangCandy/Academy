@@ -108,7 +108,7 @@ tag_Bullet BP[MAXBULLETNUM];
 //--------------------------------------------------------------------
 //패턴 메모리풀
 //--------------------------------------------------------------------
-tag_Pattern PatternP[MAXPATTERNTYPENUM];
+tag_Pattern PatternType[MAXPATTERNTYPENUM];
 
 
 
@@ -122,10 +122,16 @@ void main(void)
 	//적의 개수보다 하나 더 많이 나눠야 적이 화면 끝에 위치하지 않는다.	
 	int divide = dfSCREEN_WIDTH / (MAXENEMYNUM + 1);
 
-	LoadPattern();
+	if (!LoadPattern(PatternType))
+	{
+		return;
+	}
 
 	tag_Enemy E;
-	LoadEnemy(&E);
+	if (!LoadEnemy(&E))
+	{
+		return;
+	}
 	EP[0] = E;
 
 	//LoadPattern();
@@ -168,7 +174,7 @@ void main(void)
 		// 
 		// 2. 로직부 
 		MoveBullet(BP);
-		MoveEnemy(EP);
+		MoveEnemys(EP);
 		CheckBulletCollision(BP, EP);
 		CheckPlayerHit(BP, &P);
 		// 3. 랜더부

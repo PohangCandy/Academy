@@ -7,7 +7,7 @@
 //--------------------------------------------------------------------
 // 패턴 반복 횟수
 //--------------------------------------------------------------------
-#define MAXPATTERNSTEPNUM 12
+#define MAXPATTERNSTEPNUM 24
 #include "TextParser.h"
 
 //--------------------------------------------------------------------
@@ -24,17 +24,18 @@ struct tag_Pos
 //--------------------------------------------------------------------
 struct tag_Pattern
 {
-	char name[12];
-	tag_Pos Steps[MAXPATTERNSTEPNUM];
-	int curStep;
+	char name[12] = { 0, };
+	tag_Pos Steps[MAXPATTERNSTEPNUM] = {0,};
+	int stepCount = 0;
+	int curStep = 0;
 };
 
-extern tag_Pattern PatternP[MAXPATTERNTYPENUM];
+extern tag_Pattern PatternType[MAXPATTERNTYPENUM];
 
 //--------------------------------------------------------------------
 //패턴 파일에서 데이터 불러오기
 //--------------------------------------------------------------------
-void LoadPattern();
+bool LoadPattern(tag_Pattern pattern[]);
 
 
 //--------------------------------------------------------------------

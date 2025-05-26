@@ -1,8 +1,0 @@
-EnemyAshape= A
-EnemyAXpos= 40
-EnemyAYpos= 3
-EnemyAdirectionX= 1
-EnemyAhp= 3
-EnemyAfirePassability= 5
-EnemyAActive= 1
-EnemyAPattern= pattern0
