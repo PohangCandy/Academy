@@ -70,6 +70,8 @@ void LoadEnemy(tag_Enemy* e)
 	int fhp = 0;
 	int ffirePassability = 0;
 	int fbActive = 0;
+	char patternName[12];
+	tag_Pattern fp;
 
 	bool bSuccess = false;
 
@@ -107,19 +109,23 @@ void LoadEnemy(tag_Enemy* e)
 		{
 			break;
 		}
+		if (!Parser.GetCharacter("EnemyAPattern", patternName))
+		{
+			break;
+		}
 
 		bSuccess = true;
 	} while (0);
 
 	if (!bSuccess)
 	{
-		printf("데이터 값 로딩 실패\n");
+		printf("적 데이터 값 로딩 실패\n");
 		return;
 	}
 
 	if (fx < 0 || fx >= dfSCREEN_WIDTH || fy < 0 || fy >= dfSCREEN_HEIGHT)
 	{
-		printf("잘못된 플레이어 위치\n");
+		printf("잘못된 적 위치\n");
 		return;
 	}
 
@@ -130,6 +136,22 @@ void LoadEnemy(tag_Enemy* e)
 	e->hp = fhp;
 	e->firePassability = ffirePassability;
 	e->Active = (bool)fbActive;
+
+	bool findpattern = false;
+	for (int i = 0; i < MAXPATTERNTYPENUM; i++)
+	{
+		if (strcmp(PatternP[i].name, patternName) == 0)
+		{
+			fp = PatternP[i];
+			e->pattern = fp;
+			findpattern = true;
+		}
+	}
+	if (!findpattern)
+	{
+		printf("패턴 값 못 읽음.\n");
+		return;
+	}
 }
 
 

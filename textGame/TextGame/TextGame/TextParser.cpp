@@ -163,7 +163,8 @@
 						  {
 							  memset(chWord, 0, 256);
 							  memcpy(chWord, chpBuff, iLength);
-							  *cdata = *chWord;
+							  memcpy(cdata, chWord, iLength);
+							 // *cdata = *chWord;
 							  return TRUE;
 						  }
 						  return FALSE;

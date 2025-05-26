@@ -4,6 +4,7 @@
 #include "Console.h"
 #include "Bullet.h"
 #include "TextParser.h"
+#include "MovePattern.h"
 //--------------------------------------------------------------------
 //적 최대 수
 //--------------------------------------------------------------------
@@ -29,6 +30,7 @@ struct tag_Enemy
 	int hp = 0;
 	int firePassability = 0;
 	bool Active = 0;
+	tag_Pattern pattern;
 };
 
 //--------------------------------------------------------------------
