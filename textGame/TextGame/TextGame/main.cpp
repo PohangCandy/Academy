@@ -7,6 +7,8 @@
 #include "Bullet.h"
 #include "Enemy.h"
 #include "MovePattern.h"
+#include "Stage.h"
+//총알도 모양 다르게 타입별로 파일 데이터로 불러올 수 있을 듯?
 
 /*
 * 
@@ -92,12 +94,14 @@ void Buffer_Clear(void);
 void Sprite_Draw(int iX, int iY, char chSprite);
 
 
-
+//--------------------------------------------------------------------
+//적 타입
+//--------------------------------------------------------------------
+tag_Enemy EnemyType[MAXENEMYTYPE];
 //--------------------------------------------------------------------
 //적 메모리풀
 //--------------------------------------------------------------------
 tag_Enemy EP[MAXENEMYNUM];
-
 
 
 //--------------------------------------------------------------------
@@ -124,36 +128,21 @@ void main(void)
 
 	if (!LoadPattern(PatternType))
 	{
+		printf("페턴 타입 불러오기 실패\n");
 		return;
 	}
 
-	tag_Enemy E;
-	if (!LoadEnemy(&E))
+	if (!LoadEnemys(EnemyType))
 	{
+		printf("적 타입 불러오기 실패\n");
 		return;
 	}
-	EP[0] = E;
 
-	//LoadPattern();
+	LoadStageInfo();
+	//'LoadStage();
 
-	//for (int i = 0; i < MAXENEMYNUM; i++)
-	//{
-	//	EP[i].shape = 'E';
-	//	EP[i].y = 3;
-	//	EP[i].x = divide * (i + 1);
-	//	EP[i].hp = 3;
-	//	EP[i].Active = 1;
-	//}
-
-	//for (int i = 0; i < MAXBULLETNUM; i++)
-	//{
-	//	BP[i].Active = false;
-	//	BP[i].shape = 'O';
-	//	BP[i].bEnemy = false;
-	//	BP[i].x = 0;
-	//	BP[i].y = 0;
-	//	BP[i].directionY = -1;
-	//}
+	//EP[0] = EnemyType[0];
+	//EP[1] = EnemyType[1];
 
 	//-------------------------------------------------------------------
 	// 게임의 메인 루프

@@ -21,11 +21,15 @@ public:
 
 	  bool GetNextWord(char** buf, int* length);
 
+	  bool RemoveSpace();
+
 	  bool GetValue(const char* szName, int* ipValue);
 
 	  bool GetCharacter(const char* szName, char* cdata);
 
 	  bool GetStringWord(const char** chppBuffer, int* ipLength);
+
+	  bool GetOneByte(char* buf);
 
 	  bool IsValid();
 };

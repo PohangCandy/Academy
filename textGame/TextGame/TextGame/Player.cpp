@@ -56,7 +56,7 @@ void LoadPlayer(tag_Player* p)
 
 	bool bSuccess = false;
 
-	if (!Parser.LoadFile("test.txt"))
+	if (!Parser.LoadFile("Player.txt"))
 	{
 		printf("플레이어 파일 로딩 실패\n");
 	};
