@@ -38,8 +38,12 @@ bool LoadPattern(tag_Pattern pattern[])
 		sprintf(p, "pattern%d", i);
 		strcpy(pattern[i].name, p);
 		pattern[i].stepCount = stepNum;
-		return GetPattern(Parser,p, &pattern[i], stepNum);
+		if (!GetPattern(Parser, p, &pattern[i], stepNum))
+		{
+			return false;
+		}
 	}
+	return true;
 }
 
 //아직 패턴을 추가했을때 오류 잡는부분이 부족함
@@ -106,8 +110,11 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 										memset(chWord, 0, 256);
 										memcpy(chWord, chpBuff, iLength);
 										if (!isdigit(*chWord)) {
-											printf("잘못된 행동 패턴 양식\n");
-											return false;
+											if (!(*chWord == '-' && isdigit(*(chWord + 1))))
+											{
+												printf("잘못된 행동 패턴 양식\n");
+												return false;
+											}
 										}
 										pattern->Steps[i].y = atoi(chWord);
 										i++;

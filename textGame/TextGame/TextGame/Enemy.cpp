@@ -24,30 +24,6 @@ void MoveEnemys(tag_Enemy E[])
 //--------------------------------------------------------------------
 void MoveEnemy(tag_Enemy* E)
 {
-	////우로 이동
-	//if (E->directionX == 1)
-	//{
-	//	//dfSCREEN_WIDTH에 \n 들어가므로 dfSCREEN_WIDTH - 1까지만 이동하게 만든다. 
-	//	if (E[MAXENEMYNUM - 1].x + 1 >= dfSCREEN_WIDTH - 1)
-	//	{
-	//		E->directionX = -1;
-	//	}
-	//}
-	////좌로 이동
-	//else
-	//{
-	//	if (E[0].x - 1 < 0)
-	//	{
-	//		E->directionX = 1;
-	//	}
-	//}
-
-	//int nx = E->directionX;
-
-	//for (int i = 0; i < MAXENEMYNUM; i++)
-	//{
-	//	E[i].x += nx;
-	//}
 	int Ecurstep = E->pattern.curStep;
 	int ex = E->x;
 	int ey = E->y;
@@ -96,7 +72,51 @@ void EnemyFire(tag_Enemy* ep, tag_Bullet* bp)
 
 }
 
-bool LoadEnemy(tag_Enemy* e)
+//--------------------------------------------------------------------
+// 적 파일 데이터 로드
+//--------------------------------------------------------------------
+bool LoadEnemys(tag_Enemy e[])
+{
+	static CParser Parser;
+	int typeNum = 0;
+
+	bool bSuccess = false;
+
+	if (!Parser.LoadFile("EnemyInfom.txt"))
+	{
+		printf("적 파일 로딩 실패\n");
+	};
+
+	do {
+		if (!Parser.GetValue("EnemyTypeNum", &typeNum))
+		{
+			break;
+		}
+
+		bSuccess = true;
+	} while (0);
+
+	if (!bSuccess)
+	{
+		printf("적 데이터 값 로딩 실패\n");
+		return false;
+	}
+
+	for (int i = 0; i < typeNum; i++)
+	{
+		char *buff,p[256];
+		char filename[256];
+		int ilength;
+		if(!Parser.RemoveSpace()) return false;
+		Parser.GetNextWord(&buff, &ilength);
+		memset(p, 0, 256);
+		memcpy(p, buff, ilength);
+		sprintf_s(filename, "%s.txt", p);
+		LoadEnemy(&EnemyType[i],filename);
+	}
+}
+
+bool LoadEnemy(tag_Enemy* e, const char* filename)
 {
 
 	static CParser Parser;
@@ -112,7 +132,7 @@ bool LoadEnemy(tag_Enemy* e)
 
 	bool bSuccess = false;
 
-	if (!Parser.LoadFile("Enemy1.txt"))
+	if (!Parser.LoadFile(filename))
 	{
 		printf("파일 로딩 실패\n");
 	};
@@ -175,6 +195,7 @@ bool LoadEnemy(tag_Enemy* e)
 	e->Active = (bool)fbActive;
 
 	bool findpattern = false;
+	//이부분 함수로 만들어서 MovePattern쪽에 넣을까?
 	for (int i = 0; i < MAXPATTERNTYPENUM; i++)
 	{
 		if (strcmp(PatternType[i].name, patternName) == 0)
@@ -184,7 +205,7 @@ bool LoadEnemy(tag_Enemy* e)
 			return true;
 		}
 	}
-	printf("패턴 값 못 읽음.\n");
+	printf("적 값 못 읽음.\n");
 	return false;
 }
 
