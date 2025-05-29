@@ -193,11 +193,67 @@
 		  return FALSE;
 	  }
 
-	  bool CParser::GetStringWord(const char** chppBuffer, int* ipLength)
+	  bool CParser::GetString(const char* szName, char* cdata)
 	  {
+		  //filedata 안에서 단어를 찾는다.
+	  //찾은 단어를 저장할 버퍼
+		  char* chpBuff, chWord[256];
+		  int	iLength;
 
+		  //커서 초기화
+		  current = filedata;
 
-		  return false;
+		  // 찾고자 하는 단어가 나올때까지 계속 찾을 것이므로 while 문으로 검사.
+		  while (GetNextWord(&chpBuff, &iLength))
+		  {
+			  // Word 버퍼에 찾은 단어를 저장한다.
+			  memset(chWord, 0, 256);
+			  memcpy(chWord, chpBuff, iLength);
+			  // 인자로 입력 받은 단어와 같은지 검사한다.
+			  if (0 == strcmp(szName, chWord))
+			  {
+				  // 맞다면 바로 뒤에 = 을 찾자.
+				  if (GetNextWord(&chpBuff, &iLength))
+				  {
+					  memset(chWord, 0, 256);
+					  memcpy(chWord, chpBuff, iLength);
+					  if (0 == strcmp(chWord, "="))
+					  {
+						  // = 다음의 데이터 부분을 얻자.
+						  if (GetStringWord(&chpBuff, &iLength))
+						  {
+							  memset(chWord, 0, 256);
+							  memcpy(chWord, chpBuff, iLength);
+							  memcpy(cdata, chWord, iLength);
+							  // *cdata = *chWord;
+							  return TRUE;
+						  }
+						  return FALSE;
+					  }
+					  return FALSE;
+				  }
+			  }
+		  }
+
+		  return FALSE;
+	  }
+
+	  bool CParser::GetStringWord(char** buf, int* length)
+	  {
+		  if (!RemoveSpace()) return false;
+
+		  if(*current != '"') return false;
+
+		  current++;
+		  *buf = current;
+		  *length = 0;
+		  while (*current != '"')
+		  {
+			  (*length)++;
+			  current++;
+		  }
+
+		  return true;
 	  }
 
 	  bool CParser::GetOneByte(char* buf)

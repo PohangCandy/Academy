@@ -27,7 +27,9 @@ public:
 
 	  bool GetCharacter(const char* szName, char* cdata);
 
-	  bool GetStringWord(const char** chppBuffer, int* ipLength);
+	  bool GetStringWord(char** buf, int* length);
+
+	  bool GetString(const char* szName, char* cdata);
 
 	  bool GetOneByte(char* buf);
 
