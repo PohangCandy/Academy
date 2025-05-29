@@ -8,25 +8,31 @@
 		  f = fopen(filename, "rb");
 		  if (!f)
 		  {
+			  printf("%s 파일 열기 실패\n", filename);
 			  return false;
 		  }
 
-		  filesize = (int*)malloc(sizeof(int));
-
 		  fseek(f, 0, SEEK_END);
-		  *filesize = ftell(f);
+		  filesize = ftell(f);
 		  fseek(f, 0, SEEK_SET);
+
+		  if (filesize < 0)
+		  {
+			  printf("%s 파일 사이즈 읽기 실패\n", filename);
+			  return false;
+		  }
+
 		  //원본을 가리킬 버퍼와 문자를 저장할 버퍼
 		  //저장한 문자를 담을 버퍼가 있어야함.
-		  filedata = (char*)malloc(*filesize + 1);
+		  filedata = (char*)malloc(filesize + 1);
 		  if (!filedata)
 		  {
 			  fclose(f);
 			  return false;
 		  }
 
-		  fread(filedata, 1, *filesize, f);
-		  filedata[*filesize] = '\0';
+		  fread(filedata, 1, filesize, f);
+		  filedata[filesize] = '\0';
 		  fclose(f);
 
 		  //탐색을 시작할 커서를 파일 데이터 가장 앞으로 초기화
@@ -121,15 +127,16 @@
 			  // Word 버퍼에 찾은 단어를 저장한다.
 			  memset(chWord, 0, 256);
 			  memcpy(chWord, chpBuff, iLength);
+			  chWord[iLength] = '\0';
 			  // 인자로 입력 받은 단어와 같은지 검사한다.
-			  if (0 == strcmp(szName, chWord))
+			  if (strcmp(szName, chWord) == 0)
 			  {
 				  // 맞다면 바로 뒤에 = 을 찾자.
 				  if (GetNextWord(&chpBuff, &iLength))
 				  {
 					  memset(chWord, 0, 256);
 					  memcpy(chWord, chpBuff, iLength);
-					  if (0 == strcmp(chWord, "="))
+					  if (strcmp(chWord, "=") == 0)
 					  {
 						  // = 다음의 데이터 부분을 얻자.
 						  if (GetNextWord(&chpBuff, &iLength))
@@ -165,14 +172,15 @@
 			  memset(chWord, 0, 256);
 			  memcpy(chWord, chpBuff, iLength);
 			  // 인자로 입력 받은 단어와 같은지 검사한다.
-			  if (0 == strcmp(szName, chWord))
+			  chWord[iLength] = '\0';
+			  if (strcmp(szName, chWord) == 0)
 			  {
 				  // 맞다면 바로 뒤에 = 을 찾자.
 				  if (GetNextWord(&chpBuff, &iLength))
 				  {
 					  memset(chWord, 0, 256);
 					  memcpy(chWord, chpBuff, iLength);
-					  if (0 == strcmp(chWord, "="))
+					  if (strcmp(chWord, "=") == 0)
 					  {
 						  // = 다음의 데이터 부분을 얻자.
 						  if (GetNextWord(&chpBuff, &iLength))
@@ -210,7 +218,8 @@
 			  memset(chWord, 0, 256);
 			  memcpy(chWord, chpBuff, iLength);
 			  // 인자로 입력 받은 단어와 같은지 검사한다.
-			  if (0 == strcmp(szName, chWord))
+			  chWord[iLength] = '\0';
+			  if ( strcmp(szName, chWord) == 0)
 			  {
 				  // 맞다면 바로 뒤에 = 을 찾자.
 				  if (GetNextWord(&chpBuff, &iLength))

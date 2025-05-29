@@ -64,6 +64,7 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 		// Word 버퍼에 찾은 단어를 저장한다.
 		memset(chWord, 0, 256);
 		memcpy(chWord, chpBuff, iLength);
+		chWord[iLength] = '\0';
 		// 인자로 입력 받은 단어와 같은지 검사한다.
 		if (0 == strcmp(patternName, chWord))
 		{

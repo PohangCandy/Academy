@@ -3,9 +3,14 @@
 #include "TextParser.h"
 #include "Enemy.h"
 
-#define MAXSTAGENUM		2	
+#define MAXSTAGENUM		   100
 #define dfSTAGE_WIDTH		81	
 #define dfSTAGE_HEIGHT		24
+
+//--------------------------------------------------------------------
+//게임에서 읽어들인 모든 StageNum;
+//--------------------------------------------------------------------
+extern int CurStageNum;
 
 //--------------------------------------------------------------------
 //StageInfo 파일에 있는 스테이지 이름을 저장해둔다.
@@ -20,7 +25,8 @@ struct tag_Stage
 //--------------------------------------------------------------------
 //스테이지 메모리풀
 //--------------------------------------------------------------------
-extern tag_Stage StagePool[MAXSTAGENUM];
+//extern tag_Stage StagePool[MAXSTAGENUM];
+extern tag_Stage* StagePool;
 
 //--------------------------------------------------------------------
 //파일에 있는 스테이지 데이터 그대로 읽어서 저장할 배열

@@ -12,7 +12,7 @@ class CParser
 {
 public:
 	char* filedata = nullptr;
-	int* filesize = nullptr;
+	int filesize = 0;
 	char* current = nullptr;
 
 	 CParser() {}
