@@ -65,8 +65,10 @@ void EnemyFire(tag_Enemy* ep, tag_Bullet* bp)
 				return;
 			}
 			tb->bEnemy = true;
+			tb->shape = tb->eshape;
 			tb->x = ep[i].x;
 			tb->y = ep[i].y;
+			tb->directionY = 1;
 		}
 	}
 
@@ -114,6 +116,7 @@ bool LoadEnemys(tag_Enemy e[])
 		sprintf_s(filename, "%s.txt", p);
 		LoadEnemy(&EnemyType[i],filename);
 	}
+	return true;
 }
 
 bool LoadEnemy(tag_Enemy* e, const char* filename)

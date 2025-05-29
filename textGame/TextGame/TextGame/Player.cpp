@@ -143,8 +143,10 @@ void PlayerFire(tag_Player* p, tag_Bullet* bp)
 	}
 
 	tb->bEnemy = false;
+	tb->shape = tb->pshape;
 	tb->x = p->x;
 	tb->y = p->y;
+	tb->directionY = -1;
 }
 
 //--------------------------------------------------------------------

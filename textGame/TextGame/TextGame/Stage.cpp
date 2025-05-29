@@ -42,9 +42,18 @@ bool LoadStageInfo()
 
 	if (stagenum > MAXSTAGENUM)
 	{
-		printf("최개 스테이지 개수 초과\n");
-		return false;
+		int diff = stagenum - MAXSTAGENUM;
+		tag_Stage* temp = (tag_Stage*)realloc(StagePool, sizeof(tag_Stage) * (MAXSTAGENUM + diff + 10));
+		if (!temp) {
+			free(StagePool);
+			return false;
+		}
+		StagePool = temp;
+
+		//return false;
 	}
+
+	CurStageNum = stagenum;
 
 	//불러온 파일 이름으로 파일을 호출한다.
 	for (int i = 0; i < stagenum; i++)
