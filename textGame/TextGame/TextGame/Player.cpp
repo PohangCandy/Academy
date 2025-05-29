@@ -35,9 +35,17 @@ void MovePlayer(tag_Player* p, tag_Bullet* bp)
 	int nx = p->x + dx;
 	int ny = p->y + dy;
 
-	if (p->Active && nx >= 0 && nx < dfSCREEN_WIDTH - 1 && ny >= 0 && ny < dfSCREEN_HEIGHT)
+	//if (p->Active && nx >= 0 && nx < dfSCREEN_WIDTH - 1 && ny >= 0 && ny < dfSCREEN_HEIGHT)
+	//{
+	//	p->x = p->x + dx;
+	//	p->y = p->y + dy;
+	//}
+	if (p->Active && nx >= 0 && nx < dfSCREEN_WIDTH - 1)
 	{
 		p->x = p->x + dx;
+	}	
+	if (ny >= 0 && ny < dfSCREEN_HEIGHT)
+	{
 		p->y = p->y + dy;
 	}
 }
@@ -45,7 +53,7 @@ void MovePlayer(tag_Player* p, tag_Bullet* bp)
 //--------------------------------------------------------------------
 // 플레이어 파일 데이터 로드
 //--------------------------------------------------------------------
-void LoadPlayer(tag_Player* p)
+bool LoadPlayer(tag_Player* p)
 {
 	static CParser Parser;
 	int fx = 0;
@@ -59,6 +67,7 @@ void LoadPlayer(tag_Player* p)
 	if (!Parser.LoadFile("Player.txt"))
 	{
 		printf("플레이어 파일 로딩 실패\n");
+		return false;
 	};
 
 	do {
@@ -89,13 +98,13 @@ void LoadPlayer(tag_Player* p)
 	if (!bSuccess)
 	{
 		printf("데이터 값 로딩 실패\n");
-		return;
+		return false;;
 	}
 
 	if (fx < 0 || fx >= dfSCREEN_WIDTH || fy < 0 || fy >= dfSCREEN_HEIGHT)
 	{
 		printf("잘못된 플레이어 위치\n");
-		return;
+		return false;
 	}
 
 	p->x = fx;
@@ -103,6 +112,20 @@ void LoadPlayer(tag_Player* p)
 	p->shape = fshape;
 	p->hp = fhp;
 	p->Active = (bool)fbActive;
+	return true;
+}
+
+
+//--------------------------------------------------------------------
+// 플레이어 사망 체크
+//--------------------------------------------------------------------
+bool CkeckGameOver(tag_Player* p)
+{
+	if (p->Active == false)
+	{
+		return true;
+	}
+	return false;
 }
 
 //--------------------------------------------------------------------

@@ -8,7 +8,15 @@
 #include "Enemy.h"
 #include "MovePattern.h"
 #include "Stage.h"
-//총알도 모양 다르게 타입별로 파일 데이터로 불러올 수 있을 듯?
+
+
+//1. 시간 측정으로 프레임이 떨어지지 않도록 만든다.
+//2. 오류 없애기
+// 
+// 
+//3. 플레이어도 스테이지 파일에서 정보를 불러오게 해준다.
+//4. 총알도 모양 다르게 타입별로 파일 데이터로 불러올 수 있을 듯
+//5. 플레이어 두명도 가능할 듯. 타입과 메모리풀 선언 
 
 /*
 * 
@@ -43,6 +51,75 @@
 //--------------------------------------------------------------------
 char szScreenBuffer[dfSCREEN_HEIGHT][dfSCREEN_WIDTH];
 
+
+////--------------------------------------------------------------------
+////플레이어 타입
+////--------------------------------------------------------------------
+//tag_Player PlayerType[MAXPlAYERTYPE];
+
+////--------------------------------------------------------------------
+////플레이어 메모리풀
+////--------------------------------------------------------------------
+tag_Player curPlayer;
+
+//--------------------------------------------------------------------
+//적 타입
+//--------------------------------------------------------------------
+tag_Enemy EnemyType[MAXENEMYTYPE];
+//--------------------------------------------------------------------
+//적 메모리풀
+//--------------------------------------------------------------------
+tag_Enemy EP[MAXENEMYNUM];
+
+
+//--------------------------------------------------------------------
+//총알 메모리풀
+//--------------------------------------------------------------------
+tag_Bullet BP[MAXBULLETNUM];
+
+//--------------------------------------------------------------------
+//패턴 메모리풀
+//--------------------------------------------------------------------
+tag_Pattern PatternType[MAXPATTERNTYPENUM];
+
+//--------------------------------------------------------------------
+//스테이지 메모리풀
+//--------------------------------------------------------------------
+tag_Stage StagePool[MAXSTAGENUM];
+
+//--------------------------------------------------------------------
+//게임 씬
+//--------------------------------------------------------------------
+enum  e_Scene
+{
+	Load,
+	Title,
+	Game,
+	GameOver
+};
+
+//--------------------------------------------------------------------
+//현재 게임 씬과 다음에 올 게임 씬
+//--------------------------------------------------------------------
+e_Scene CurScene,nextScene;
+
+//--------------------------------------------------------------------
+//게임 씬의 현재 스테이지 인덱스
+//--------------------------------------------------------------------
+int CurStageIndex;
+
+//--------------------------------------------------------------------
+//텍스트 씬 구조체
+//--------------------------------------------------------------------
+struct TextScene {
+	char message[256];
+	int xpos;
+	int ypos;
+};
+//--------------------------------------------------------------------
+//타이틀 씬과 게임오버 씬 
+//--------------------------------------------------------------------
+TextScene curTitle, curGameOver;
 
 //--------------------------------------------------------------------
 // GetAsyncKeyState(int iKey)  #include <Windows.h>
@@ -93,56 +170,41 @@ void Buffer_Clear(void);
 //--------------------------------------------------------------------
 void Sprite_Draw(int iX, int iY, char chSprite);
 
+//--------------------------------------------------------------------
+// 타이틀 씬 업데이트 함수
+//--------------------------------------------------------------------
+void updateTitle();
 
 //--------------------------------------------------------------------
-//적 타입
+// 게임 씬 업데이트 함수
 //--------------------------------------------------------------------
-tag_Enemy EnemyType[MAXENEMYTYPE];
-//--------------------------------------------------------------------
-//적 메모리풀
-//--------------------------------------------------------------------
-tag_Enemy EP[MAXENEMYNUM];
-
+void updateGame();
 
 //--------------------------------------------------------------------
-//총알 메모리풀
+// 게임오버 씬 업데이트 함수
 //--------------------------------------------------------------------
-tag_Bullet BP[MAXBULLETNUM];
+void updateGameOver();
 
 //--------------------------------------------------------------------
-//패턴 메모리풀
+// 로딩 씬 업데이트 함수
+// 각 씬 진입 전에 씬에 필요한 정보 로딩
 //--------------------------------------------------------------------
-tag_Pattern PatternType[MAXPATTERNTYPENUM];
+void updateLoading();
 
+//--------------------------------------------------------------------
+// 각 오브젝트 풀 정리
+// 버퍼 정리 -> clearBuff()
+// 메모리 정리 ->  GameReset()
+//--------------------------------------------------------------------
+void GameReset();
 
 
 void main(void)
 {
 	cs_Initial();
-	
-	tag_Player P;
-	LoadPlayer(&P);
-
-	//적의 개수보다 하나 더 많이 나눠야 적이 화면 끝에 위치하지 않는다.	
-	int divide = dfSCREEN_WIDTH / (MAXENEMYNUM + 1);
-
-	if (!LoadPattern(PatternType))
-	{
-		printf("페턴 타입 불러오기 실패\n");
-		return;
-	}
-
-	if (!LoadEnemys(EnemyType))
-	{
-		printf("적 타입 불러오기 실패\n");
-		return;
-	}
-
-	LoadStageInfo();
-	//'LoadStage();
-
-	//EP[0] = EnemyType[0];
-	//EP[1] = EnemyType[1];
+	CurScene = Load;
+	nextScene = Title;
+	CurStageIndex = 0;
 
 	//-------------------------------------------------------------------
 	// 게임의 메인 루프
@@ -150,56 +212,23 @@ void main(void)
 	//--------------------------------------------------------------------
 	while (1)
 	{
-		// 하단은 게임씬의 로직 예시이며 
-		// 이 부분에는 씬 표현을 위한 분기가 들어가시면 됩니다.
-		// 
-		// 
-		// GameUpdate() 내부 예시
-		// 
-		// 1. 키보드 입력부
-		MovePlayer(&P,BP);
-		EnemyFire(EP, BP);
-		//EnemyFire(&E, BP);
-		// 
-		// 2. 로직부 
-		MoveBullet(BP);
-		MoveEnemys(EP);
-		CheckBulletCollision(BP, EP);
-		CheckPlayerHit(BP, &P);
-		// 3. 랜더부
-			  //예시
-				// 스크린 버퍼를 지움
-				Buffer_Clear();
-				// 스크린 버퍼에 객체들 출력
-				//DrawBullet
-				for (int i = 0; i < MAXBULLETNUM; i++)
-				{
-					if (BP[i].Active)
-					{
-						Sprite_Draw(BP[i].x, BP[i].y, BP[i].shape);
-					}
-				}
-
-				//DrawEnemy
-				for (int i = 0; i < MAXENEMYNUM; i++)
-				{
-					if (EP[i].Active)
-					{
-						Sprite_Draw(EP[i].x, EP[i].y, EP[i].shape);
-					}
-				}
-
-				//DrawPlayer
-				if (P.Active)
-				{
-					Sprite_Draw(P.x, P.y, P.shape);
-				}
-				// 스크린 버퍼를 화면으로 출력
-				Buffer_Flip();
-			
-
+		switch (CurScene)
+		{
+		case Title:
+			updateTitle();
+			break;
+		case Load:
+			updateLoading();
+			break;
+		case Game:
+			updateGame();
+			break;
+		case GameOver:
+			updateGameOver();
+			break;
+		}
 		// 프레임 맞추기용 대기 Sleep(X)
-				Sleep(100);
+		Sleep(100);
 	}
 }
 
@@ -251,4 +280,252 @@ void Sprite_Draw(int iX, int iY, char chSprite)
 		return;
 
 	szScreenBuffer[iY][iX] = chSprite;
+}
+
+//--------------------------------------------------------------------
+// 게임 씬 업데이트 함수
+//--------------------------------------------------------------------
+void updateGame()
+{
+	// 1. 키보드 입력부
+	MovePlayer(&curPlayer, BP);
+	EnemyFire(EP, BP);
+	// 
+	// 2. 로직부 
+	MoveBullet(BP);
+	MoveEnemys(EP);
+	CheckBulletCollision(BP, EP);
+	if (Stage_End())
+	{
+		if (CurStageIndex + 1 < MAXSTAGENUM)
+		{
+			GameReset();
+			CurStageIndex++;
+			CurScene = Load;
+			nextScene = Game;
+			return;
+		}
+		else
+		{
+			GameReset();
+			CurStageIndex = 0;
+			CurScene = Load;
+			nextScene = GameOver;
+			return;
+		}
+	}
+	CheckPlayerHit(BP, &curPlayer);
+	if (CkeckGameOver(&curPlayer))
+	{
+		GameReset();
+		CurStageIndex = 0;
+		CurScene = Load;
+		nextScene = GameOver;
+		return;
+	}
+
+	// 3. 랜더부
+			// 스크린 버퍼를 지움
+	Buffer_Clear();
+	// 스크린 버퍼에 객체들 출력
+	//DrawBullet
+	for (int i = 0; i < MAXBULLETNUM; i++)
+	{
+		if (BP[i].Active)
+		{
+			Sprite_Draw(BP[i].x, BP[i].y, BP[i].shape);
+		}
+	}
+
+	//DrawEnemy
+	for (int i = 0; i < MAXENEMYNUM; i++)
+	{
+		if (EP[i].Active)
+		{
+			Sprite_Draw(EP[i].x, EP[i].y, EP[i].shape);
+		}
+	}
+
+	//DrawPlayer
+	if (curPlayer.Active)
+	{
+		Sprite_Draw(curPlayer.x, curPlayer.y, curPlayer.shape);
+	}
+	// 스크린 버퍼를 화면으로 출력
+	Buffer_Flip();
+}
+
+//--------------------------------------------------------------------
+// 타이틀 씬 업데이트 함수
+//--------------------------------------------------------------------
+void updateTitle()
+{
+	//입력
+	if (GetAsyncKeyState(VK_SPACE) & 0x8001)
+	{
+		nextScene = Game;
+		CurScene = Load;
+	}
+
+	//랜더
+	Buffer_Clear();
+	for (int i = 0; i < strlen(curTitle.message); i++)
+	{
+		Sprite_Draw(curTitle.xpos + i, curTitle.ypos, curTitle.message[i]);
+	}
+	Buffer_Flip();
+}
+
+//--------------------------------------------------------------------
+// 게임오버 씬 업데이트 함수
+//--------------------------------------------------------------------
+void updateGameOver()
+{
+	//입력
+	if (GetAsyncKeyState(VK_SPACE) & 0x8001)
+	{
+		CurScene = Load;
+		nextScene = Title;
+	}
+
+	//랜더
+	Buffer_Clear();
+	for (int i = 0; i < strlen(curGameOver.message); i++)
+	{
+		Sprite_Draw(curGameOver.xpos + i, curGameOver.ypos, curGameOver.message[i]);
+	}
+	Buffer_Flip();
+}
+
+//--------------------------------------------------------------------
+// 로딩 씬 업데이트 함수
+//--------------------------------------------------------------------
+void updateLoading()
+{
+	if (nextScene == Title)
+	{
+		static bool LoadTitleData = false;
+		if (!LoadTitleData)
+		{
+			static CParser parser;
+
+			if (!parser.LoadFile("gameTitle.txt"))
+			{
+				printf("게임 오버 파일 불러오기 실패");
+				return;
+			}
+
+			bool bSuccess = false;
+			do {
+				if (!parser.GetValue("xpos", &curTitle.xpos))
+				{
+					break;
+				}
+				if (!parser.GetValue("ypos", &curTitle.ypos))
+				{
+					break;
+				}
+				if (!parser.GetString("GameTitlemessage", curTitle.message))
+				{
+					break;
+				}
+
+				bSuccess = true;
+			} while (0);
+
+			if (!bSuccess)
+			{
+				printf("게임 타이틀 메시지 로딩 실패\n");
+				return;
+			}
+			LoadTitleData = true;
+		}
+
+		CurScene = Title;
+	}
+	else if (nextScene == Game)
+	{
+		static bool LoadGameData = false;
+
+		if (!LoadGameData)
+		{
+			if (!LoadPattern(PatternType))
+			{
+				printf("페턴 타입 불러오기 실패\n");
+				return;
+			}
+
+			if (!LoadEnemys(EnemyType))
+			{
+				printf("적 타입 불러오기 실패\n");
+				return;
+			}
+
+			LoadStageInfo();
+
+			LoadGameData = true;
+		}
+		LoadPlayer(&curPlayer);
+		LoadStage(&StagePool[CurStageIndex]);
+		CurScene = Game;
+	}
+	else if (nextScene == GameOver)
+	{
+		static bool LoadOverData = false;
+		if (!LoadOverData)
+		{
+			CParser parser;
+
+			if (!parser.LoadFile("gameOver.txt"))
+			{
+				printf("게임 오버 파일 불러오기 실패");
+				return;
+			}
+
+			bool bSuccess = false;
+			do {
+				if (!parser.GetValue("xpos", &curGameOver.xpos))
+				{
+					break;
+				}
+				if (!parser.GetValue("ypos", &curGameOver.ypos))
+				{
+					break;
+				}
+				if (!parser.GetString("GameOvermessage", curGameOver.message))
+				{
+					break;
+				}
+
+				bSuccess = true;
+			} while (0);
+
+			if (!bSuccess)
+			{
+				printf("게임 오버 메시지 로딩 실패\n");
+				return;
+			}
+			LoadOverData = true;
+		}
+		CurScene = GameOver;
+	}
+}
+
+void GameReset()
+{
+	for (int i = 0; i < MAXBULLETNUM; i++)
+	{
+		if (BP[i].Active)
+		{
+			BP[i].Active = false;
+		}
+	}
+	for (int i = 0; i < MAXENEMYNUM; i++)
+	{
+		if (EP[i].Active)
+		{
+			EP[i].Active = false;
+		}
+	}
+	curPlayer.Active = false;
 }
