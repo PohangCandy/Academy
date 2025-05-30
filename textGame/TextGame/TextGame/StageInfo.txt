@@ -1,6 +1,7 @@
 stagewidth = 81
 stageheight = 24
-stagenum = 3
+stagenum = 4
 stage0
 stage1
 stage2
+stage3

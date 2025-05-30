@@ -5,4 +5,4 @@ EnemydirectionX= 1
 Enemyhp= 1
 EnemyfirePassability= 5
 EnemyActive= 1
-EnemyPattern= pattern4
+EnemyPattern= pattern5
