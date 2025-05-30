@@ -8,6 +8,8 @@
 #include "Enemy.h"
 #include "MovePattern.h"
 #include "Stage.h"
+#include "FixedUpdate.h"
+
 
 #pragma comment(lib, "winmm.lib") 
 
@@ -107,6 +109,10 @@ TextScene curTitle, curGameOver;
 //--------------------------------------------------------------------
 int CurStageNum;
 
+//--------------------------------------------------------------------
+//프레임 드랍을 해결해줄 FixedUpdate
+//--------------------------------------------------------------------
+CfixedUpdate fu;
 
 //--------------------------------------------------------------------
 // 버퍼의 내용을 화면으로 찍어주는 함수.
@@ -156,7 +162,12 @@ void updateLoading();
 // 버퍼 정리 -> clearBuff()
 // 메모리 정리 ->  GameReset()
 //--------------------------------------------------------------------
-void GameReset();
+void StageReset();
+
+//--------------------------------------------------------------------
+// 게임 데이터 동적 할당 해제
+//--------------------------------------------------------------------
+void EndGame();
 
 
 int main(void)
@@ -174,7 +185,9 @@ int main(void)
 	timeBeginPeriod(1);
 	while (1)
 	{
-		unsigned int st = timeGetTime();
+		/*unsigned int st = timeGetTime();*/
+		fu.Logic();
+		fu.Frame();
 		switch (CurScene)
 		{
 		case Title:
@@ -190,15 +203,15 @@ int main(void)
 			updateGameOver();
 			break;
 		}
-		unsigned int et = timeGetTime();
-		// 프레임 맞추기용 대기 Sleep(X)
-		if (et - st < 100)
-		{
-			Sleep(100 - (et - st));
-		}
+		//unsigned int et = timeGetTime();
+		//// 프레임 맞추기용 대기 Sleep(X)
+		//if (et - st < 100)
+		//{
+		//	Sleep(100 - (et - st));
+		//}
 	}
 	timeEndPeriod(1);
-
+	EndGame();
 	return 0;
 }
 
@@ -269,7 +282,7 @@ void updateGame()
 	{
 		if (CurStageIndex + 1 < CurStageNum)
 		{
-			GameReset();
+			StageReset();
 			CurStageIndex++;
 			CurScene = Load;
 			nextScene = Game;
@@ -277,7 +290,7 @@ void updateGame()
 		}
 		else
 		{
-			GameReset();
+			StageReset();
 			CurStageIndex = 0;
 			CurScene = Load;
 			nextScene = GameOver;
@@ -287,42 +300,50 @@ void updateGame()
 	CheckPlayerHit(BP, &curPlayer);
 	if (CkeckGameOver(&curPlayer))
 	{
-		GameReset();
+		StageReset();
 		CurStageIndex = 0;
 		CurScene = Load;
 		nextScene = GameOver;
 		return;
 	}
 
-	// 3. 랜더부
+	if (!fu.Skip)
+	{
+		// 3. 랜더부
 			// 스크린 버퍼를 지움
-	Buffer_Clear();
-	// 스크린 버퍼에 객체들 출력
-	//DrawBullet
-	for (int i = 0; i < MAXBULLETNUM; i++)
-	{
-		if (BP[i].Active)
+		Buffer_Clear();
+		// 스크린 버퍼에 객체들 출력
+		//DrawBullet
+		for (int i = 0; i < MAXBULLETNUM; i++)
 		{
-			Sprite_Draw(BP[i].x, BP[i].y, BP[i].shape);
+			if (BP[i].Active)
+			{
+				Sprite_Draw(BP[i].x, BP[i].y, BP[i].shape);
+			}
 		}
-	}
 
-	//DrawEnemy
-	for (int i = 0; i < MAXENEMYNUM; i++)
-	{
-		if (EP[i].Active)
+		//DrawEnemy
+		for (int i = 0; i < MAXENEMYNUM; i++)
 		{
-			Sprite_Draw(EP[i].x, EP[i].y, EP[i].shape);
+			if (EP[i].Active)
+			{
+				Sprite_Draw(EP[i].x, EP[i].y, EP[i].shape);
+			}
 		}
-	}
 
-	//DrawPlayer
-	if (curPlayer.Active)
-	{
-		Sprite_Draw(curPlayer.x, curPlayer.y, curPlayer.shape);
+		//DrawPlayer
+		if (curPlayer.Active)
+		{
+			Sprite_Draw(curPlayer.x, curPlayer.y, curPlayer.shape);
+		}
+		// 스크린 버퍼를 화면으로 출력
+		fu.Render();
+		for (int i = 0; i < (signed int)strlen(fu.Framemessage); i++)
+		{
+			Sprite_Draw(30 + i, 0, fu.Framemessage[i]);
+		}
+		Buffer_Flip();
 	}
-	// 스크린 버퍼를 화면으로 출력
-	Buffer_Flip();
 }
 
 //--------------------------------------------------------------------
@@ -337,13 +358,21 @@ void updateTitle()
 		CurScene = Load;
 	}
 
-	//랜더
-	Buffer_Clear();
-	for (int i = 0; i < (signed int)strlen(curTitle.message); i++)
+	if (!fu.Skip)
 	{
-		Sprite_Draw(curTitle.xpos + i, curTitle.ypos, curTitle.message[i]);
+		//랜더
+		Buffer_Clear();
+		for (int i = 0; i < (signed int)strlen(curTitle.message); i++)
+		{
+			Sprite_Draw(curTitle.xpos + i, curTitle.ypos, curTitle.message[i]);
+		}
+		fu.Render();
+		for (int i = 0; i < (signed int)strlen(fu.Framemessage); i++)
+		{
+			Sprite_Draw(30 + i, 0, fu.Framemessage[i]);
+		}
+		Buffer_Flip();
 	}
-	Buffer_Flip();
 }
 
 //--------------------------------------------------------------------
@@ -358,13 +387,22 @@ void updateGameOver()
 		nextScene = Title;
 	}
 
+
 	//랜더
-	Buffer_Clear();
-	for (int i = 0; i < (signed int)strlen(curGameOver.message); i++)
+	if (!fu.Skip)
 	{
-		Sprite_Draw(curGameOver.xpos + i, curGameOver.ypos, curGameOver.message[i]);
+		Buffer_Clear();
+		for (int i = 0; i < (signed int)strlen(curGameOver.message); i++)
+		{
+			Sprite_Draw(curGameOver.xpos + i, curGameOver.ypos, curGameOver.message[i]);
+		}
+		fu.Render();
+		for (int i = 0; i < (signed int)strlen(fu.Framemessage); i++)
+		{
+			Sprite_Draw(30 + i, 0, fu.Framemessage[i]);
+		}
+		Buffer_Flip();
 	}
-	Buffer_Flip();
 }
 
 //--------------------------------------------------------------------
@@ -496,9 +534,18 @@ void updateLoading()
 
 		CurScene = GameOver;
 	}
+
+	if (!fu.Skip)
+	{
+		fu.Render();
+		for (int i = 0; i < (signed int)strlen(fu.Framemessage); i++)
+		{
+			Sprite_Draw(30 + i, 0, fu.Framemessage[i]);
+		}
+	}
 }
 
-void GameReset()
+void StageReset()
 {
 	for (int i = 0; i < MAXBULLETNUM; i++)
 	{
@@ -515,4 +562,12 @@ void GameReset()
 		}
 	}
 	curPlayer.Active = false;
+}
+
+//--------------------------------------------------------------------
+// 게임 데이터 동적 할당 해제
+//--------------------------------------------------------------------
+void EndGame()
+{
+	free(StagePool);
 }

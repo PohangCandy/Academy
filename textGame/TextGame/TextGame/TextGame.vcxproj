@@ -22,6 +22,7 @@
     <ClCompile Include="Bullet.cpp" />
     <ClCompile Include="Console.cpp" />
     <ClCompile Include="Enemy.cpp" />
+    <ClCompile Include="FixedUpdate.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MovePattern.cpp" />
     <ClCompile Include="Player.cpp" />
@@ -32,6 +33,7 @@
     <ClInclude Include="Bullet.h" />
     <ClInclude Include="Console.h" />
     <ClInclude Include="Enemy.h" />
+    <ClInclude Include="FixedUpdate.h" />
     <ClInclude Include="MovePattern.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="Stage.h" />
