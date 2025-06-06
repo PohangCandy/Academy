@@ -31,8 +31,13 @@ int main()
 	//MyClass* pc = new MyClass[10];
 	//delete pc;
 
-	MyClass* pc = new MyClass;
-	delete[] pc;
+	//MyClass* pc = new MyClass;
+	//delete[] pc;
+
+	int* pi = new int;
+	delete pi;
+	delete pi;
+	delete pi;
 
 	return 0;
 }
