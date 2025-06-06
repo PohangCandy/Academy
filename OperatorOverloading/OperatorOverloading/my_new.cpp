@@ -26,10 +26,6 @@ static int tail = 0;
 //-----------------------------------------------
 void* operator new(size_t size, const char* File, int Line)
 {
-	//static말곤 방법이 없나? -> 배열으로도 할당 받으려면 전역 변수 되야함.
-	//전역 배열 끝에 들어갈 수 있는 좋은 방법을 찾거나
-	//리스트로 구현하기
-	//static int tail = 0;
 	if (tail < MAXALLOCNUM - 1)
 	{
 		void* pv = malloc(size);
@@ -54,6 +50,7 @@ void* operator new[](size_t size, const char* File, int Line)
 	{
 		void* pv = malloc(size);
 		//메타데이터도 넣어야되나?
+		//메타 데이터 넣으면 배열인지 체크하는 불 변수 필요없어질듯
 
 		if (pv != nullptr)
 		{

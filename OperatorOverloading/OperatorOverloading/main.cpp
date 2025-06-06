@@ -4,10 +4,35 @@
 //#define new new( __FILE__ , __LINE__)
 //#define delete(a) delete((void*)a)
 
+class MyClass
+{
+public:
+	MyClass();
+	~MyClass();
+
+private:
+
+};
+
+MyClass::MyClass()
+{
+	printf("»ý¼º\n");
+}
+
+MyClass::~MyClass()
+{
+	printf("¼Ò¸ê\n");
+}
+
+
+
 int main()
 {
-	int* pi = new int;
+	//MyClass* pc = new MyClass[10];
+	//delete pc;
 
-	delete[](pi);
+	MyClass* pc = new MyClass;
+	delete[] pc;
+
 	return 0;
 }
