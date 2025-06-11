@@ -1,101 +1,15 @@
-#define	_CRT_SECURE_NO_WARNINGS
+//#define	_CRT_SECURE_NO_WARNINGS
 
-#include "Profile.h"
+#include "profiler.h"
 #include <iostream>
 
-//class Profile
-//{
-//	const char* _tag;
-//public:
-//	Profile(const char* tag)
-//	{
-//		//Begin(tag);
-//		_tag = tag;
-//	}
-//	~Profile()
-//	{
-//		//End(_tag);
-//	}
-//};
-#define PROFILE_NUM 10
-#define PROFILE_SAMPLE_Name 64
-#define PROFILE_SAMPLE_MIN 2
-#define PROFILE_SAMPLE_MAX 2
-
-void Test();
-void PrintProFile();
-
-
-struct PROFILE_SAMPLE{
-	//ÇÁ·ÎÆÄÀÏ »ç¿ë¿©ºÎ
-	long lFlag = 0;
-	//ÇÁ·ÎÆÄÀÏ »ùÇÃ ÀÌ¸§
-	WCHAR sxName[PROFILE_SAMPLE_Name];
-
-	// ÇÁ·ÎÆÄÀÏ »ùÇÃ ½ÇÇà ½Ã°£.
-	LARGE_INTEGER lStartTime;
-
-	// ÀüÃ¼ »ç¿ë½Ã°£ Ä«¿îÅÍ Time.	(Ãâ·Â½Ã È£ÃâÈ¸¼ö·Î ³ª´©¾î Æò±Õ ±¸ÇÔ)
-	_int64 iTotalTime;
-
-	//ÃÖ¼Ò »ç¿ë½Ã°£ Ä«¿îÅÍ Time
-	//(ÃÊ´ÜÀ§·Î °è»êÇÏ¿© ÀúÀå / [0] °¡ÀåÃÖ¼Ò [1] ´ÙÀ½ ÃÖ¼Ò [2])
-	_int64 iMin[PROFILE_SAMPLE_MIN];
-
-	//ÃÖ´ë »ç¿ë½Ã°£ Ä«¿îÅÍ Time
-	//(ÃÊ´ÜÀ§·Î °è»êÇÏ¿© ÀúÀå / [0] °¡ÀåÃÖ´ë[1] ´ÙÀ½ ÃÖ´ë[2])
-	_int64 iMax[PROFILE_SAMPLE_MAX];
-
-	// ´©Àû È£Ãâ È½¼ö
-	int iCall;
-};
-
+//êµ³ì´ staticìœ¼ë¡œ ìˆ¨ê¸¸ í•„ìš”ì—†ëŠ”ë°?
 PROFILE_SAMPLE arP[PROFILE_NUM];
 
-int main()
-{
-	WCHAR c[] = L"func1";
-	ProfileBegin(c);
-	Test();
-	ProfileEnd(c);
-
-	ProfileBegin(c);
-	Test();
-	ProfileEnd(c);
-
-	WCHAR f2[] = L"func2";
-	ProfileBegin(f2);
-	Test();
-	ProfileEnd(f2);
-
-	WCHAR f3[] = L"func3";
-	ProfileBegin(f3);
-	Test();
-	ProfileEnd(f3);
-	ProfileBegin(f3);
-	Test();
-	ProfileEnd(f3);
-	ProfileBegin(f3);
-	Test();
-	ProfileEnd(f3);
-
-
-	PrintProFile();
-
-	return 0;
-}
-
-void Test()
-{
-	for(int i  = 0; i < 100000; i++){}
-
-	//printf("Test Done\n");
-}
-
-//ÀÌ¹Ì ÀÖÀ» °æ¿ì ÇØ´ç ÇÁ·ÎÆÄÀÏ Á¤º¸ °»½Å
+//ì´ë¯¸ ìˆì„ ê²½ìš° í•´ë‹¹ í”„ë¡œíŒŒì¼ ì •ë³´ ê°±ì‹ 
 PROFILE_SAMPLE* findExistProfile(WCHAR* szName)
 {
-	//ÀÌ¹Ì ÀÖÀ» °æ¿ì ÇØ´ç ÇÁ·ÎÆÄÀÏ Á¤º¸ °»½Å
+	
 	int pi = 0;
 	while (pi < PROFILE_NUM)
 	{
@@ -108,7 +22,7 @@ PROFILE_SAMPLE* findExistProfile(WCHAR* szName)
 	return nullptr;
 }
 
-//»õ·Î¿î ÇÁ·ÎÆÄÀÏ µé¾î°¥ À§Ä¡ °Ë»ö
+//ìƒˆë¡œìš´ í”„ë¡œíŒŒì¼ ë“¤ì–´ê°ˆ ìœ„ì¹˜ ê²€ìƒ‰
 PROFILE_SAMPLE* FindemptyProFile()
 {
 	int proindex = 0;
@@ -124,22 +38,22 @@ PROFILE_SAMPLE* FindemptyProFile()
 	return nullptr;
 }
 
-//»õ·Î¿î ÇÁ·ÎÆÄÀÏ·¯ ÃÊ±âÈ­
+//ìƒˆë¡œìš´ í”„ë¡œíŒŒì¼ëŸ¬ ì´ˆê¸°í™”
 void initPRoFile(PROFILE_SAMPLE* pf, WCHAR* szName)
 {
 	pf->lFlag = 1;
-	wcscpy(pf->sxName, szName);
-	for (int i = 0; i < PROFILE_SAMPLE_MAX;i++)
+	wcscpy_s(pf->sxName,sizeof(pf->sxName), szName);
+	for (int i = 0; i < PROFILE_SAMPLE_MAX; i++)
 	{
 		pf->iMax[i] = 0;
 	}
-	for (int i = 0; i < PROFILE_SAMPLE_MIN;i++)
+	for (int i = 0; i < PROFILE_SAMPLE_MIN; i++)
 	{
 		pf->iMin[i] = 100000000000;
 	}
 }
 
-//ProFile ½Ã°£ ÃøÁ¤ ½ÃÀÛ
+//ProFile ì‹œê°„ ì¸¡ì • ì‹œì‘
 void BeginTimeCount(PROFILE_SAMPLE* pf)
 {
 	QueryPerformanceCounter(&(pf->lStartTime));
@@ -147,13 +61,13 @@ void BeginTimeCount(PROFILE_SAMPLE* pf)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// ÇÏ³ªÀÇ ÇÔ¼ö Profiling ½ÃÀÛ, ³¡ ÇÔ¼ö.
+// í•˜ë‚˜ì˜ í•¨ìˆ˜ Profiling ì‹œì‘, ë í•¨ìˆ˜.
 //
-// Parameters: (char *)ProfilingÀÌ¸§.
-// Return: ¾øÀ½.
+// Parameters: (char *)Profilingì´ë¦„.
+// Return: ì—†ìŒ.
 /////////////////////////////////////////////////////////////////////////////
 void ProfileBegin(WCHAR* szName)
-{	
+{
 	PROFILE_SAMPLE* newP = findExistProfile(szName);
 	if (newP == nullptr)
 	{
@@ -188,8 +102,8 @@ void EndTimeCount(PROFILE_SAMPLE* pf)
 	long long nanoResult = Result * 1000000000LL / Freq.QuadPart;
 	(pf->iTotalTime) += nanoResult;
 
-//todo
-//ÃøÁ¤ÇÑ ½Ã°£À» ÃÖ¼Ò Å×ÀÌºí°ú ÃÖ´ë Å×ÀÌºí¿¡ ºñ±³ÇØ¼­ ³Ö´Â´Ù.
+	//todo
+//ì¸¡ì •í•œ ì‹œê°„ì„ ìµœì†Œ í…Œì´ë¸”ê³¼ ìµœëŒ€ í…Œì´ë¸”ì— ë¹„êµí•´ì„œ ë„£ëŠ”ë‹¤.
 	for (int i = 0; i < PROFILE_SAMPLE_MAX; i++)
 	{
 		if (pf->iMax[i] < nanoResult)
@@ -225,7 +139,7 @@ void PrintProFile()
 	printf("           Name  |     Average  |        Min   |        Max   |      Call |\n");
 	printf("-------------------------------------------------------------------------------\n");
 
-	for(int i = 0; i < PROFILE_NUM;i++)
+	for (int i = 0; i < PROFILE_NUM; i++)
 	{
 		PROFILE_SAMPLE* pf = &arP[i];
 		if (pf->lFlag)
@@ -238,10 +152,10 @@ void PrintProFile()
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Profiling µÈ µ¥ÀÌÅ¸¸¦ Text ÆÄÀÏ·Î Ãâ·ÂÇÑ´Ù.
+// Profiling ëœ ë°ì´íƒ€ë¥¼ Text íŒŒì¼ë¡œ ì¶œë ¥í•œë‹¤.
 //
-// Parameters: (char *)Ãâ·ÂµÉ ÆÄÀÏ ÀÌ¸§.
-// Return: ¾øÀ½.
+// Parameters: (char *)ì¶œë ¥ë  íŒŒì¼ ì´ë¦„.
+// Return: ì—†ìŒ.
 /////////////////////////////////////////////////////////////////////////////
 void ProfileDataOutText(WCHAR* szFileName)
 {
@@ -250,7 +164,7 @@ void ProfileDataOutText(WCHAR* szFileName)
 		L"           Name  |     Average  |        Min   |        Max   |      Call |\n"
 		L"-------------------------------------------------------------------------------\n";
 
-	for (int i = 0; i < PROFILE_NUM;i++)
+	for (int i = 0; i < PROFILE_NUM; i++)
 	{
 		PROFILE_SAMPLE* pf = &arP[i];
 		if (pf->lFlag)
@@ -267,7 +181,7 @@ void ProfileDataOutText(WCHAR* szFileName)
 	}
 
 	FILE* f;
-	f = fopen("Test.txt", "wt");
+	fopen_s(&f,"Test.txt", "wt");
 	if (f != NULL)
 	{
 		fputws(s, f);
@@ -276,12 +190,64 @@ void ProfileDataOutText(WCHAR* szFileName)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// ÇÁ·ÎÆÄÀÏ¸µ µÈ µ¥ÀÌÅÍ¸¦ ¸ğµÎ ÃÊ±âÈ­ ÇÑ´Ù.
+// í”„ë¡œíŒŒì¼ë§ ëœ ë°ì´í„°ë¥¼ ëª¨ë‘ ì´ˆê¸°í™” í•œë‹¤.
 //
-// Parameters: ¾øÀ½.
-// Return: ¾øÀ½.
+// Parameters: ì—†ìŒ.
+// Return: ì—†ìŒ.
 /////////////////////////////////////////////////////////////////////////////
 void ProfileReset(void)
 {
 
 }
+
+
+
+
+
+//#include "profiler.h"
+//#include <iostream>
+//
+//void Test();
+//
+////êµ³ì´ staticìœ¼ë¡œ ìˆ¨ê¸¸ í•„ìš”ì—†ëŠ”ë°?
+////PROFILE_SAMPLE arP[PROFILE_NUM];
+//
+//int main()
+//{
+//	WCHAR c[] = L"func1";
+//	ProfileBegin(c);
+//	Test();
+//	ProfileEnd(c);
+//
+//	ProfileBegin(c);
+//	Test();
+//	ProfileEnd(c);
+//
+//	WCHAR f2[] = L"func2";
+//	ProfileBegin(f2);
+//	Test();
+//	ProfileEnd(f2);
+//
+//	WCHAR f3[] = L"func3";
+//	ProfileBegin(f3);
+//	Test();
+//	ProfileEnd(f3);
+//	ProfileBegin(f3);
+//	Test();
+//	ProfileEnd(f3);
+//	ProfileBegin(f3);
+//	Test();
+//	ProfileEnd(f3);
+//
+//
+//	PrintProFile();
+//
+//	return 0;
+//}
+//
+//void Test()
+//{
+//	for (int i = 0; i < 100000; i++) {}
+//
+//	//printf("Test Done\n");
+//}
