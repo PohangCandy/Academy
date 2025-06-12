@@ -1,6 +1,48 @@
 #include <iostream>
 #include "TemplateLinkedList.h"
 
+#include <list>
+using namespace std;
+void testSTL();
+void testmine();
+
+void TestBasicOperations();
+void TestPointerList();
+
+int main()
+{
+	//TestBasicOperations();
+	//TestPointerList();
+	//testSTL();
+	testmine();
+	return 0;
+}
+
+void testmine()
+{
+	CList<int> ml;
+	CList<int>::iterator it1;
+	CList<int>::iterator it2;
+
+	ml.push_back(1);
+	it1 = ml.begin();
+	printf("%d\n", *it1);
+	ml.pop_back();
+	//stlì€ í•´ì œëœ ë©”ëª¨ë¦¬ê°€ ì•„ë‹Œ ì›ë˜ ë©”ëª¨ë¦¬ ë‚˜íƒ€ë‚´ëŠ”ë°
+	//ì§€ê¸ˆì€ í•´ì œëœ ë©”ëª¨ë¦¬ ë‚˜íƒ€ëƒ„.
+	printf("%d\n", *it1);
+}
+
+void testSTL()
+{
+	list<int> my_list = { 10,20,30,40 };
+
+	auto it = my_list.begin();
+	my_list.pop_front();
+	cout << *it;
+}
+
+
 void TestBasicOperations()
 {
 	CList<int> list;
@@ -14,8 +56,8 @@ void TestBasicOperations()
 		std::cout << *it << " ";
 	std::cout << "\n";
 
-	list.pop_front(); // 5 Á¦°Å
-	list.pop_back();  // 30 Á¦°Å
+	list.pop_front(); // 5 ì œê±°
+	list.pop_back();  // 30 ì œê±°
 
 	std::cout << "After pop: ";
 	for (auto it = list.begin(); it != list.end(); ++it)
@@ -49,8 +91,8 @@ void TestPointerList()
 	{
 		if ((*iter)->id == 2)
 		{
-			delete* iter; // ½ÇÁ¦ °´Ã¼ ¸ÕÀú »èÁ¦
-			iter = list.erase(iter); // ³ëµå »èÁ¦
+			delete* iter; // ì‹¤ì œ ê°ì²´ ë¨¼ì € ì‚­ì œ
+			iter = list.erase(iter); // ë…¸ë“œ ì‚­ì œ
 		}
 		else
 		{
@@ -67,12 +109,4 @@ void TestPointerList()
 		delete* iter;
 
 	list.clear();
-}
-
-int main()
-{
-	TestBasicOperations();
-	TestPointerList();
-
-	return 0;
 }
