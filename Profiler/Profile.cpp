@@ -197,7 +197,13 @@ void ProfileDataOutText(WCHAR* szFileName)
 /////////////////////////////////////////////////////////////////////////////
 void ProfileReset(void)
 {
-
+	for (int i = 0; i < PROFILE_NUM; i++)
+	{
+		if (arP[i].lFlag)
+		{
+			arP[i].lFlag = 0;
+		}
+	}
 }
 
 
