@@ -1,19 +1,17 @@
-//#define	_CRT_SECURE_NO_WARNINGS
-
-#include "profiler.h"
+#include "Profile.h"
 #include <iostream>
 
-//굳이 static으로 숨길 필요없는데?
+////굳이 static으로 숨길 필요있을까?
 PROFILE_SAMPLE arP[PROFILE_NUM];
 
 //이미 있을 경우 해당 프로파일 정보 갱신
 PROFILE_SAMPLE* findExistProfile(WCHAR* szName)
 {
-	
+	//이미 있을 경우 해당 프로파일 정보 갱신
 	int pi = 0;
 	while (pi < PROFILE_NUM)
 	{
-		if (wcscmp(arP[pi].sxName, szName) == 0)
+		if (arP[pi].lFlag && wcscmp(arP[pi].sxName, szName) == 0)
 		{
 			return &arP[pi];
 		}
@@ -42,12 +40,13 @@ PROFILE_SAMPLE* FindemptyProFile()
 void initPRoFile(PROFILE_SAMPLE* pf, WCHAR* szName)
 {
 	pf->lFlag = 1;
-	wcscpy_s(pf->sxName,sizeof(pf->sxName), szName);
-	for (int i = 0; i < PROFILE_SAMPLE_MAX; i++)
+	//wcscpy(pf->sxName, szName);
+	wcscpy_s(pf->sxName, sizeof(pf->sxName), szName);
+	for (int i = 0; i < PROFILE_SAMPLE_MAX;i++)
 	{
 		pf->iMax[i] = 0;
 	}
-	for (int i = 0; i < PROFILE_SAMPLE_MIN; i++)
+	for (int i = 0; i < PROFILE_SAMPLE_MIN;i++)
 	{
 		pf->iMin[i] = 100000000000;
 	}
@@ -67,7 +66,7 @@ void BeginTimeCount(PROFILE_SAMPLE* pf)
 // Return: 없음.
 /////////////////////////////////////////////////////////////////////////////
 void ProfileBegin(WCHAR* szName)
-{
+{	
 	PROFILE_SAMPLE* newP = findExistProfile(szName);
 	if (newP == nullptr)
 	{
@@ -102,7 +101,7 @@ void EndTimeCount(PROFILE_SAMPLE* pf)
 	long long nanoResult = Result * 1000000000LL / Freq.QuadPart;
 	(pf->iTotalTime) += nanoResult;
 
-	//todo
+//todo
 //측정한 시간을 최소 테이블과 최대 테이블에 비교해서 넣는다.
 	for (int i = 0; i < PROFILE_SAMPLE_MAX; i++)
 	{
@@ -133,13 +132,15 @@ void ProfileEnd(WCHAR* szName)
 	EndTimeCount(pf);
 }
 
+//--------------------------------------------------------------------
+//--------------------------------------------------------------------
 void PrintProFile()
 {
 	printf("-------------------------------------------------------------------------------\n");
 	printf("           Name  |     Average  |        Min   |        Max   |      Call |\n");
 	printf("-------------------------------------------------------------------------------\n");
 
-	for (int i = 0; i < PROFILE_NUM; i++)
+	for(int i = 0; i < PROFILE_NUM;i++)
 	{
 		PROFILE_SAMPLE* pf = &arP[i];
 		if (pf->lFlag)
@@ -157,14 +158,14 @@ void PrintProFile()
 // Parameters: (char *)출력될 파일 이름.
 // Return: 없음.
 /////////////////////////////////////////////////////////////////////////////
-void ProfileDataOutText(WCHAR* szFileName)
+void ProfileDataOutText(const WCHAR* szFileName)
 {
-	WCHAR s[] =
+	WCHAR s[256 * PROFILE_NUM] =
 		L"-------------------------------------------------------------------------------\n"
 		L"           Name  |     Average  |        Min   |        Max   |      Call |\n"
 		L"-------------------------------------------------------------------------------\n";
 
-	for (int i = 0; i < PROFILE_NUM; i++)
+	for (int i = 0; i < PROFILE_NUM;i++)
 	{
 		PROFILE_SAMPLE* pf = &arP[i];
 		if (pf->lFlag)
@@ -176,12 +177,17 @@ void ProfileDataOutText(WCHAR* szFileName)
 				L"-------------------------------------------------------------------------------\n",
 				pf->sxName, average, pf->iMin[0], pf->iMax[0], pf->iCall);
 
-			memcpy(&s[wcslen(s)], buffer, wcslen(buffer) + 1);
+			size_t ls = wcslen(s);
+			memcpy(&s[ls], buffer, (wcslen(buffer) + 1)*sizeof(WCHAR));
+			//wprintf(L"%s\n", s);
 		}
 	}
 
+	WCHAR cs[256];
+	wcscpy_s(cs, szFileName);
 	FILE* f;
-	fopen_s(&f,"Test.txt", "wt");
+	//f =_wfopen(cs, L"wt");
+	_wfopen_s(&f, cs, L"wt");
 	if (f != NULL)
 	{
 		fputws(s, f);
@@ -189,12 +195,12 @@ void ProfileDataOutText(WCHAR* szFileName)
 	}
 }
 
-/////////////////////////////////////////////////////////////////////////////
-// 프로파일링 된 데이터를 모두 초기화 한다.
-//
-// Parameters: 없음.
-// Return: 없음.
-/////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+ //프로파일링 된 데이터를 모두 초기화 한다.
+
+ //Parameters: 없음.
+ //Return: 없음.
+///////////////////////////////////////////////////////////////////////////
 void ProfileReset(void)
 {
 	for (int i = 0; i < PROFILE_NUM; i++)
@@ -205,55 +211,3 @@ void ProfileReset(void)
 		}
 	}
 }
-
-
-
-
-
-//#include "profiler.h"
-//#include <iostream>
-//
-//void Test();
-//
-////굳이 static으로 숨길 필요없는데?
-////PROFILE_SAMPLE arP[PROFILE_NUM];
-//
-//int main()
-//{
-//	WCHAR c[] = L"func1";
-//	ProfileBegin(c);
-//	Test();
-//	ProfileEnd(c);
-//
-//	ProfileBegin(c);
-//	Test();
-//	ProfileEnd(c);
-//
-//	WCHAR f2[] = L"func2";
-//	ProfileBegin(f2);
-//	Test();
-//	ProfileEnd(f2);
-//
-//	WCHAR f3[] = L"func3";
-//	ProfileBegin(f3);
-//	Test();
-//	ProfileEnd(f3);
-//	ProfileBegin(f3);
-//	Test();
-//	ProfileEnd(f3);
-//	ProfileBegin(f3);
-//	Test();
-//	ProfileEnd(f3);
-//
-//
-//	PrintProFile();
-//
-//	return 0;
-//}
-//
-//void Test()
-//{
-//	for (int i = 0; i < 100000; i++) {}
-//
-//	//printf("Test Done\n");
-//}
