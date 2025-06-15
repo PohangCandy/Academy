@@ -15,7 +15,8 @@ public:
 	int filesize = 0;
 	char* current = nullptr;
 
-	 CParser() {}
+	CParser() {};
+	 ~CParser();
 
 	  bool LoadFile(const char* filename);
 

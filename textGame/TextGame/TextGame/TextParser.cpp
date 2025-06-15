@@ -1,7 +1,12 @@
 //TextParser.cpp
 #include "TextParser.h"
 
-	  bool CParser::LoadFile(const char* filename)
+CParser::~CParser()
+{
+	free(filedata);
+}
+
+bool CParser::LoadFile(const char* filename)
 	  {
 		  FILE* f;
 		  
