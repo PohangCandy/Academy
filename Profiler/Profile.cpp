@@ -1,105 +1,17 @@
-#define	_CRT_SECURE_NO_WARNINGS
-
 #include "Profile.h"
 #include <iostream>
 
-//class Profile
-//{
-//	const char* _tag;
-//public:
-//	Profile(const char* tag)
-//	{
-//		//Begin(tag);
-//		_tag = tag;
-//	}
-//	~Profile()
-//	{
-//		//End(_tag);
-//	}
-//};
-#define PROFILE_NUM 10
-#define PROFILE_SAMPLE_Name 64
-#define PROFILE_SAMPLE_MIN 2
-#define PROFILE_SAMPLE_MAX 2
-
-void Test();
-void PrintProFile();
-
-
-struct PROFILE_SAMPLE{
-	//ÇÁ·ÎÆÄÀÏ »ç¿ë¿©ºÎ
-	long lFlag = 0;
-	//ÇÁ·ÎÆÄÀÏ »ùÇÃ ÀÌ¸§
-	WCHAR sxName[PROFILE_SAMPLE_Name];
-
-	// ÇÁ·ÎÆÄÀÏ »ùÇÃ ½ÇÇà ½Ã°£.
-	LARGE_INTEGER lStartTime;
-
-	// ÀüÃ¼ »ç¿ë½Ã°£ Ä«¿îÅÍ Time.	(Ãâ·Â½Ã È£ÃâÈ¸¼ö·Î ³ª´©¾î Æò±Õ ±¸ÇÔ)
-	_int64 iTotalTime;
-
-	//ÃÖ¼Ò »ç¿ë½Ã°£ Ä«¿îÅÍ Time
-	//(ÃÊ´ÜÀ§·Î °è»êÇÏ¿© ÀúÀå / [0] °¡ÀåÃÖ¼Ò [1] ´ÙÀ½ ÃÖ¼Ò [2])
-	_int64 iMin[PROFILE_SAMPLE_MIN];
-
-	//ÃÖ´ë »ç¿ë½Ã°£ Ä«¿îÅÍ Time
-	//(ÃÊ´ÜÀ§·Î °è»êÇÏ¿© ÀúÀå / [0] °¡ÀåÃÖ´ë[1] ´ÙÀ½ ÃÖ´ë[2])
-	_int64 iMax[PROFILE_SAMPLE_MAX];
-
-	// ´©Àû È£Ãâ È½¼ö
-	int iCall;
-};
-
+////êµ³ì´ staticìœ¼ë¡œ ìˆ¨ê¸¸ í•„ìš”ìˆì„ê¹Œ?
 PROFILE_SAMPLE arP[PROFILE_NUM];
 
-int main()
-{
-	WCHAR c[] = L"func1";
-	ProfileBegin(c);
-	Test();
-	ProfileEnd(c);
-
-	ProfileBegin(c);
-	Test();
-	ProfileEnd(c);
-
-	WCHAR f2[] = L"func2";
-	ProfileBegin(f2);
-	Test();
-	ProfileEnd(f2);
-
-	WCHAR f3[] = L"func3";
-	ProfileBegin(f3);
-	Test();
-	ProfileEnd(f3);
-	ProfileBegin(f3);
-	Test();
-	ProfileEnd(f3);
-	ProfileBegin(f3);
-	Test();
-	ProfileEnd(f3);
-
-
-	PrintProFile();
-
-	return 0;
-}
-
-void Test()
-{
-	for(int i  = 0; i < 100000; i++){}
-
-	//printf("Test Done\n");
-}
-
-//ÀÌ¹Ì ÀÖÀ» °æ¿ì ÇØ´ç ÇÁ·ÎÆÄÀÏ Á¤º¸ °»½Å
+//ì´ë¯¸ ìˆì„ ê²½ìš° í•´ë‹¹ í”„ë¡œíŒŒì¼ ì •ë³´ ê°±ì‹ 
 PROFILE_SAMPLE* findExistProfile(WCHAR* szName)
 {
-	//ÀÌ¹Ì ÀÖÀ» °æ¿ì ÇØ´ç ÇÁ·ÎÆÄÀÏ Á¤º¸ °»½Å
+	//ì´ë¯¸ ìˆì„ ê²½ìš° í•´ë‹¹ í”„ë¡œíŒŒì¼ ì •ë³´ ê°±ì‹ 
 	int pi = 0;
 	while (pi < PROFILE_NUM)
 	{
-		if (wcscmp(arP[pi].sxName, szName) == 0)
+		if (arP[pi].lFlag && wcscmp(arP[pi].sxName, szName) == 0)
 		{
 			return &arP[pi];
 		}
@@ -108,7 +20,7 @@ PROFILE_SAMPLE* findExistProfile(WCHAR* szName)
 	return nullptr;
 }
 
-//»õ·Î¿î ÇÁ·ÎÆÄÀÏ µé¾î°¥ À§Ä¡ °Ë»ö
+//ìƒˆë¡œìš´ í”„ë¡œíŒŒì¼ ë“¤ì–´ê°ˆ ìœ„ì¹˜ ê²€ìƒ‰
 PROFILE_SAMPLE* FindemptyProFile()
 {
 	int proindex = 0;
@@ -124,11 +36,12 @@ PROFILE_SAMPLE* FindemptyProFile()
 	return nullptr;
 }
 
-//»õ·Î¿î ÇÁ·ÎÆÄÀÏ·¯ ÃÊ±âÈ­
+//ìƒˆë¡œìš´ í”„ë¡œíŒŒì¼ëŸ¬ ì´ˆê¸°í™”
 void initPRoFile(PROFILE_SAMPLE* pf, WCHAR* szName)
 {
 	pf->lFlag = 1;
-	wcscpy(pf->sxName, szName);
+	//wcscpy(pf->sxName, szName);
+	wcscpy_s(pf->sxName, sizeof(pf->sxName), szName);
 	for (int i = 0; i < PROFILE_SAMPLE_MAX;i++)
 	{
 		pf->iMax[i] = 0;
@@ -139,7 +52,7 @@ void initPRoFile(PROFILE_SAMPLE* pf, WCHAR* szName)
 	}
 }
 
-//ProFile ½Ã°£ ÃøÁ¤ ½ÃÀÛ
+//ProFile ì‹œê°„ ì¸¡ì • ì‹œì‘
 void BeginTimeCount(PROFILE_SAMPLE* pf)
 {
 	QueryPerformanceCounter(&(pf->lStartTime));
@@ -147,10 +60,10 @@ void BeginTimeCount(PROFILE_SAMPLE* pf)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// ÇÏ³ªÀÇ ÇÔ¼ö Profiling ½ÃÀÛ, ³¡ ÇÔ¼ö.
+// í•˜ë‚˜ì˜ í•¨ìˆ˜ Profiling ì‹œì‘, ë í•¨ìˆ˜.
 //
-// Parameters: (char *)ProfilingÀÌ¸§.
-// Return: ¾øÀ½.
+// Parameters: (char *)Profilingì´ë¦„.
+// Return: ì—†ìŒ.
 /////////////////////////////////////////////////////////////////////////////
 void ProfileBegin(WCHAR* szName)
 {	
@@ -189,7 +102,7 @@ void EndTimeCount(PROFILE_SAMPLE* pf)
 	(pf->iTotalTime) += nanoResult;
 
 //todo
-//ÃøÁ¤ÇÑ ½Ã°£À» ÃÖ¼Ò Å×ÀÌºí°ú ÃÖ´ë Å×ÀÌºí¿¡ ºñ±³ÇØ¼­ ³Ö´Â´Ù.
+//ì¸¡ì •í•œ ì‹œê°„ì„ ìµœì†Œ í…Œì´ë¸”ê³¼ ìµœëŒ€ í…Œì´ë¸”ì— ë¹„êµí•´ì„œ ë„£ëŠ”ë‹¤.
 	for (int i = 0; i < PROFILE_SAMPLE_MAX; i++)
 	{
 		if (pf->iMax[i] < nanoResult)
@@ -219,6 +132,8 @@ void ProfileEnd(WCHAR* szName)
 	EndTimeCount(pf);
 }
 
+//--------------------------------------------------------------------
+//--------------------------------------------------------------------
 void PrintProFile()
 {
 	printf("-------------------------------------------------------------------------------\n");
@@ -238,14 +153,14 @@ void PrintProFile()
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Profiling µÈ µ¥ÀÌÅ¸¸¦ Text ÆÄÀÏ·Î Ãâ·ÂÇÑ´Ù.
+// Profiling ëœ ë°ì´íƒ€ë¥¼ Text íŒŒì¼ë¡œ ì¶œë ¥í•œë‹¤.
 //
-// Parameters: (char *)Ãâ·ÂµÉ ÆÄÀÏ ÀÌ¸§.
-// Return: ¾øÀ½.
+// Parameters: (char *)ì¶œë ¥ë  íŒŒì¼ ì´ë¦„.
+// Return: ì—†ìŒ.
 /////////////////////////////////////////////////////////////////////////////
-void ProfileDataOutText(WCHAR* szFileName)
+void ProfileDataOutText(const WCHAR* szFileName)
 {
-	WCHAR s[] =
+	WCHAR s[256 * PROFILE_NUM] =
 		L"-------------------------------------------------------------------------------\n"
 		L"           Name  |     Average  |        Min   |        Max   |      Call |\n"
 		L"-------------------------------------------------------------------------------\n";
@@ -262,12 +177,17 @@ void ProfileDataOutText(WCHAR* szFileName)
 				L"-------------------------------------------------------------------------------\n",
 				pf->sxName, average, pf->iMin[0], pf->iMax[0], pf->iCall);
 
-			memcpy(&s[wcslen(s)], buffer, wcslen(buffer) + 1);
+			size_t ls = wcslen(s);
+			memcpy(&s[ls], buffer, (wcslen(buffer) + 1)*sizeof(WCHAR));
+			//wprintf(L"%s\n", s);
 		}
 	}
 
+	WCHAR cs[256];
+	wcscpy_s(cs, szFileName);
 	FILE* f;
-	f = fopen("Test.txt", "wt");
+	//f =_wfopen(cs, L"wt");
+	_wfopen_s(&f, cs, L"wt");
 	if (f != NULL)
 	{
 		fputws(s, f);
@@ -275,13 +195,19 @@ void ProfileDataOutText(WCHAR* szFileName)
 	}
 }
 
-/////////////////////////////////////////////////////////////////////////////
-// ÇÁ·ÎÆÄÀÏ¸µ µÈ µ¥ÀÌÅÍ¸¦ ¸ğµÎ ÃÊ±âÈ­ ÇÑ´Ù.
-//
-// Parameters: ¾øÀ½.
-// Return: ¾øÀ½.
-/////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+ //í”„ë¡œíŒŒì¼ë§ ëœ ë°ì´í„°ë¥¼ ëª¨ë‘ ì´ˆê¸°í™” í•œë‹¤.
+
+ //Parameters: ì—†ìŒ.
+ //Return: ì—†ìŒ.
+///////////////////////////////////////////////////////////////////////////
 void ProfileReset(void)
 {
-
+	for (int i = 0; i < PROFILE_NUM; i++)
+	{
+		if (arP[i].lFlag)
+		{
+			arP[i].lFlag = 0;
+		}
+	}
 }
