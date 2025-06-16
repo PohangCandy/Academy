@@ -5,7 +5,7 @@
 //--------------------------------------------------------------------
 bool loadBullet(tag_Bullet b[])
 {
-	static CParser Parser;
+	CParser Parser;
 
 	char ftype[12] = "none";
 	bool fActive = false;

@@ -45,5 +45,5 @@ bool LoadPattern(tag_Pattern pattern[]);
 //패턴 이름으로 패턴 불러오기
 // parameter : 파일 데이터를 저장하고 있는 파서, 패턴 이름, 저장할 패턴 메모리, 패턴 메모리 크기
 //--------------------------------------------------------------------
-bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, int patternSize);
+bool GetPattern(CParser* parser, const char* patternName, tag_Pattern* pattern, int patternSize);
 
