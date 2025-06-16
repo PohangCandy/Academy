@@ -79,7 +79,7 @@ void EnemyFire(tag_Enemy* ep, tag_Bullet* bp)
 //--------------------------------------------------------------------
 bool LoadEnemys(tag_Enemy e[])
 {
-	static CParser Parser;
+	CParser Parser;
 	int typeNum = 0;
 
 	bool bSuccess = false;
@@ -122,7 +122,7 @@ bool LoadEnemys(tag_Enemy e[])
 bool LoadEnemy(tag_Enemy* e, const char* filename)
 {
 
-	static CParser Parser;
+	CParser Parser;
 	char fshape = '@';
 	int fx = 0;
 	int fy = 0;

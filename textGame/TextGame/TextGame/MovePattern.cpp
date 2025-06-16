@@ -2,7 +2,7 @@
 
 bool LoadPattern(tag_Pattern pattern[])
 {
-	static CParser Parser;
+	CParser Parser;
 	int typeNum = 0;
 	int stepNum = 0;
 
@@ -38,7 +38,7 @@ bool LoadPattern(tag_Pattern pattern[])
 		sprintf(p, "pattern%d", i);
 		strcpy(pattern[i].name, p);
 		pattern[i].stepCount = stepNum;
-		if (!GetPattern(Parser, p, &pattern[i], stepNum))
+		if (!GetPattern(&Parser, p, &pattern[i], stepNum))
 		{
 			return false;
 		}
@@ -48,7 +48,7 @@ bool LoadPattern(tag_Pattern pattern[])
 
 //아직 패턴을 추가했을때 오류 잡는부분이 부족함
 //ex) (-1-,1)오류 안나고 정상작동
-bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, int patternSize)
+bool GetPattern(CParser *parser, const char* patternName, tag_Pattern* pattern, int patternSize)
 {
 	//filedata 안에서 단어를 찾는다.
 		//찾은 단어를 저장할 버퍼
@@ -56,10 +56,10 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 	int	iLength;
 
 	//탐색을 시작할 커서를 파일 데이터 가장 앞으로 초기화
-	parser.current = parser.filedata;
+	parser->current = parser->filedata;
 
 	// 찾고자 하는 단어가 나올때까지 계속 찾을 것이므로 while 문으로 검사.
-	while (parser.GetNextWord(&chpBuff, &iLength))
+	while (parser->GetNextWord(&chpBuff, &iLength))
 	{
 		// Word 버퍼에 찾은 단어를 저장한다.
 		memset(chWord, 0, 256);
@@ -69,7 +69,7 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 		if (0 == strcmp(patternName, chWord))
 		{
 			// 맞다면 바로 뒤에 = 을 찾자.
-			while (parser.GetNextWord(&chpBuff, &iLength))
+			while (parser->GetNextWord(&chpBuff, &iLength))
 			{
 				memset(chWord, 0, 256);
 				memcpy(chWord, chpBuff, iLength);
@@ -77,7 +77,7 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 				{
 					// = 다음의 패턴 데이터 부분을 얻자.
 					int i = 0;
-					while (parser.GetNextWord(&chpBuff, &iLength) && i != patternSize)
+					while (parser->GetNextWord(&chpBuff, &iLength) && i != patternSize)
 					{
 						memset(chWord, 0, 256);
 						memcpy(chWord, chpBuff, iLength);
@@ -85,7 +85,7 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 						if (0 == strcmp(chWord, "("))
 						{
 							//패턴의 x좌표를 찾는다.
-							if (parser.GetNextWord(&chpBuff, &iLength))
+							if (parser->GetNextWord(&chpBuff, &iLength))
 							{
 								memset(chWord, 0, 256);
 								memcpy(chWord, chpBuff, iLength);
@@ -99,14 +99,14 @@ bool GetPattern(CParser parser, const char* patternName, tag_Pattern* pattern, i
 								pattern->Steps[i].x = atoi(chWord);
 							}
 							//,를 찾는다
-							if (parser.GetNextWord(&chpBuff, &iLength))
+							if (parser->GetNextWord(&chpBuff, &iLength))
 							{
 								memset(chWord, 0, 256);
 								memcpy(chWord, chpBuff, iLength);
 								if (0 == strcmp(chWord, ","))
 								{
 									//패턴의 y좌표를 찾는다.
-									if (parser.GetNextWord(&chpBuff, &iLength))
+									if (parser->GetNextWord(&chpBuff, &iLength))
 									{
 										memset(chWord, 0, 256);
 										memcpy(chWord, chpBuff, iLength);

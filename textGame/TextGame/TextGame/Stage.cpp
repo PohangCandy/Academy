@@ -5,7 +5,7 @@
 //--------------------------------------------------------------------
 bool LoadStageInfo()
 {
-	static CParser Parser;
+	CParser Parser;
 	int stagewidth = 0;
 	int stageheight = 0;
 	int stagenum = 0;
@@ -86,7 +86,7 @@ bool LoadStageInfo()
 //bool LoadStage(const char* filename, int width, int height)
 bool LoadStage(tag_Stage* s)
 {
-	static CParser Parser;
+	CParser Parser;
 	int stagewidth = s->width;
 	int stageheight = s->height;
 

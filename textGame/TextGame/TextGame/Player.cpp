@@ -55,7 +55,7 @@ void MovePlayer(tag_Player* p, tag_Bullet* bp)
 //--------------------------------------------------------------------
 bool LoadPlayer(tag_Player* p)
 {
-	static CParser Parser;
+	CParser Parser;
 	int fx = 0;
 	int fy = 0;
 	char fshape = '@';
