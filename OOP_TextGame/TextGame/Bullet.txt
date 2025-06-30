@@ -1,3 +1,0 @@
-type = normal
-pShape = o
-eShape = x
