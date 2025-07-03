@@ -1,4 +1,6 @@
 #include "Enemy.h"
+#include "CScreenBuffer.h"
+#include "CObjectManager.h"
 
 //--------------------------------------------------------------------
 // 자동으로 적 위치 좌표 이동
@@ -7,46 +9,46 @@
 //--------------------------------------------------------------------
 void CEnemy :: MoveEnemys(CEnemy E[])
 {
-	for (int i = 0; i < MAXENEMYNUM; i++)
-	{
-		if (E[i]._Active)
-		{
-			MoveEnemy(&E[i]);
-		}
+	//for (int i = 0; i < MAXENEMYNUM; i++)
+	//{
+	//	if (E[i]._Active)
+	//	{
+	//		E[i].MoveEnemy();
+	//	}
 
-		//MoveEnemy(&E[i]);
-	}
+	//	//MoveEnemy(&E[i]);
+	//}
 }
 
 //--------------------------------------------------------------------
 // 자동으로 적 위치 좌표 이동
 // 적들이 각각 패턴을 기반으로 움직이도록 해준다.
 //--------------------------------------------------------------------
-void CEnemy::MoveEnemy(CEnemy* E)
+void CEnemy::MoveEnemy()
 {
-	int Ecurstep = E->_pattern.curStep;
-	int ex = E->_X;
-	int ey = E->_Y;
-	int dx = E->_pattern.Steps[Ecurstep].x;
-	int dy = E->_pattern.Steps[Ecurstep].y;
+	int Ecurstep = _pattern.curStep;
+	int ex = _X;
+	int ey = _Y;
+	int dx = _pattern.Steps[Ecurstep].x;
+	int dy = _pattern.Steps[Ecurstep].y;
 
 	//적의 이전 위치 정보 저장
-	E->_Prev_x = ex;
-	E->_Prev_y = ey;
+	_Prev_x = ex;
+	_Prev_y = ey;
 
 	if (ex + dx >= 0 && ex + dx < dfSCREEN_WIDTH - 1)
 	{
-		E->_X += dx;
+		_X += dx;
 	}
 	if (ey + dy >= 0 && ey + dy < dfSCREEN_HEIGHT)
 	{
-		E->_Y += dy;
+		_Y += dy;
 	}
 
-	E->_pattern.curStep++;
-	if (E->_pattern.curStep >= E->_pattern.stepCount)
+	_pattern.curStep++;
+	if (_pattern.curStep >= _pattern.stepCount)
 	{
-		E->_pattern.curStep = 0;
+		_pattern.curStep = 0;
 	}
 }
 
@@ -55,23 +57,41 @@ void CEnemy::MoveEnemy(CEnemy* E)
 //--------------------------------------------------------------------
 // 적 총알 발사
 //--------------------------------------------------------------------
-void CEnemy::EnemyFire(CEnemy* ep, CBullet* bp)
+void CEnemy::EnemysFire(CEnemy* ep, CBullet* bp)
+{
+	//CBullet* tb;
+	//for (int i = 0; i < MAXENEMYNUM; i++)
+	//{
+	//	if (ep[i]._Active && (rand() % 100 < ep[i]._firePassability))
+	//	{
+	//		tb = CBullet::FindBullet();
+	//		if (!tb)
+	//		{
+	//			printf("남은 총알 없음\n");
+	//			return;
+	//		}
+	//		tb->InitBullet(true, ep[i]._X, ep[i]._Y, 1);
+	//	}
+	//}
+
+}
+
+void CEnemy::EnemyFire()
 {
 	CBullet* tb;
-	for (int i = 0; i < MAXENEMYNUM; i++)
+	if (_Active && (rand() % 100 < _firePassability))
 	{
-		if (ep[i]._Active && (rand() % 100 < ep[i]._firePassability))
+		tb = CBullet::FindBullet();
+		if (!tb)
 		{
-			tb = FindBullet(bp);
-			if (!tb)
-			{
-				printf("남은 총알 없음\n");
-				return;
-			}
-			tb->InitBullet(true, ep[i]._X, ep[i]._Y, 1);
+			printf("남은 총알 없음\n");
+			return;
 		}
-	}
+		tb->InitBullet(true, _X, _Y, 1);
 
+		CObjectManager* CurObjManager = CObjectManager::GetInstance();
+		CurObjManager->CreateObject(tb);
+	}
 }
 
 //--------------------------------------------------------------------
@@ -216,22 +236,38 @@ bool CEnemy::LoadEnemy(CEnemy* e, const char* filename)
 //--------------------------------------------------------------------
 // 적이 총알 데미지 입음
 //--------------------------------------------------------------------
-void CEnemy::CheckDamagedEnemy(CBullet* bp, CEnemy* ep)
+void CEnemy::CheckDamagedEnemys(CBullet* bp, CEnemy* ep)
 {
 	for (int i = 0; i < MAXBULLETNUM; i++)
 	{
-		if (!bp[i]._Active || bp[i]._bEnemy) continue;
+		if (!bp[i].IsAvailable() || bp[i].FromEnemy()) continue;
 		for (int j = 0; j < MAXENEMYNUM; j++)
 		{
 			if (!ep[j]._Active) continue;
 			if(CheckBulletCollision(&bp[i], &ep[j]))
 			{
-				bp[i]._Active = false;
+				bp[i].Deactivate();
 				ep[j]._hp -= 1;
 				if (ep[j]._hp <= 0)
 				{
 					ep[j]._Active = false;
 				}
+			}
+		}
+	}
+}
+
+void CEnemy::CheckDamagedEnemy(CBaseObject* other)
+{
+	if (other->GetObjectType() == BULLET)
+	{
+		CBullet* bp = (CBullet*)other;
+		if (!bp->FromEnemy())
+		{
+			_hp -= 1;
+			if (_hp <= 0 && _Active)
+			{
+				_Active = false;
 			}
 		}
 	}
@@ -243,10 +279,10 @@ bool CEnemy::CheckBulletCollision(CBullet* bp, CEnemy* ep)
 
 	do {
 		//적과 총알의 위치 일치
-		if (bp->_X == ep->_X && bp->_Y == ep->_Y) break;
+		if (bp->Getpos_X() == ep->_X && bp->Getpos_Y() == ep->_Y) break;
 
 		//적의 이전 위치와 총알의 현재 위치 일치
-		if (bp->_X == ep->_Prev_x && bp->_Y == ep->_Prev_y) break;
+		if (bp->Getpos_X() == ep->_Prev_x && bp->Getpos_Y() == ep->_Prev_y) break;
 
 		collisionCheck = false;
 	
@@ -260,15 +296,22 @@ bool CEnemy::CheckBulletCollision(CBullet* bp, CEnemy* ep)
 
 bool CEnemy::Update(void)
 {
-	return false;
-}
+	MoveEnemy();
+	EnemyFire();
 
-void CEnemy::Render(void)
-{
-
+	return true;
 }
 
 void CEnemy::OnCollision(CBaseObject* other)
 {
+	CheckDamagedEnemy(other);
+}
 
+void CEnemy::Render(void)
+{
+	CScreenBuffer* CurScreen = CScreenBuffer::GetInstance();
+	if (IsAvailable())
+	{
+		CurScreen->Sprite_Draw(_X,_Y,_shape);
+	}
 }

@@ -27,7 +27,7 @@ class CEnemy:public CBaseObject{
 
 public:
 
-	CEnemy() :CBaseObject(_ObjectType, _X, _Y) {}
+	CEnemy() :CBaseObject(ENEMY, 0, 0, 0) {}
 	~CEnemy() {}
 
 	bool		Update(void) override;
@@ -44,12 +44,18 @@ public:
 	// 자동으로 적 위치 좌표 이동
 	// 적들이 각각 패턴을 기반으로 움직이도록 해준다.
 	//--------------------------------------------------------------------
-	void MoveEnemy(CEnemy* E);
+	void MoveEnemy();
 
 	//--------------------------------------------------------------------
 	// 적이 총알 데미지 입음
 	//--------------------------------------------------------------------
-	void CheckDamagedEnemy(CBullet* bp, CEnemy* ep);
+	void CheckDamagedEnemys(CBullet* bp, CEnemy* ep);
+
+
+	//--------------------------------------------------------------------
+	// 적이 총알 데미지 입음
+	//--------------------------------------------------------------------
+	void CheckDamagedEnemy(CBaseObject* other);
 
 	//--------------------------------------------------------------------
 	// 적과 총알 충돌 체크
@@ -59,32 +65,47 @@ public:
 	//--------------------------------------------------------------------
 	// 적 총알 발사
 	//--------------------------------------------------------------------
-	void EnemyFire(CEnemy* ep, CBullet* bp);
+	void EnemysFire(CEnemy* ep, CBullet* bp);
+
+	//--------------------------------------------------------------------
+	// 적 총알 발사
+	//--------------------------------------------------------------------
+	void EnemyFire();
 
 	//--------------------------------------------------------------------
 	// 적 파일 데이터 로드
 	//--------------------------------------------------------------------
-	bool LoadEnemys(CEnemy e[]);
+	static bool LoadEnemys(CEnemy e[]);
 
 	//--------------------------------------------------------------------
 	// 적 이름으로 적 데이터 불러오기
 	// 
 	//--------------------------------------------------------------------
-	bool LoadEnemy(CEnemy* e, const char* filename);
+	static bool LoadEnemy(CEnemy* e, const char* filename);
+
+	char GetShape(void) { return _shape; };
+	//안 쓰고 싶었으나 스테이지 데이터에서 가져온 데이터로 세팅하기위해 사용
+	void SetPos(int x, int y) { _X = x, _Y = y; };
+	bool IsAvailable(void) { return _Active; };
+	void Deactivate(void) { _Active = false;}
+
+	int getexpos_X() { return _Prev_x; }
+	int getexpos_Y() { return _Prev_y; }
 
 protected:
-	int 	_X = 0;
-	int 	_Y = 0;
-	int 	_ObjectType = 1;
 
-	char _shape = '@';
-	int _Prev_x = 0;
-	int _Prev_y = 0;
-	int _directionX = 0;
-	int _hp = 0;
-	int _firePassability = 0;
-	bool _Active = 0;
-	tag_Pattern _pattern;
+	char _shape = 'A';
+	int _Prev_x = 40;
+	int _Prev_y = 3;
+	int _directionX = 1;
+	int _hp = 1;
+	int _firePassability = 5;
+	tag_Pattern _pattern = {
+		"pattern",
+		(-1,0),(-1,0),(-1,0),(1,0),(1,0),(1,0),(-1,0),(-1,0),(-1,0),(1,0),(1,0),(1,0),
+		0,
+		0
+	};
 };
 
 

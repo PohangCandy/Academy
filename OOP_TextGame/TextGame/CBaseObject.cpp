@@ -1,10 +1,11 @@
 #include "CBaseObject.h"
 
-CBaseObject::CBaseObject(int ObjectType, int X, int Y)
+CBaseObject::CBaseObject(int ObjectType, int X, int Y, bool Active)
 {
-	_iX = X;
-	_iY = Y;
-	_ObjectType = ObjectType;
+	_X = X;
+	_Y = Y;
+	_EObjectType = ObjectType;
+	_Active = Active;
 }
 
 CBaseObject::~CBaseObject()
@@ -14,5 +15,6 @@ CBaseObject::~CBaseObject()
 
 int CBaseObject::GetObjectType()
 {
-	return _ObjectType;
+	return _EObjectType;
 }
+

@@ -21,8 +21,13 @@
   <ItemGroup>
     <ClCompile Include="CBaseObject.cpp" />
     <ClCompile Include="Bullet.cpp" />
-    <ClCompile Include="CBulletManager.cpp" />
+    <ClCompile Include="CObjectManager.cpp" />
     <ClCompile Include="Console.cpp" />
+    <ClCompile Include="CSceneGame.cpp" />
+    <ClCompile Include="CSceneManager.cpp" />
+    <ClCompile Include="CSceneOver.cpp" />
+    <ClCompile Include="CSceneTitle.cpp" />
+    <ClCompile Include="CScreenBuffer.cpp" />
     <ClCompile Include="Enemy.cpp" />
     <ClCompile Include="FixedUpdate.cpp" />
     <ClCompile Include="main.cpp" />
@@ -34,13 +39,20 @@
   <ItemGroup>
     <ClInclude Include="CBaseObject.h" />
     <ClInclude Include="Bullet.h" />
-    <ClInclude Include="CBulletManager.h" />
+    <ClInclude Include="CObjectManager.h" />
     <ClInclude Include="Console.h" />
+    <ClInclude Include="CSceneGame.h" />
+    <ClInclude Include="CSceneManager.h" />
+    <ClInclude Include="CSceneOver.h" />
+    <ClInclude Include="CSceneTitle.h" />
+    <ClInclude Include="CScreenBuffer.h" />
     <ClInclude Include="Enemy.h" />
     <ClInclude Include="FixedUpdate.h" />
     <ClInclude Include="MovePattern.h" />
     <ClInclude Include="Player.h" />
+    <ClInclude Include="CSceneBase.h" />
     <ClInclude Include="Stage.h" />
+    <ClInclude Include="TemplateLinkedList.h" />
     <ClInclude Include="TextParser.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

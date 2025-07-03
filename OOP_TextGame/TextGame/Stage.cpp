@@ -128,7 +128,7 @@ CEnemy* SearchEnemyType(const char eShape)
 {
 	for (int i = 0; i < MAXENEMYTYPE; i++)
 	{
-		if (EnemyType[i]._shape == eShape)
+		if (EnemyType[i].GetShape() == eShape)
 		{
 			return &EnemyType[i];
 		}
@@ -144,11 +144,11 @@ bool LoadEnemyPool(CEnemy* ep, int posx, int posy)
 {
 	if (ep == nullptr) return false;
 
-	ep->_X = posx;
-	ep->_Y = posy;
+	ep->SetPos(posx, posy);
+
 	for (int i = 0; i < MAXENEMYNUM; i++)
 	{
-		if (!EP[i]._Active)
+		if (!EP[i].IsAvailable())
 		{
 			EP[i] = *ep;
 			return true;
@@ -166,7 +166,7 @@ bool Stage_End()
 	//그냥 적 메모리풀만 체크해도 되겠는데?
 	for (int i = 0; i < MAXENEMYNUM;i++)
 	{
-		if (EP[i]._Active) return false;
+		if (EP[i].IsAvailable()) return false;
 	}
 
 	return true;

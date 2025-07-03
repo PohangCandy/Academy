@@ -1,4 +1,5 @@
 #include "Bullet.h"
+#include "CScreenBuffer.h"
 
 //--------------------------------------------------------------------
 // 총알 모양 파일에서 데이터 읽기
@@ -95,13 +96,22 @@ void CBullet::Deactivate(void)
 	_Active = false;
 }
 
+bool CBullet::FromEnemy(void)
+{
+	if (_bEnemy)
+	{
+		return true;
+	}
+	return false;
+}
+
 //--------------------------------------------------------------------
 // 자동으로 총알 위치 좌표 이동
 // 종류에 따라 위 or 아래로 움직임
 // 플레이어는 스페이스로 총알 생성
 // 적은 랜덤한 시간으로 총알 생성
 //--------------------------------------------------------------------
-void  CBullet::MoveBullet(CBullet* bp)
+void  CBullet::MoveBullets(CBullet* bp)
 {
 	for (int i = 0; i < MAXBULLETNUM; i++)
 	{
@@ -148,17 +158,34 @@ void  CBullet::MoveBullet(CBullet* bp)
 	}
 }
 
+void CBullet::MoveBullet()
+{
+	if (_Active)
+	{
+		int y = _Y;
+		int dy = _directionY;
+		if (y + dy < 0 || y + dy > dfSCREEN_HEIGHT - 1)
+		{
+			_Active = false;
+		}
+		else
+		{
+			_Y += dy;
+		}
+	}
+}
+
 //--------------------------------------------------------------------
 // 총알 메모리 풀에서 사용가능한 총알 반환
 //--------------------------------------------------------------------
-CBullet* CBullet::FindBullet(CBullet* bp)
+CBullet* CBullet::FindBullet()
 {
 	for (int i = 0; i < MAXBULLETNUM; i++)
 	{
-		if (!(bp[i]._Active))
+		if (!(BP[i]._Active))
 		{
-			bp[i]._Active = true;
-			return &bp[i];
+			BP[i]._Active = true;
+			return &BP[i];
 		}
 	}
 
@@ -170,15 +197,27 @@ CBullet* CBullet::FindBullet(CBullet* bp)
 
 bool CBullet::Update(void)
 {
+	MoveBullet();
 	return false;
-}
-
-void CBullet::Render(void)
-{
-
 }
 
 void CBullet::OnCollision(CBaseObject* other)
 {
+	if (this->_bEnemy && other->GetObjectType() != ENEMY)
+	{
+		_Active = false;
+	}
+	if (!this->_bEnemy && other->GetObjectType() == ENEMY)
+	{
+		_Active = false;
+	}
+}
 
+void CBullet::Render(void)
+{
+	CScreenBuffer* CurScreen = CScreenBuffer::GetInstance();
+	if (IsAvailable())
+	{
+		CurScreen->Sprite_Draw(_X, _Y, _shape);
+	}
 }
