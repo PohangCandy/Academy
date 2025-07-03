@@ -23,7 +23,7 @@
 //--------------------------------------------------------------------
 class CBullet : public CBaseObject {
 public:
-	CBullet() :CBaseObject(_ObjectType, _X, _Y) {};
+	CBullet() :CBaseObject(BULLET, 0, 0, 0) {};
 	~CBullet() {};
 
 	virtual bool		Update(void) override;
@@ -36,18 +36,20 @@ public:
 // 플레이어는 스페이스로 총알 생성
 // 적은 랜덤한 시간으로 총알 생성
 //--------------------------------------------------------------------
-	void MoveBullet(CBullet* bp);
+	void MoveBullets(CBullet* bp);
+
+	void MoveBullet();
 
 	//--------------------------------------------------------------------
 	// 총알 메모리 풀에서 사용가능한 총알 반환
 	//--------------------------------------------------------------------
-	CBullet* FindBullet(CBullet* bp);
+	static CBullet* FindBullet();
 
 
 	//--------------------------------------------------------------------
 	// 총알 모양 파일에서 읽어서 메모리 풀 초기화
 	//--------------------------------------------------------------------
-	bool loadBullet(CBullet b[]);
+	static bool loadBullet(CBullet b[]);
 
 	//-------------------------------------------------------------------
 	// 총알을 적이나 플레이어 것으로 세팅해줄 함수
@@ -65,22 +67,25 @@ public:
 	void Activate(void);
 
 	//-------------------------------------------------------------------
-	// 총알 메모리 풀에서 _Active를 확인하기 위한 함수
+	// 총알 메모리 풀에서 있는 총알 비활성화, _Active를 false로 만들자
 	//-------------------------------------------------------------------
 	void Deactivate(void);
 
+	//-------------------------------------------------------------------
+	// 적 총알 유무 판단
+	//-------------------------------------------------------------------
+	bool FromEnemy(void);
+
+	int Getpos_X() { return _X; };
+	int Getpos_Y() { return _Y; };
+
 protected:
-	int _ObjectType = 2;
-	int _X = 0;
-	int _Y = 0;
 
 	char _type[12] = "none";
 
-	bool _Active = false;
-
 	char _shape = 'O';
-	char _pshape = 'O';
-	char _eshape = 'O';
+	char _pshape = 'o';
+	char _eshape = 'x';
 	bool _bEnemy = false;
 	int _directionY = -1;
 };
@@ -89,3 +94,8 @@ protected:
 //총알 타입
 //--------------------------------------------------------------------
 extern CBullet BulletType[MAXBULLETTYPE];
+
+//--------------------------------------------------------------------
+//총알 메모리풀
+//--------------------------------------------------------------------
+extern CBullet BP[MAXBULLETNUM];
