@@ -8,7 +8,7 @@
 #define SERVERPORT 9000
 #define BUFSIZE 512
 
-//¼ÒÄÏ Á¤º¸ ÀúÀåÀ» À§ÇÑ ±¸Á¶Ã¼¿Í º¯¼ö
+//ì†Œì¼“ ì •ë³´ ì €ì¥ì„ ìœ„í•œ êµ¬ì¡°ì²´ì™€ ë³€ìˆ˜
 struct SOCKETINFO
 {
 	SOCKET sock;
@@ -20,11 +20,11 @@ struct SOCKETINFO
 int nTotalSockets = 0;
 SOCKETINFO* SocketInfoArray[FD_SETSIZE];
 
-//¼ÒÄÏ °ü¸® ÇÔ¼ö
+//ì†Œì¼“ ê´€ë¦¬ í•¨ìˆ˜
 BOOL AddSocketInfo(SOCKET sock);
 void RemoveSocketInfo(int nIndex);
 
-//¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â ÈÄ Á¾·á
+//ì†Œì¼“ í•¨ìˆ˜ ì˜¤ë¥˜ ì¶œë ¥ í›„ ì¢…ë£Œ
 void err_quit(const char* msg)
 {
 	LPVOID lpMsgbuf;
@@ -39,7 +39,7 @@ void err_quit(const char* msg)
 	exit(1);
 }
 
-//¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â
+//ì†Œì¼“ í•¨ìˆ˜ ì˜¤ë¥˜ ì¶œë ¥
 void err_display(const char* msg)
 {
 	LPVOID lpMsgbuf;
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
 {
 	int retval;
 
-	//À©¼Ó ÃÊ±âÈ­
+	//ìœˆì† ì´ˆê¸°í™”
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return 1;
 
@@ -78,12 +78,12 @@ int main(int argc, char* argv[])
 	retval = listen(listen_sock, SOMAXCONN);
 	if (retval == SOCKET_ERROR) err_quit("listen()");
 
-	//³Íºí·ÎÅ· ¼ÒÄÏÀ¸·Î ÀüÈ¯
+	//ë„Œë¸”ë¡œí‚¹ ì†Œì¼“ìœ¼ë¡œ ì „í™˜
 	u_long on = 1;
 	retval = ioctlsocket(listen_sock, FIONBIO, &on);
 	if (retval == SOCKET_ERROR) err_display("ioctlsocket()");
 
-	//µ¥ÀÌÅÍ Åë½Å¿¡ »ç¿ëÇÒ º¯¼ö
+	//ë°ì´í„° í†µì‹ ì— ì‚¬ìš©í•  ë³€ìˆ˜
 	FD_SET rset, wset;
 	SOCKET client_sock;
 	SOCKADDR_IN clientaddr;
@@ -91,7 +91,7 @@ int main(int argc, char* argv[])
 
 	while (1)
 	{
-		//¼ÒÄÏ ¼Â ÃÊ±âÈ­
+		//ì†Œì¼“ ì…‹ ì´ˆê¸°í™”
 		FD_ZERO(&rset);
 		FD_ZERO(&wset);
 		FD_SET(listen_sock, &rset);
@@ -107,7 +107,7 @@ int main(int argc, char* argv[])
 	retval = select(0, &rset, &wset, NULL, NULL);
 	if (retval == SOCKET_ERROR) err_quit("select()");
 
-	//¼ÒÄÏ ¼Â °Ë»ç(1)
+	//ì†Œì¼“ ì…‹ ê²€ì‚¬(1)
 	if (FD_ISSET(listen_sock, &rset)) {
 		addrlen = sizeof(clientaddr);
 		client_sock = accept(listen_sock, (SOCKADDR*)&clientaddr, &addrlen);
@@ -115,18 +115,18 @@ int main(int argc, char* argv[])
 			err_display("accept()");
 		}
 		else {
-			printf("\n[TCP ¼­¹ö] Å¬¶óÀÌ³ÊÆ® Á¢¼Ò : IP ÁÖ¼Ò = %s, Æ÷Æ®¹øÈ£ = %d\n",
+			printf("\n[TCP ì„œë²„] í´ë¼ì´ë„ˆíŠ¸ ì ‘ì†Œ : IP ì£¼ì†Œ = %s, í¬íŠ¸ë²ˆí˜¸ = %d\n",
 				inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-			//¼ÒÄÏ Á¤º¸ Ãß°¡
+			//ì†Œì¼“ ì •ë³´ ì¶”ê°€
 			AddSocketInfo(client_sock);
 		}
 	}
 
-	//¼ÒÄÏ ¼Â °Ë»ç(2) : µ¥ÀÌÅÍ Åë½Å
+	//ì†Œì¼“ ì…‹ ê²€ì‚¬(2) : ë°ì´í„° í†µì‹ 
 	for (i = 0; i < nTotalSockets; i++) {
 		SOCKETINFO* ptr = SocketInfoArray[i];
 		if (FD_ISSET(ptr->sock, &rset)) {
-			//µ¥ÀÌÅÍ ¹Ş±â
+			//ë°ì´í„° ë°›ê¸°
 			retval = recv(ptr->sock, ptr->buf, BUFSIZE, 0);
 			if (retval == SOCKET_ERROR) {
 				err_display("recv()");
@@ -138,14 +138,14 @@ int main(int argc, char* argv[])
 				continue;
 			}
 			ptr->recvbytes = retval;
-			//¹ŞÀº µ¥ÀÌÅÍ Ãâ·Â
+			//ë°›ì€ ë°ì´í„° ì¶œë ¥
 			addrlen = sizeof(clientaddr);
 			getpeername(ptr->sock, (SOCKADDR*)&clientaddr, &addrlen);
 			ptr->buf[retval] = '\0';
 			printf("[TCP/%s : %d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), ptr->buf);
 		}
 		if (FD_ISSET(ptr->sock, &wset)) {
-			//µ¥ÀÌÅÍ º¸³»±â
+			//ë°ì´í„° ë³´ë‚´ê¸°
 			retval = send(ptr->sock, ptr->buf + ptr->sendbytes, ptr->recvbytes - ptr->sendbytes, 0);
 			if (retval == SOCKET_ERROR) {
 				err_display("send()");
@@ -159,22 +159,22 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	//À©¼Ó Á¾·á
+	//ìœˆì† ì¢…ë£Œ
 	WSACleanup();
 	return 0;
 }
 
-//¼ÒÄÏ Á¤º¸ Ãß°¡
+//ì†Œì¼“ ì •ë³´ ì¶”ê°€
 BOOL AddSocketInfo(SOCKET sock)
 {
 	if (nTotalSockets >= FD_SETSIZE) {
-		printf("[¿À·ù] ¼ÒÄÏ Á¤º¸¸¦ Ãß°¡ÇÒ ¼ö ¾ø½À´Ï´Ù!\n");
+		printf("[ì˜¤ë¥˜] ì†Œì¼“ ì •ë³´ë¥¼ ì¶”ê°€í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤!\n");
 		return FALSE;
 	}
 
 	SOCKETINFO* ptr = new SOCKETINFO;
 	if (ptr == NULL) {
-		printf("[¿À·ù] ¸Ş¸ğ¸®°¡ ºÎÁ·ÇÕ´Ï´Ù!\n");
+		printf("[ì˜¤ë¥˜] ë©”ëª¨ë¦¬ê°€ ë¶€ì¡±í•©ë‹ˆë‹¤!\n");
 		return false;
 	}
 
@@ -186,14 +186,23 @@ BOOL AddSocketInfo(SOCKET sock)
 	return true;
 }
 
-//¼ÒÄÏ Á¤º¸ »èÁ¦
+//ì†Œì¼“ ì •ë³´ ì‚­ì œ
 void RemoveSocketInfo(int nIndex)
 {
 	SOCKETINFO* ptr = SocketInfoArray[nIndex];
 
-	//Å¬¶óÀÌ¾ğÆ® Á¤º¸ ¾ò±â
+	//í´ë¼ì´ì–¸íŠ¸ ì •ë³´ ì–»ê¸°
 	SOCKADDR_IN clientaddr;
 	int addrlen = sizeof(clientaddr);
 	getpeername(ptr->sock, (SOCKADDR*)&clientaddr, &addrlen);
-	printf("[TCP ¼­¹ö] Å¬¶óÀÌ¾ğÆ® Á¾·á : IPÁÖ¼Ò")
+	printf("[TCP ì„œë²„] í´ë¼ì´ì–¸íŠ¸ ì¢…ë£Œ : IPì£¼ì†Œ = %s, í¬íŠ¸ ë²ˆí˜¸ = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+
+	closesocket(ptr->sock);
+	delete ptr;
+
+	if (nIndex != (nTotalSockets - 1))
+		SocketInfoArray[nIndex] = SocketInfoArray[nTotalSockets - 1];
+
+	--nTotalSockets;
+
 }
