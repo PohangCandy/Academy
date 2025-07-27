@@ -7,6 +7,7 @@
 #include <chrono>
 #include <thread>
 #include "Console.h"
+using namespace std;
 
 #pragma comment(lib, "ws2_32")
 
@@ -22,14 +23,14 @@ struct PLAYER {
 	int X, Y;
 };
 
-std::map<int, PLAYER> g_players;
+map<int, PLAYER> g_players;
 int MYID = -1;
 SOCKET g_sock;
 DWORD g_lastMoveTime = 0;
 
 void InputProc() {
 	DWORD now = GetTickCount();
-	if (now - g_lastMoveTime < 100) return;
+	if (now - g_lastMoveTime < 10) return;
 
 	if (GetAsyncKeyState(VK_LEFT) & 0x8000 ||
 		GetAsyncKeyState(VK_RIGHT) & 0x8000 ||
@@ -50,7 +51,7 @@ void InputProc() {
 			int sret = send(g_sock, (char*)&pkt, sizeof(pkt), 0);
 			if (sret == SOCKET_ERROR) {
 				cs_MoveCursor(0, 24);
-				printf("[¿À·ù] send ½ÇÆĞ: %d\n", WSAGetLastError());
+				printf("[ì˜¤ë¥˜] send ì‹¤íŒ¨: %d\n", WSAGetLastError());
 			}
 			g_lastMoveTime = now;
 		}
@@ -66,7 +67,7 @@ void LogicProc() {
 	int ret = select(0, &rset, NULL, NULL, &timeout);
 	if (ret == SOCKET_ERROR) {
 		cs_MoveCursor(0, 24);
-		printf("[¿À·ù] select ½ÇÆĞ: %d\n", WSAGetLastError());
+		printf("[ì˜¤ë¥˜] select ì‹¤íŒ¨: %d\n", WSAGetLastError());
 		return;
 	}
 	if (ret > 0 && FD_ISSET(g_sock, &rset)) {
@@ -75,7 +76,7 @@ void LogicProc() {
 			int err = WSAGetLastError();
 			if (err != WSAEWOULDBLOCK) {
 				cs_MoveCursor(0, 24);
-				printf("[¿À·ù] recv ½ÇÆĞ ¶Ç´Â ¿¬°á Á¾·á: %d\n", err);
+				printf("[ì˜¤ë¥˜] recv ì‹¤íŒ¨ ë˜ëŠ” ì—°ê²° ì¢…ë£Œ: %d\n", err);
 			}
 			return;
 		}
@@ -92,7 +93,7 @@ void LogicProc() {
 				break;
 			default:
 				cs_MoveCursor(0, 24);
-				printf("[°æ°í] ¾Ë ¼ö ¾ø´Â ÆĞÅ¶ Å¸ÀÔ ¼ö½Å: %d\n", p->Type);
+				printf("[ê²½ê³ ] ì•Œ ìˆ˜ ì—†ëŠ” íŒ¨í‚· íƒ€ì… ìˆ˜ì‹ : %d\n", p->Type);
 				break;
 			}
 			offset += 16;
@@ -102,44 +103,48 @@ void LogicProc() {
 
 void RenderProc() {
 	cs_ClearScreen();
-	for (auto& [id, pl] : g_players) {
+
+	for (auto it = g_players.begin(); it != g_players.end(); ++it) {
+		const int id = it->first;
+		const PLAYER& pl = it->second;
 		cs_MoveCursor(pl.X, pl.Y);
 		printf("*");
 	}
+
 	cs_MoveCursor(0, 24);
 }
 
 int main() {
-	cs_Initial(); // ÄÜ¼Ö ÃÊ±âÈ­ (Ä¿¼­ ¼û±â±â Æ÷ÇÔ)
+	cs_Initial(); // ì½˜ì†” ì´ˆê¸°í™” (ì»¤ì„œ ìˆ¨ê¸°ê¸° í¬í•¨)
 
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-		printf("[¿À·ù] WSAStartup ½ÇÆĞ\n");
+		printf("[ì˜¤ë¥˜] WSAStartup ì‹¤íŒ¨\n");
 		return 1;
 	}
 	g_sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (g_sock == INVALID_SOCKET) {
-		printf("[¿À·ù] ¼ÒÄÏ »ı¼º ½ÇÆĞ: %d\n", WSAGetLastError());
+		printf("[ì˜¤ë¥˜] ì†Œì¼“ ìƒì„± ì‹¤íŒ¨: %d\n", WSAGetLastError());
 		WSACleanup();
 		return 1;
 	}
 
 	char ipStr[32];
-	printf("Á¢¼ÓÇÒ IP¸¦ ÀÔ·ÂÇÏ¼¼¿ä: ");
+	printf("ì ‘ì†í•  IPë¥¼ ì…ë ¥í•˜ì„¸ìš”: ");
 	scanf_s("%31s", ipStr, (unsigned)_countof(ipStr));
 
 	sockaddr_in servAddr = {};
 	servAddr.sin_family = AF_INET;
 	servAddr.sin_port = htons(3000);
 	if (InetPtonA(AF_INET, ipStr, &servAddr.sin_addr) != 1) {
-		printf("[¿À·ù] Àß¸øµÈ IP Çü½Ä\n");
+		printf("[ì˜¤ë¥˜] ì˜ëª»ëœ IP í˜•ì‹\n");
 		closesocket(g_sock);
 		WSACleanup();
 		return 1;
 	}
 
 	if (connect(g_sock, (sockaddr*)&servAddr, sizeof(servAddr)) == SOCKET_ERROR) {
-		printf("[¿À·ù] ¼­¹ö ¿¬°á ½ÇÆĞ: %d\n", WSAGetLastError());
+		printf("[ì˜¤ë¥˜] ì„œë²„ ì—°ê²° ì‹¤íŒ¨: %d\n", WSAGetLastError());
 		closesocket(g_sock);
 		WSACleanup();
 		return 1;
@@ -152,7 +157,6 @@ int main() {
 		InputProc();
 		LogicProc();
 		RenderProc();
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
 	closesocket(g_sock);
