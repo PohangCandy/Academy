@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <list>
 #include <vector>
+#include <chrono>
 #include "Console.h"
 #include "CScreenBuffer.h"
 
@@ -14,9 +15,10 @@
 #define MAX_ID 10000
 #define dfSCREEN_WIDTH  80
 #define dfSCREEN_HEIGHT 23
+#define TARGET_FRAME    100
 
 struct stHEADER {
-	int Type; // 0: ID ºÎ¿©, 1: »ı¼º, 2: »èÁ¦, 3: ÀÌµ¿
+	int Type; // 0: ID ë¶€ì—¬, 1: ìƒì„±, 2: ì‚­ì œ, 3: ì´ë™
 	int ID;
 	int X;
 	int Y;
@@ -41,7 +43,13 @@ void SendUnicast(Player* player, const stHEADER& msg);
 void SendBroadcast(Player* except, const stHEADER& msg);
 void AcceptProc();
 void RecvProc(Player* player);
-void Render();
+void Render(int displayedFPS);
+void NetworkProc();
+
+DWORD lastFrameTime = GetTickCount();
+DWORD lastFPSUpdateTime = GetTickCount();
+int frameCount = 0;
+int displayedFPS = TARGET_FRAME;
 
 int main() {
 	WSADATA wsa;
@@ -60,38 +68,52 @@ int main() {
 	ioctlsocket(g_listenSock, FIONBIO, &on);
 
 	while (true) {
-		fd_set rset;
-		FD_ZERO(&rset);
-		FD_SET(g_listenSock, &rset);
-		for (auto p : g_playerList) {
-			FD_SET(p->sock, &rset);
-		}
-		int ret = select(0, &rset, nullptr, nullptr, nullptr);
-		if (ret < 0) continue;
+		DWORD now = GetTickCount();
+		if (now - lastFrameTime < 10) continue; // 100 FPS
+		lastFrameTime = now;
+		frameCount++;
 
-		if (FD_ISSET(g_listenSock, &rset)) {
-			AcceptProc();
+		if (now - lastFPSUpdateTime >= 1000) {
+			displayedFPS = frameCount;
+			frameCount = 0;
+			lastFPSUpdateTime = now;
 		}
 
-		for (auto it = g_playerList.begin(); it != g_playerList.end(); ) {
-			Player* p = *it;
-			if (FD_ISSET(p->sock, &rset)) {
-				RecvProc(p);
-				if (p->bDisconnected) {
-					closesocket(p->sock);
-					delete p;
-					it = g_playerList.erase(it);
-					continue;
-				}
-			}
-			++it;
-		}
-
-		Render();
+		NetworkProc();
+		Render(displayedFPS);
 	}
 
 	WSACleanup();
 	return 0;
+}
+
+void NetworkProc() {
+	fd_set rset;
+	FD_ZERO(&rset);
+	FD_SET(g_listenSock, &rset);
+	for (auto p : g_playerList) {
+		FD_SET(p->sock, &rset);
+	}
+	int ret = select(0, &rset, nullptr, nullptr, nullptr);
+	if (ret < 0) return;
+
+	if (FD_ISSET(g_listenSock, &rset)) {
+		AcceptProc();
+	}
+
+	for (auto it = g_playerList.begin(); it != g_playerList.end(); ) {
+		Player* p = *it;
+		if (FD_ISSET(p->sock, &rset)) {
+			RecvProc(p);
+			if (p->bDisconnected) {
+				closesocket(p->sock);
+				delete p;
+				it = g_playerList.erase(it);
+				continue;
+			}
+		}
+		++it;
+	}
 }
 
 void AcceptProc() {
@@ -111,7 +133,7 @@ void AcceptProc() {
 
 	g_playerList.push_back(newPlayer);
 
-	// 1. ID ºÎ¿©
+	// 1. ID ë¶€ì—¬
 	stHEADER msg;
 	msg.Type = 0;
 	msg.ID = newPlayer->ID;
@@ -119,14 +141,14 @@ void AcceptProc() {
 	msg.Y = newPlayer->Y;
 	SendUnicast(newPlayer, msg);
 
-	// 2. ÀÚ±â º° »ı¼º ¸Ş½ÃÁö (»õ ÇÃ·¹ÀÌ¾î¿¡°Ô)
+	// 2. ìê¸° ë³„ ìƒì„± ë©”ì‹œì§€ (ìƒˆ í”Œë ˆì´ì–´ì—ê²Œ)
 	msg.Type = 1;
 	SendUnicast(newPlayer, msg);
 
-	// 3. ±âÁ¸ ÇÃ·¹ÀÌ¾îµé¿¡°Ô »õ ÇÃ·¹ÀÌ¾î »ı¼º Åëº¸
+	// 3. ê¸°ì¡´ í”Œë ˆì´ì–´ë“¤ì—ê²Œ ìƒˆ í”Œë ˆì´ì–´ ìƒì„± í†µë³´
 	SendBroadcast(newPlayer, msg);
 
-	// 4. »õ ÇÃ·¹ÀÌ¾î¿¡°Ô ±âÁ¸ ÇÃ·¹ÀÌ¾îµé Á¤º¸ Àü¼Û
+	// 4. ìƒˆ í”Œë ˆì´ì–´ì—ê²Œ ê¸°ì¡´ í”Œë ˆì´ì–´ë“¤ ì •ë³´ ì „ì†¡
 	for (auto p : g_playerList) {
 		if (p == newPlayer) continue;
 		stHEADER other;
@@ -148,7 +170,7 @@ void RecvProc(Player* player) {
 	if (ret < sizeof(stHEADER)) return;
 
 	stHEADER* pkt = (stHEADER*)buf;
-	if (pkt->Type == 3) { // ÀÌµ¿
+	if (pkt->Type == 3) { // ì´ë™
 		player->X = pkt->X;
 		player->Y = pkt->Y;
 		SendBroadcast(nullptr, *pkt);
@@ -174,19 +196,19 @@ void Disconnect(Player* player) {
 	player->bDisconnected = true;
 
 	stHEADER msg;
-	msg.Type = 2; // »èÁ¦
+	msg.Type = 2; // ì‚­ì œ
 	msg.ID = player->ID;
 	msg.X = 0;
 	msg.Y = 0;
 	SendBroadcast(player, msg);
 }
 
-void Render() {
+void Render(int displayedFPS) {
 	CScreenBuffer* pBuffer = CScreenBuffer::GetInstance();
 	pBuffer->Buffer_Clear();
 
 	char info[80];
-	sprintf_s(info, "Connect Client : %zu   Packet : %d", g_playerList.size(), g_frameRecvCount);
+	sprintf_s(info, "Connect Client : %zu   Frame : %d", g_playerList.size(), displayedFPS);
 	for (int i = 0; info[i] != '\0'; ++i) {
 		pBuffer->Sprite_Draw(i, 0, info[i]);
 	}
