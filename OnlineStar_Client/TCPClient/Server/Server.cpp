@@ -3,20 +3,57 @@
 #include <windows.h>
 #include <stdio.h>
 #include <list>
-#include <vector>
-#include <chrono>
 #include "Console.h"
 #include "CScreenBuffer.h"
+#include "errlog.h"
+using namespace std;
 
 #pragma comment(lib, "ws2_32")
 
 #define PORT 3000
-#define MAX_BUFFER 1024
-#define MAX_ID 10000
-#define TARGET_FRAME    100
+#define MAX_BUFFER 1600
+#define FRAME 100
 
-struct stHEADER {
-	int Type; // 0: ID �ο�, 1: ����, 2: ����, 3: �̵�
+//#pragma pack(push, 1)
+//#pragma pack(pop)
+
+//메시지 타입별 고유번호
+enum PacketType {
+	ASSIGN_ID = 0,
+	CREATE_STAR = 1,
+	REMOVE_STAR = 2,
+	MOVE = 3,
+};
+
+// ID 할당
+struct GiveID 
+{
+	int Type;
+	int ID;
+	int unused1 = 0;
+	int unused2 = 0;
+};
+
+// 별 생성
+struct CreateStar 
+{
+	int Type;
+	int ID;
+	int X;
+	int Y;
+};
+
+// 별 삭제
+struct RemoveStar {
+	int Type;
+	int ID;
+	int unused1 = 0;
+	int unused2 = 0;
+};
+
+// 별 이동
+struct MoveStar {
+	int Type;
 	int ID;
 	int X;
 	int Y;
@@ -25,52 +62,78 @@ struct stHEADER {
 struct Player {
 	SOCKET sock;
 	sockaddr_in addr;
+	char IP[16];
+	int Port;
 	int ID;
 	int X;
 	int Y;
 	bool bDisconnected = false;
 };
 
-std::list<Player*> g_playerList;
-int g_nextID = 0;
-SOCKET g_listenSock;
-int g_frameRecvCount = 0;
+//플레이어들 담을 리스트 정보
+list<Player*> PlayerList;
 
-void Disconnect(Player* player);
-void SendUnicast(Player* player, const stHEADER& msg);
-void SendBroadcast(Player* except, const stHEADER& msg);
+//다음에 할당할 ID
+int NextID = 0;
+
+SOCKET listenSock;
+
+void NetworkProc();
+void Render(int displayedFPS);
+
+//다양한 메시지를 처리하기위해 템플릿 적용
+template<typename T>
+void SendUnicast(Player* player, const T& msg);
+template<typename T>
+void SendBroadcast(Player* except, const T& msg);
+
 void AcceptProc();
 void RecvProc(Player* player);
-void Render(int displayedFPS);
-void NetworkProc();
+void Disconnect(Player* player);
 
-DWORD lastFrameTime = GetTickCount();
-DWORD lastFPSUpdateTime = GetTickCount();
-int frameCount = 0;
-int displayedFPS = TARGET_FRAME;
 
-int main() {
+int displayedFPS = FRAME;
+
+int main() 
+{
 	WSADATA wsa;
-	WSAStartup(MAKEWORD(2, 2), &wsa);
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+	{
+		printf("윈속 초기화 실패");
+		return 1;
+	}
 	cs_Initial();
 
-	g_listenSock = socket(AF_INET, SOCK_STREAM, 0);
-	sockaddr_in servAddr = {};
-	servAddr.sin_family = AF_INET;
-	servAddr.sin_port = htons(PORT);
-	servAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	bind(g_listenSock, (sockaddr*)&servAddr, sizeof(servAddr));
-	listen(g_listenSock, SOMAXCONN);
+	//접속 동작 전 예비 동작
+	listenSock = socket(AF_INET, SOCK_STREAM, 0);
+	sockaddr_in serverAddr = {};
+	serverAddr.sin_family = AF_INET;
+	serverAddr.sin_port = htons(PORT);
+	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
+	bind(listenSock, (sockaddr*)&serverAddr, sizeof(serverAddr));
+	if (listenSock == INVALID_SOCKET) err_quit("bind()");
+
+	listen(listenSock, SOMAXCONN);
+	if(listenSock == SOCKET_ERROR) err_quit("listen()");
+
+	//넌블로킹 소켓 세팅
 	u_long on = 1;
-	ioctlsocket(g_listenSock, FIONBIO, &on);
+	ioctlsocket(listenSock, FIONBIO, &on);
+	if (listenSock == SOCKET_ERROR) err_quit("ioctlsocket()");
+
+
+	DWORD lastFrameTime = GetTickCount();
+	DWORD lastFPSUpdateTime = GetTickCount();
+	int frameCount = 0;
 
 	while (true) {
 		DWORD now = GetTickCount();
-		if (now - lastFrameTime < 10) continue; // 100 FPS
-		lastFrameTime = now;
+		//if (now - lastFrameTime < 10) continue;
+		//lastFrameTime = now;
 		frameCount++;
 
+		//1초마다 프레임 결과를 출력
 		if (now - lastFPSUpdateTime >= 1000) {
 			displayedFPS = frameCount;
 			frameCount = 0;
@@ -85,28 +148,39 @@ int main() {
 	return 0;
 }
 
-void NetworkProc() {
+void NetworkProc() 
+{
 	fd_set rset;
 	FD_ZERO(&rset);
-	FD_SET(g_listenSock, &rset);
-	for (auto p : g_playerList) {
+	//접속 동작 감지
+	FD_SET(listenSock, &rset);
+
+	//이동,종료 동작 감지
+	for (auto p : PlayerList) {
 		FD_SET(p->sock, &rset);
 	}
+
+	//메시지가 없으면 무한 대기
 	int ret = select(0, &rset, nullptr, nullptr, nullptr);
+	if (ret == SOCKET_ERROR) err_quit("select()");
 	if (ret < 0) return;
 
-	if (FD_ISSET(g_listenSock, &rset)) {
+	//접속 허락
+	if (FD_ISSET(listenSock, &rset)) {
 		AcceptProc();
 	}
 
-	for (auto it = g_playerList.begin(); it != g_playerList.end(); ) {
+	//이동,종료 허락
+	for (auto it = PlayerList.begin(); it != PlayerList.end(); ) {
 		Player* p = *it;
 		if (FD_ISSET(p->sock, &rset)) {
 			RecvProc(p);
+
+			//플래그 비활성화된 플레이어 삭제
 			if (p->bDisconnected) {
 				closesocket(p->sock);
 				delete p;
-				it = g_playerList.erase(it);
+				it = PlayerList.erase(it);
 				continue;
 			}
 		}
@@ -114,104 +188,114 @@ void NetworkProc() {
 	}
 }
 
+//플레이어 접속
 void AcceptProc() {
-	sockaddr_in caddr;
-	int clen = sizeof(caddr);
-	SOCKET cSock = accept(g_listenSock, (sockaddr*)&caddr, &clen);
-	if (cSock == INVALID_SOCKET) return;
+	sockaddr_in clientAddr;
+	int addlen = sizeof(clientAddr);
+	SOCKET clientSock = accept(listenSock, (sockaddr*)&clientAddr, &addlen);
+	if (clientSock == INVALID_SOCKET) err_display("accept()");
 	u_long on = 1;
-	ioctlsocket(cSock, FIONBIO, &on);
+	ioctlsocket(clientSock, FIONBIO, &on);
 
 	Player* newPlayer = new Player;
-	newPlayer->sock = cSock;
-	newPlayer->addr = caddr;
-	newPlayer->ID = g_nextID++;
+	newPlayer->sock = clientSock;
+	newPlayer->addr = clientAddr;
+	InetNtopA(AF_INET, &clientAddr.sin_addr, newPlayer->IP, 16);
+	newPlayer->Port = clientAddr.sin_port;
+	newPlayer->ID = NextID++;
 	newPlayer->X = dfSCREEN_WIDTH / 2;
 	newPlayer->Y = dfSCREEN_HEIGHT / 2;
 
-	g_playerList.push_back(newPlayer);
+	PlayerList.push_back(newPlayer);
 
-	// 1. ID �ο�
-	stHEADER msg;
-	msg.Type = 0;
-	msg.ID = newPlayer->ID;
-	msg.X = newPlayer->X;
-	msg.Y = newPlayer->Y;
-	SendUnicast(newPlayer, msg);
+	//ID 할당
+	GiveID assignMsg = { ASSIGN_ID, newPlayer->ID};
+	SendUnicast(newPlayer, assignMsg);
 
-	// 2. �ڱ� �� ���� �޽��� (�� �÷��̾��)
-	msg.Type = 1;
-	SendUnicast(newPlayer, msg);
+	//새로운 플레이어 별 생성
+	CreateStar createMsg = { CREATE_STAR, newPlayer->ID, newPlayer->X, newPlayer->Y };
+	SendUnicast(newPlayer, createMsg);
 
-	// 3. ���� �÷��̾�鿡�� �� �÷��̾� ���� �뺸
-	SendBroadcast(newPlayer, msg);
+	//기존 플레이어들에게 새로운 플레이어 별 생성
+	SendBroadcast(newPlayer, createMsg);
 
-	// 4. �� �÷��̾�� ���� �÷��̾�� ���� ����
-	for (auto p : g_playerList) {
+	//새로운 기존에게 기존의 플레이어 정보 전송
+	for (auto p : PlayerList) 
+	{
 		if (p == newPlayer) continue;
-		stHEADER other;
-		other.Type = 1;
-		other.ID = p->ID;
-		other.X = p->X;
-		other.Y = p->Y;
+		CreateStar other = { CREATE_STAR, p->ID, p->X, p->Y };
 		SendUnicast(newPlayer, other);
 	}
 }
 
-void RecvProc(Player* player) {
+void RecvProc(Player* player) 
+{
 	char buf[MAX_BUFFER];
 	int ret = recv(player->sock, buf, MAX_BUFFER, 0);
+
+	//접속 종료
 	if (ret <= 0) {
 		Disconnect(player);
 		return;
 	}
-	if (ret < sizeof(stHEADER)) return;
 
-	stHEADER* pkt = (stHEADER*)buf;
-	if (pkt->Type == 3) { // �̵�
+	//별 이동
+	int type = *(int*)buf;
+	switch (type) {
+	case MOVE: {
+		if (ret < sizeof(MoveStar)) return;
+		MoveStar* pkt = (MoveStar*)(buf);
 		player->X = pkt->X;
 		player->Y = pkt->Y;
-		SendBroadcast(nullptr, *pkt);
-		g_frameRecvCount++;
+		//플레이어를 제외한 나머지 플레이어에게 메시지 전달
+		SendBroadcast(player, *pkt);
+		break;
+	}
 	}
 }
 
-void SendUnicast(Player* player, const stHEADER& msg) {
-	int ret = send(player->sock, (const char*)&msg, sizeof(msg), 0);
+//지정된 플레이어에게만 전달
+template<typename T>
+void SendUnicast(Player* player, const T& msg) 
+{
+	int ret = send(player->sock, (const char*)(&msg), sizeof(T), 0);
 	if (ret == SOCKET_ERROR) {
 		Disconnect(player);
 	}
 }
 
-void SendBroadcast(Player* except, const stHEADER& msg) {
-	for (auto p : g_playerList) {
+//지정된 플레이어 제외 전달
+template<typename T>
+void SendBroadcast(Player* except, const T& msg) 
+{
+	for (auto p : PlayerList) {
 		if (p == except) continue;
 		SendUnicast(p, msg);
 	}
 }
 
-void Disconnect(Player* player) {
+void Disconnect(Player* player) 
+{
+	//플래그 활성화
 	player->bDisconnected = true;
 
-	stHEADER msg;
-	msg.Type = 2; // ����
-	msg.ID = player->ID;
-	msg.X = 0;
-	msg.Y = 0;
-	SendBroadcast(player, msg);
+	RemoveStar removeMsg = { REMOVE_STAR, player->ID };
+	SendBroadcast(player, removeMsg);
 }
 
-void Render(int displayedFPS) {
+void Render(int displayedFPS) 
+{
 	CScreenBuffer* pBuffer = CScreenBuffer::GetInstance();
 	pBuffer->Buffer_Clear();
 
 	char info[80];
-	sprintf_s(info, "Connect Client : %zu   Frame : %d", g_playerList.size(), displayedFPS);
+	sprintf_s(info, "Connect Client : %zu   Frame : %d", PlayerList.size(), displayedFPS);
+	//sprintf_s(info, "Connect Client : %zu", PlayerList.size());
 	for (int i = 0; info[i] != '\0'; ++i) {
 		pBuffer->Sprite_Draw(i, 0, info[i]);
 	}
 
-	for (auto& p : g_playerList) {
+	for (auto& p : PlayerList) {
 		pBuffer->Sprite_Draw(p->X, p->Y, '*');
 	}
 
