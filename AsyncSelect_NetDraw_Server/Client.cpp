@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <string>
-#include <vector> // 추가됨
+#include <vector>
 #include "CRingBuffer.h"
 
 #pragma comment(lib, "ws2_32.lib")
@@ -19,7 +19,7 @@
 #define SERVER_PORT 25000
 #define PACKET_SIZE 18
 #define HEADER_SIZE 2
-#define BUFFER_SIZE 1800 + 1
+#define BUFFER_SIZE 8192
 
 struct stHEADER {
     unsigned short Len;
@@ -34,12 +34,13 @@ struct st_DRAW_PACKET {
 
 bool g_bConnected = false;
 SOCKET g_sock = INVALID_SOCKET;
-CRingBuffer g_recvBuf(1800 + 1);  // 기본 버퍼 크기 지정
+CRingBuffer g_recvBuf(1024);
+CRingBuffer g_sendBuf(1024);  // 전송용 링버퍼 추가
 char g_tempBuf[BUFFER_SIZE];
 
 HWND g_hWnd;
 std::vector<st_DRAW_PACKET> g_drawPackets;
-bool g_bMouseDown = false;  // 마우스 상태
+bool g_bMouseDown = false;
 int g_iPrevX = 0, g_iPrevY = 0;
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -191,7 +192,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         break;
     }
     case WM_DESTROY:
-        ForceCloseSocket(); // SO_LINGER 설정으로 RST 전송
+        ForceCloseSocket();
         PostQuitMessage(0);
         break;
     default:
@@ -244,7 +245,23 @@ void ProcessRead() {
 }
 
 void ProcessWrite() {
-    // Optional if using SendQ
+    if (!g_bConnected || g_sendBuf.GetUseSize() == 0)
+        return;
+
+    char sendTemp[BUFFER_SIZE];
+    int sendLen = g_sendBuf.Peek(sendTemp, BUFFER_SIZE);
+    int ret = send(g_sock, sendTemp, sendLen, 0);
+
+    if (ret > 0) {
+        g_sendBuf.MoveFront(ret);
+    }
+    else if (ret == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err != WSAEWOULDBLOCK) {
+            ShowErrorMessage("Send Error", "send() failed");
+            ForceCloseSocket();
+        }
+    }
 }
 
 void SendDrawPacket(int sx, int sy, int ex, int ey) {
@@ -257,12 +274,11 @@ void SendDrawPacket(int sx, int sy, int ex, int ey) {
     st_DRAW_PACKET pkt{ sx, sy, ex, ey };
     memcpy(buffer + HEADER_SIZE, &pkt, sizeof(pkt));
 
-    int ret = send(g_sock, buffer, PACKET_SIZE, 0);
-    if (ret == SOCKET_ERROR) {
-        char errMsg[128];
-        sprintf_s(errMsg, "Send error: %d\n", WSAGetLastError());
-        OutputDebugStringA(errMsg);
-        ShowErrorMessage("Send Error", errMsg);
+    if (g_sendBuf.Enqueue(buffer, PACKET_SIZE) != PACKET_SIZE) {
+        ShowErrorMessage("Send Buffer Error", "Failed to enqueue send packet");
+    }
+    else {
+        PostMessage(g_hWnd, UM_NETWORK, g_sock, FD_WRITE); // 강제 write 트리거
     }
 }
 
