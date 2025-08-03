@@ -2,21 +2,24 @@
 #define _UNICODE
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
+// DrawingClient.cpp
 #include <winsock2.h>
 #include <windows.h>
 #include <ws2tcpip.h>
 #include <tchar.h>
 #include <stdio.h>
-#include <vector>
+#include <iostream>
+#include <string>
+#include <vector> // Ï∂îÍ∞ÄÎê®
 #include "CRingBuffer.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
 #define UM_NETWORK (WM_USER + 1)
 #define SERVER_PORT 25000
-#define HEADER_SIZE 2
 #define PACKET_SIZE 18
-#define BUFFER_SIZE 8192
+#define HEADER_SIZE 2
+#define BUFFER_SIZE 1800 + 1
 
 struct stHEADER {
     unsigned short Len;
@@ -31,23 +34,34 @@ struct st_DRAW_PACKET {
 
 bool g_bConnected = false;
 SOCKET g_sock = INVALID_SOCKET;
-CRingBuffer g_recvBuf(8192);
+CRingBuffer g_recvBuf(1800 + 1);  // Í∏∞Î≥∏ Î≤ÑÌçº ÌÅ¨Í∏∞ ÏßÄÏ†ï
 char g_tempBuf[BUFFER_SIZE];
 
 HWND g_hWnd;
 std::vector<st_DRAW_PACKET> g_drawPackets;
-
-bool g_bMouseDown = false;
-int g_oldX = 0, g_oldY = 0;
+bool g_bMouseDown = false;  // ÎßàÏö∞Ïä§ ÏÉÅÌÉú
+int g_iPrevX = 0, g_iPrevY = 0;
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void ProcessRead();
+void ProcessWrite();
 void SendDrawPacket(int sx, int sy, int ex, int ey);
 void HandlePacket(char* data);
 void ShowErrorMessage(const char* title, const char* msg);
+void ForceCloseSocket();
 
 void ShowErrorMessage(const char* title, const char* msg) {
     MessageBoxA(g_hWnd ? g_hWnd : NULL, msg, title, MB_ICONERROR | MB_OK);
+}
+
+void ForceCloseSocket() {
+    if (g_sock != INVALID_SOCKET) {
+        linger optLinger = { 1, 0 }; // RST Ï†ÑÏÜ°ÏùÑ ÏúÑÌïú linger ÏÑ§Ï†ï
+        setsockopt(g_sock, SOL_SOCKET, SO_LINGER, (char*)&optLinger, sizeof(optLinger));
+        closesocket(g_sock);
+        g_sock = INVALID_SOCKET;
+    }
+    g_bConnected = false;
 }
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
@@ -70,7 +84,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         return 1;
     }
 
-    HWND hwnd = CreateWindowW(L"DrawingClientWindowClass", L"±◊∏Æ±‚ ≈¨∂Û¿Ãæ∆Æ", WS_OVERLAPPEDWINDOW,
+    HWND hwnd = CreateWindowW(L"DrawingClientWindowClass", L"Í∑∏Î¶¨Í∏∞ ÌÅ¥ÎùºÏù¥Ïñ∏Ìä∏", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
         NULL, NULL, hInstance, NULL);
 
@@ -111,7 +125,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         DispatchMessage(&msg);
     }
 
-    closesocket(g_sock);
+    ForceCloseSocket();
     WSACleanup();
     return (int)msg.wParam;
 }
@@ -122,50 +136,50 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         if (WSAGETSELECTERROR(lParam)) {
             char errLog[128];
             sprintf_s(errLog, "WSA Error: %d\n", WSAGETSELECTERROR(lParam));
+            OutputDebugStringA(errLog);
             ShowErrorMessage("Socket Error", errLog);
-            closesocket(g_sock);
-            g_bConnected = false;
+            ForceCloseSocket();
             return 0;
         }
 
         switch (WSAGETSELECTEVENT(lParam)) {
         case FD_CONNECT:
             g_bConnected = true;
+            OutputDebugStringA("Connected to server\n");
             break;
         case FD_CLOSE:
             g_bConnected = false;
+            OutputDebugStringA("Connection closed\n");
             PostQuitMessage(0);
             break;
         case FD_READ:
             ProcessRead();
             break;
         case FD_WRITE:
-            // « ø‰«œ∏È ±∏«ˆ
+            ProcessWrite();
             break;
         }
         break;
     }
-    case WM_LBUTTONDOWN:
-        if (!g_bConnected) break;
+    case WM_LBUTTONDOWN: {
         g_bMouseDown = true;
-        g_oldX = LOWORD(lParam);
-        g_oldY = HIWORD(lParam);
+        g_iPrevX = LOWORD(lParam);
+        g_iPrevY = HIWORD(lParam);
         break;
-
-    case WM_MOUSEMOVE:
-        if (g_bConnected && g_bMouseDown) {
-            int curX = LOWORD(lParam);
-            int curY = HIWORD(lParam);
-            SendDrawPacket(g_oldX, g_oldY, curX, curY);
-            g_oldX = curX;
-            g_oldY = curY;
-        }
-        break;
-
-    case WM_LBUTTONUP:
+    }
+    case WM_LBUTTONUP: {
         g_bMouseDown = false;
         break;
-
+    }
+    case WM_MOUSEMOVE: {
+        if (!g_bConnected || !g_bMouseDown) break;
+        int x = LOWORD(lParam);
+        int y = HIWORD(lParam);
+        SendDrawPacket(g_iPrevX, g_iPrevY, x, y);
+        g_iPrevX = x;
+        g_iPrevY = y;
+        break;
+    }
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hWnd, &ps);
@@ -177,6 +191,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         break;
     }
     case WM_DESTROY:
+        ForceCloseSocket(); // SO_LINGER ÏÑ§Ï†ïÏúºÎ°ú RST Ï†ÑÏÜ°
         PostQuitMessage(0);
         break;
     default:
@@ -188,9 +203,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 void ProcessRead() {
     int ret = recv(g_sock, g_tempBuf, BUFFER_SIZE, 0);
     if (ret <= 0) {
+        OutputDebugStringA("recv failed or connection closed\n");
         ShowErrorMessage("Recv Error", "recv failed or connection closed");
-        closesocket(g_sock);
-        g_bConnected = false;
+        ForceCloseSocket();
         return;
     }
 
@@ -204,25 +219,23 @@ void ProcessRead() {
         if (g_recvBuf.Peek((char*)&header, HEADER_SIZE) != HEADER_SIZE)
             break;
 
-        unsigned short len = header.Len; // ±◊¥Î∑Œ ªÁøÎ
-
-        if (g_recvBuf.GetUseSize() < HEADER_SIZE + len)
+        unsigned short netLen = header.Len;
+        if (g_recvBuf.GetUseSize() < HEADER_SIZE + netLen)
             break;
 
         g_recvBuf.MoveFront(HEADER_SIZE);
 
         char packetBuf[PACKET_SIZE]{};
-        if (g_recvBuf.Dequeue(packetBuf, len) != len) {
+        if (g_recvBuf.Dequeue(packetBuf, netLen) != netLen) {
             ShowErrorMessage("Dequeue Error", "Failed to dequeue full packet");
             break;
         }
 
-        if (len != sizeof(st_DRAW_PACKET)) {
+        if (netLen != sizeof(st_DRAW_PACKET)) {
             char lenErr[128];
-            sprintf_s(lenErr, "Invalid packet length: %d", len);
+            sprintf_s(lenErr, "Invalid packet length: %d", netLen);
             ShowErrorMessage("Protocol Error", lenErr);
-            closesocket(g_sock);
-            g_bConnected = false;
+            ForceCloseSocket();
             return;
         }
 
@@ -230,10 +243,14 @@ void ProcessRead() {
     }
 }
 
+void ProcessWrite() {
+    // Optional if using SendQ
+}
+
 void SendDrawPacket(int sx, int sy, int ex, int ey) {
     char buffer[PACKET_SIZE]{};
     stHEADER header;
-    header.Len = sizeof(st_DRAW_PACKET); // ±◊¥Î∑Œ ≥÷¿Ω
+    header.Len = sizeof(st_DRAW_PACKET);
 
     memcpy(buffer, &header, HEADER_SIZE);
 
@@ -244,12 +261,17 @@ void SendDrawPacket(int sx, int sy, int ex, int ey) {
     if (ret == SOCKET_ERROR) {
         char errMsg[128];
         sprintf_s(errMsg, "Send error: %d\n", WSAGetLastError());
+        OutputDebugStringA(errMsg);
         ShowErrorMessage("Send Error", errMsg);
     }
 }
 
 void HandlePacket(char* data) {
     st_DRAW_PACKET* pkt = (st_DRAW_PACKET*)data;
+    char log[128];
+    sprintf_s(log, "Draw Packet: (%d,%d)->(%d,%d)\n", pkt->iStartX, pkt->iStartY, pkt->iEndX, pkt->iEndY);
+    OutputDebugStringA(log);
+
     g_drawPackets.push_back(*pkt);
     InvalidateRect(g_hWnd, NULL, FALSE);
 }
