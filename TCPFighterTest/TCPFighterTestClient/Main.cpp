@@ -9,7 +9,7 @@
 #pragma comment(lib, "ws2_32")
 
 #define SERVER_PORT 5000
-#define MAX_CONNECT_COUNT 63
+#define MAX_CONNECT_COUNT 100
 
 #define dfRANGE_MOVE_TOP	50
 #define dfRANGE_MOVE_LEFT	10
@@ -41,7 +41,7 @@ int main()
     wcin >> serverIp;
 
     //Test1();
-    Test2();
+    //Test2();
     //Test3();
     //Test4();
 

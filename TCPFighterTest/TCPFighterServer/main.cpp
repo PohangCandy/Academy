@@ -1,5 +1,5 @@
 // server.cpp
-#define FD_SETSIZE 512   // select에서 처리 가능한 최대 소켓 수 (리스닝 포함)
+//#define FD_SETSIZE 512   // select에서 처리 가능한 최대 소켓 수 (리스닝 포함)
 #include <WinSock2.h>
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "winmm.lib")
@@ -16,6 +16,7 @@
 #include "CRingBuffer.h"
 
 using namespace std;
+
 
 // 서버 설정
 #define SERVERPORT 5000
@@ -132,8 +133,8 @@ struct st_SESSION {
         , SendQ(64 * 1024)
         , dwAction(0)
         , byDirection(dfPACKET_MOVE_DIR_RR)
-        , shX(320)
-        , shY(240)
+        , shX((rand() % (dfRANGE_MOVE_RIGHT - dfRANGE_MOVE_LEFT + 1)) + dfRANGE_MOVE_LEFT)
+        , shY((rand() % (dfRANGE_MOVE_BOTTOM - dfRANGE_MOVE_TOP + 1)) + dfRANGE_MOVE_TOP)
         , chHP(100)
     {}
 };
@@ -203,7 +204,7 @@ int main() {
 
     cout << "Server listening on port " << SERVERPORT << "\n";
 
-    // 메인 루프: netIO + logic (25fps)
+    // 메인 루프
     using clock = std::chrono::high_resolution_clock;
     auto lastLogic = clock::now();
     const double logicInterval = 1.0 / TICKS_PER_SEC;
@@ -218,7 +219,7 @@ int main() {
             lastLogic = now;
         }
 
-        Sleep(1);
+        //Sleep(1);
     }
 
     // 정리
@@ -259,7 +260,7 @@ void netIOProcess() {
     if (ret <= 0) return;
 
     // 리슨 소켓
-    int MAX_CLIENTS = 63;
+    int MAX_CLIENTS = 64;
 
     if (FD_ISSET(g_ListenSocket, &readSet)) {
        if((int)g_Sessions.size() < MAX_CLIENTS)
@@ -333,6 +334,7 @@ void netProc_Accept() {
         memcpy(buf + 8, &x_net, 2);
         memcpy(buf + 10, &y_net, 2);
         buf[12] = s->chHP;
+        cout << "Create Client Session ID : " << s->dwSessionID << " Client X: " << x_net << " Y: " << y_net << "\n";
         s->SendQ.Enqueue((char*)buf, (int)sizeof(buf));
     }
 
@@ -532,7 +534,7 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         pSession->byDirection = dir;
         pSession->shX = rx;
         pSession->shY = ry;
-        cout << "# PACKET_MOVESTART # SessionID:" << pSession->dwSessionID << " / Direction:" << pSession->byDirection << " / X:" << pSession->shX << " / Y:" << pSession->shY << "\n";
+        cout << "# PACKET_MOVESTART # SessionID:" << pSession->dwSessionID << " / Direction:" << (int)pSession->byDirection << " / X:" << pSession->shX << " / Y:" << pSession->shY << "\n";
 
         // 브로드캐스트 SC_MOVE_START (header + ID(4) + dir(1)+X(2)+Y(2))
         uint8_t buf[3 + 4 + 1 + 2 + 2];
@@ -572,7 +574,7 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         pSession->byDirection = dir;
         pSession->shX = rx;
         pSession->shY = ry;
-        cout << "# PACKET_MOVESTOP # SessionID:" << pSession->dwSessionID << " / Direction:" << pSession->byDirection << " / X:" << pSession->shX << " / Y:" << pSession->shY << "\n";
+        cout << "# PACKET_MOVESTOP # SessionID:" << pSession->dwSessionID << " / Direction:" << (int)pSession->byDirection << " / X:" << pSession->shX << " / Y:" << pSession->shY << "\n";
 
         // 브로드캐스트 SC_MOVE_STOP (hdr + ID(4) + dir(1) + X(2) + Y(2))
         uint8_t buf[3 + 4 + 1 + 2 + 2];
@@ -606,7 +608,8 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         // 동기 검사
         if ((int)abs((int)pSession->shX - (int)rx) > dfERROR_RANGE ||
             (int)abs((int)pSession->shY - (int)ry) > dfERROR_RANGE) {
-            cerr << "Client out of sync (attack), disconnect session " << pSession->dwSessionID << "\n";
+            cout<< "Client Session ID : "<< pSession->dwSessionID << " Client X: " << rx << " Y: " << ry << " Server X:" << pSession->shX << " Y:" << pSession->shY << "\n";
+            cout << "Client out of sync (attack), disconnect session " << pSession->dwSessionID << "\n";
             return false;
         }
 
@@ -616,16 +619,25 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         pSession->shY = ry;
 
         // 공격 범위 내 충돌 검사 및 데미지 처리
-        int ATTACK_RANGE = dfATTACK1_RANGE_X;
+        int ATTACK_RANGE_X = dfATTACK1_RANGE_X;
+        int ATTACK_RANGE_Y = dfATTACK1_RANGE_Y;
+
         for (auto target : g_Sessions) {
             if (target == pSession) continue;
             if (target->chHP <= 0) continue;
 
+            bool rangeDirection = false;
+            if (((int)target->shX >= (int)pSession->shX && pSession->byDirection == dfPACKET_MOVE_DIR_RR) ||
+                ((int)target->shX <= (int)pSession->shX && pSession->byDirection == dfPACKET_MOVE_DIR_LL))
+            {
+                rangeDirection = true;
+            }
+
             unsigned int dx = abs((int)target->shX - (int)pSession->shX);
-            //unsigned int dy = abs((int)target->shY - (int)pSession->shY);
+            unsigned int dy = abs((int)target->shY - (int)pSession->shY);
             //unsigned int distSq = dx * dx + dy * dy;
 
-            if (dx <= ATTACK_RANGE) {
+            if (dx <= ATTACK_RANGE_X && rangeDirection && dy <= ATTACK_RANGE_Y) {
                 target->chHP -= 10;
 
                 uint8_t dmgBuf[3 + 4 + 4 + 1];
@@ -636,10 +648,11 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
                 memcpy(dmgBuf, &dmgHdr, 3);
                 memcpy(dmgBuf + 3, &pSession->dwSessionID, 4);
                 memcpy(dmgBuf + 7, &target->dwSessionID, 4);
-                memcpy(dmgBuf + 11, &target->dwSessionID, 4);
                 dmgBuf[11] = target->chHP;
 
                 pSession->SendQ.Enqueue((char*)dmgBuf, sizeof(dmgBuf));
+                BroadcastPacketExcept(pSession, dmgBuf, sizeof(dmgBuf));
+                //cout << "Damged Client Session ID : " << target->dwSessionID << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
             }
         }
 
@@ -658,6 +671,7 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         memcpy(buf + 8, &pSession->shX, 2);
         memcpy(buf + 10, &pSession->shY, 2);
         BroadcastPacketExcept(pSession, buf, (int)sizeof(buf));
+        cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->dwSessionID << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
 
         return true;
     }
@@ -679,6 +693,7 @@ void UpdateLogic(double dt) {
         if (!s) { ++idx; continue; }
 
         if (s->chHP <= 0) {
+            cout << "Dead Client Session ID : " << s->dwSessionID << " Client X: " << s->shX << " Y: " << s->shY << " HP:" << (int)s->chHP << "\n";
             Disconnect(s);
             continue;
         }
