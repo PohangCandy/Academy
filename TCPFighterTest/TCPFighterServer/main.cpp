@@ -1,18 +1,11 @@
-// server.cpp
-//#define FD_SETSIZE 512   // select에서 처리 가능한 최대 소켓 수 (리스닝 포함)
-#include <WinSock2.h>
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "winmm.lib")
 
+#include <WinSock2.h>
 #include <Windows.h>
-#include <mmsystem.h>
 #include <vector>
 #include <chrono>
-#include <algorithm>
-#include <cstdint>
-#include <cstring>
 #include <iostream>
-
 #include "CRingBuffer.h"
 
 using namespace std;
@@ -20,6 +13,7 @@ using namespace std;
 
 // 서버 설정
 #define SERVERPORT 5000
+//프레임
 #define TICKS_PER_SEC 50.0
 
 // 이동 범위
@@ -32,7 +26,7 @@ using namespace std;
 #define MOVE_UNIT_X 3
 #define MOVE_UNIT_Y 2
 
-// 오차 허용 범위
+// 위치 오차 허용 범위
 #define dfERROR_RANGE 50
 
 // 패킷 코드 및 타입
@@ -85,7 +79,7 @@ struct st_PACKET_HEADER {
 };
 #pragma pack(pop)
 
-// CS MOVE START payload (client -> server)
+
 #pragma pack(push,1)
 struct st_CS_MOVE_START {
     uint8_t byDirection;
@@ -94,19 +88,19 @@ struct st_CS_MOVE_START {
 };
 #pragma pack(pop)
 
-// CS MOVE STOP payload
+
 #pragma pack(push,1)
 struct st_CS_MOVE_STOP {
-    uint8_t byDirection; // 좌/우만 사용 (명세)
+    uint8_t byDirection;
     uint16_t shX;
     uint16_t shY;
 };
 #pragma pack(pop)
 
-// CS ATTACK payload (same layout for 1/2/3)
+
 #pragma pack(push,1)
 struct st_CS_ATTACK {
-    uint8_t byDirection; // 좌/우만 사용
+    uint8_t byDirection;
     uint16_t shX;
     uint16_t shY;
 };
@@ -126,10 +120,11 @@ struct st_SESSION {
 
     char chHP;
 
+    //일단 구조체 생성자로 만들고 함수로 변경하자
     st_SESSION(SOCKET s, unsigned long id)
         : Socket(s)
         , dwSessionID(id)
-        , RecvQ(64 * 1024)   // 생성자에서 버퍼 크기 지정
+        , RecvQ(64 * 1024)
         , SendQ(64 * 1024)
         , dwAction(0)
         , byDirection(dfPACKET_MOVE_DIR_RR)
@@ -155,12 +150,6 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
 void BroadcastPacketExcept(st_SESSION* exclude, const void* data, int len);
 void SendPacketToSession(st_SESSION* pSession, const void* data, int len);
 void UpdateLogic(double dt);
-
-//// 유틸: 안전하게 uint16_t/uint32_t 네트워크 바이트 처리
-//static inline uint16_t to_net16(uint16_t v) { return htons(v); }
-//static inline uint16_t from_net16(uint16_t v) { return ntohs(v); }
-//static inline uint32_t to_net32(uint32_t v) { return htonl(v); }
-//static inline uint32_t from_net32(uint32_t v) { return ntohl(v); }
 
 int main() {
     timeBeginPeriod(1);
@@ -317,8 +306,7 @@ void netProc_Accept() {
 
     cout << "Accepted new client (session " << s->dwSessionID << ")\n";
 
-    // 1) 신규 클라이언트에게 자기 캐릭터 할당 패킷 전송 (dfPACKET_SC_CREATE_MY_CHARACTER)
-    // 헤더(3) + ID(4) + Direction(1) + X(2) + Y(2) + HP(1) = 총 13바이트
+    //신규 클라이언트에게 자기 캐릭터 할당 패킷 전송 (dfPACKET_SC_CREATE_MY_CHARACTER)
     {
         uint8_t buf[3 + 4 + 1 + 2 + 2 + 1];
         st_PACKET_HEADER hdr;
@@ -338,7 +326,7 @@ void netProc_Accept() {
         s->SendQ.Enqueue((char*)buf, (int)sizeof(buf));
     }
 
-    // 2) 기존 접속자 정보를 신규 클라이언트에게 전송 (SC_CREATE_OTHER_CHARACTER)
+    //기존 접속자 정보를 신규 클라이언트에게 전송 (SC_CREATE_OTHER_CHARACTER)
     for (auto other : g_Sessions) {
         if (other == s) continue;
         uint8_t buf[3 + 4 + 1 + 2 + 2 + 1];
@@ -358,19 +346,19 @@ void netProc_Accept() {
         s->SendQ.Enqueue((char*)buf, (int)sizeof(buf));
     }
 
-    // 3) 다른 클라이언트들에게 신규 접속자 정보 전송 (SC_CREATE_OTHER_CHARACTER)
+    //다른 클라이언트들에게 신규 접속자 정보 전송
     {
-        uint8_t buf[3 + 4 + 1 + 2 + 2 + 1];
+        unsigned char buf[3 + 4 + 1 + 2 + 2 + 1];
         st_PACKET_HEADER hdr;
         hdr.byCode = dfNETWORK_PACKET_CODE;
         hdr.bySize = sizeof(buf) - sizeof(st_PACKET_HEADER);
         hdr.byType = dfPACKET_SC_CREATE_OTHER_CHARACTER;
         memcpy(buf, &hdr, sizeof(hdr));
-        uint32_t id_net = s->dwSessionID;
+        unsigned int id_net = s->dwSessionID;
         memcpy(buf + 3, &id_net, 4);
         buf[7] = s->byDirection;
-        uint16_t x_net = s->shX;
-        uint16_t y_net = s->shY;
+        unsigned short x_net = s->shX;
+        unsigned short y_net = s->shY;
         memcpy(buf + 8, &x_net, 2);
         memcpy(buf + 10, &y_net, 2);
         buf[12] = (uint8_t)s->chHP;
@@ -378,7 +366,7 @@ void netProc_Accept() {
     }
 }
 
-// recv: 실제 소켓 recv 후 링버퍼에 저장, 이후 완전 패킷 처리
+// recv
 void netProc_Recv(st_SESSION* pSession) {
     if (!pSession) return;
     char tmp[4096];
@@ -426,7 +414,6 @@ void netProc_Recv(st_SESSION* pSession) {
             return;
         }
         char* payload = pkt.data() + sizeof(st_PACKET_HEADER);
-        //char* payload = pkt.data();
         int payloadLen = hdr.bySize;
         if (!PacketProc(pSession, hdr.byType, payload, payloadLen)) {
             // 처리 실패 시 연결 종료
@@ -461,32 +448,28 @@ void netProc_Send(st_SESSION* pSession) {
         }
     }
     else if (sent > 0) {
-        // 전송된 바이트만큼 Dequeue(제거)
-        int dec = pSession->SendQ.Dequeue(nullptr, sent); // Dequeue with nullptr: 일부 링버퍼 구현에서는 허용하지 않을 수 있으니 아래 대체 사용
-        // 일부 CRingBuffer 구현은 Dequeue(nullptr, n)를 허용하지 않을 수 있음.
-        // 만약 컴파일/링커 문제 발생 시 아래처럼 임시 버퍼로 꺼내서 버리도록 바꿔주세요:
-        // vector<char> drop(sent); pSession->SendQ.Dequeue(drop.data(), sent);
+        int dec = pSession->SendQ.Dequeue(nullptr, sent); 
+
         if (dec != sent) {
-            // 만약 Dequeue가 nullptr를 지원하지 않으면 위 대체 코드로 처리
             vector<char> drop(sent);
             pSession->SendQ.Dequeue(drop.data(), sent);
         }
     }
 }
 
-// Disconnect: 세션 제거
+// Disconnect
 void Disconnect(st_SESSION* pSession) {
     if (!pSession) return;
     cout << "Disconnect session " << pSession->dwSessionID << "\n";
 
-    // 다른 클라이언트에게 삭제 패킷 전송 (SC_DELETE_CHARACTER)
-    uint8_t buf[3 + 4];
+    // 다른 클라이언트에게 삭제 패킷 전송
+    unsigned char buf[3 + 4];
     st_PACKET_HEADER hdr;
     hdr.byCode = dfNETWORK_PACKET_CODE;
     hdr.bySize = sizeof(buf) - sizeof(st_PACKET_HEADER);
     hdr.byType = dfPACKET_SC_DELETE_CHARACTER;
     memcpy(buf, &hdr, sizeof(hdr));
-    uint32_t id_net = pSession->dwSessionID;
+    unsigned int id_net = pSession->dwSessionID;
     memcpy(buf + 3, &id_net, 4);
     BroadcastPacketExcept(pSession, buf, (int)sizeof(buf));
 
@@ -518,9 +501,9 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         if (payloadLen < (int)sizeof(st_CS_MOVE_START)) return false;
         st_CS_MOVE_START cs;
         memcpy(&cs, pPayload, sizeof(cs));
-        uint16_t rx = cs.shX;
-        uint16_t ry = cs.shY;
-        uint8_t dir = cs.byDirection;
+        unsigned short rx = cs.shX;
+        unsigned short ry = cs.shY;
+        unsigned char dir = cs.byDirection;
 
         // 위치 오차 검사
         if ((int)abs((int)pSession->shX - (int)rx) > dfERROR_RANGE ||
@@ -536,18 +519,17 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         pSession->shY = ry;
         cout << "# PACKET_MOVESTART # SessionID:" << pSession->dwSessionID << " / Direction:" << (int)pSession->byDirection << " / X:" << pSession->shX << " / Y:" << pSession->shY << "\n";
 
-        // 브로드캐스트 SC_MOVE_START (header + ID(4) + dir(1)+X(2)+Y(2))
-        uint8_t buf[3 + 4 + 1 + 2 + 2];
+        unsigned char buf[3 + 4 + 1 + 2 + 2];
         st_PACKET_HEADER hdr;
         hdr.byCode = dfNETWORK_PACKET_CODE;
         hdr.bySize = sizeof(buf) - sizeof(st_PACKET_HEADER);
         hdr.byType = dfPACKET_SC_MOVE_START;
         memcpy(buf, &hdr, 3);
-        uint32_t id_net = pSession->dwSessionID;
+        unsigned int id_net = pSession->dwSessionID;
         memcpy(buf + 3, &id_net, 4);
         buf[7] = pSession->byDirection;
-        uint16_t x_net = pSession->shX;
-        uint16_t y_net = pSession->shY;
+        unsigned short x_net = pSession->shX;
+        unsigned short y_net = pSession->shY;
         memcpy(buf + 8, &x_net, 2);
         memcpy(buf + 10, &y_net, 2);
         BroadcastPacketExcept(pSession, buf, (int)sizeof(buf));
@@ -559,9 +541,9 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         if (payloadLen < (int)sizeof(st_CS_MOVE_STOP)) return false;
         st_CS_MOVE_STOP cs;
         memcpy(&cs, pPayload, sizeof(cs));
-        uint16_t rx = cs.shX;
-        uint16_t ry = cs.shY;
-        uint8_t dir = cs.byDirection;
+        unsigned short rx = cs.shX;
+        unsigned short ry = cs.shY;
+        unsigned char dir = cs.byDirection;
 
         // 동기 검사
         if ((int)abs((int)pSession->shX - (int)rx) > dfERROR_RANGE ||
@@ -577,17 +559,17 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         cout << "# PACKET_MOVESTOP # SessionID:" << pSession->dwSessionID << " / Direction:" << (int)pSession->byDirection << " / X:" << pSession->shX << " / Y:" << pSession->shY << "\n";
 
         // 브로드캐스트 SC_MOVE_STOP (hdr + ID(4) + dir(1) + X(2) + Y(2))
-        uint8_t buf[3 + 4 + 1 + 2 + 2];
+        unsigned char buf[3 + 4 + 1 + 2 + 2];
         st_PACKET_HEADER hdr;
         hdr.byCode = dfNETWORK_PACKET_CODE;
         hdr.bySize = sizeof(buf) - sizeof(st_PACKET_HEADER);
         hdr.byType = dfPACKET_SC_MOVE_STOP;
         memcpy(buf, &hdr, 3);
-        uint32_t id_net = pSession->dwSessionID;
+        unsigned int id_net = pSession->dwSessionID;
         memcpy(buf + 3, &id_net, 4);
         buf[7] = pSession->byDirection;
-        uint16_t x_net = pSession->shX;
-        uint16_t y_net = pSession->shY;
+        unsigned short x_net = pSession->shX;
+        unsigned short y_net = pSession->shY;
         memcpy(buf + 8, &x_net, 2);
         memcpy(buf + 10, &y_net, 2);
         BroadcastPacketExcept(pSession, buf, (int)sizeof(buf));
@@ -601,9 +583,9 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
         if (payloadLen < (int)sizeof(st_CS_ATTACK)) return false;
         st_CS_ATTACK cs;
         memcpy(&cs, pPayload, sizeof(cs));
-        uint16_t rx = cs.shX;
-        uint16_t ry = cs.shY;
-        uint8_t dir = cs.byDirection;
+        unsigned short rx = cs.shX;
+        unsigned short ry = cs.shY;
+        unsigned char dir = cs.byDirection;
 
         // 동기 검사
         if ((int)abs((int)pSession->shX - (int)rx) > dfERROR_RANGE ||
@@ -635,12 +617,11 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
 
             unsigned int dx = abs((int)target->shX - (int)pSession->shX);
             unsigned int dy = abs((int)target->shY - (int)pSession->shY);
-            //unsigned int distSq = dx * dx + dy * dy;
 
             if (dx <= ATTACK_RANGE_X && rangeDirection && dy <= ATTACK_RANGE_Y) {
                 target->chHP -= 10;
 
-                uint8_t dmgBuf[3 + 4 + 4 + 1];
+                unsigned char dmgBuf[3 + 4 + 4 + 1];
                 st_PACKET_HEADER dmgHdr;
                 dmgHdr.byCode = dfNETWORK_PACKET_CODE;
                 dmgHdr.bySize = sizeof(dmgBuf) - sizeof(st_PACKET_HEADER);
@@ -652,16 +633,16 @@ bool PacketProc(st_SESSION* pSession, uint8_t byPacketType, char* pPayload, int 
 
                 pSession->SendQ.Enqueue((char*)dmgBuf, sizeof(dmgBuf));
                 BroadcastPacketExcept(pSession, dmgBuf, sizeof(dmgBuf));
-                //cout << "Damged Client Session ID : " << target->dwSessionID << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
+                cout << "Damged Client Session ID : " << target->dwSessionID << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
             }
         }
 
         // 공격 패킷 브로드캐스트
-        uint8_t buf[3 + 4 + 1 + 2 + 2];
+        unsigned char buf[3 + 4 + 1 + 2 + 2];
         st_PACKET_HEADER hdr;
         hdr.byCode = dfNETWORK_PACKET_CODE;
         hdr.bySize = sizeof(buf) - sizeof(st_PACKET_HEADER);
-        uint8_t scType = (byPacketType == dfPACKET_CS_ATTACK1) ? dfPACKET_SC_ATTACK1 :
+        unsigned char scType = (byPacketType == dfPACKET_CS_ATTACK1) ? dfPACKET_SC_ATTACK1 :
             (byPacketType == dfPACKET_CS_ATTACK2) ? dfPACKET_SC_ATTACK2 :
             dfPACKET_SC_ATTACK3;
         hdr.byType = scType;
@@ -703,65 +684,65 @@ void UpdateLogic(double dt) {
             case dfPACKET_MOVE_DIR_LL:
                 if (s->shX > dfRANGE_MOVE_LEFT)
                 {
-                    s->shX = (uint16_t)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
+                    s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
                     cout << "# gameRun:RR # SessionID:" << s->dwSessionID << " / X:" << s->shX << " / Y:" << s->shY << "\n";
                 }
                 else s->byDirection = dfPACKET_MOVE_DIR_LL; // 멈춤 처리: 클라이언트 규격에 맞게 변경 가능
                 break;
             case dfPACKET_MOVE_DIR_LU:
                 if (s->shX > dfRANGE_MOVE_LEFT) {
-                    s->shX = (uint16_t)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
+                    s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
                 }
                 if (s->shY > dfRANGE_MOVE_TOP) {
-                    s->shY = (uint16_t)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
+                    s->shY = (unsigned short)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
                 }
                 break;
             case dfPACKET_MOVE_DIR_UU:
                 if (s->shY > dfRANGE_MOVE_TOP)
                 {
-                    s->shY = (uint16_t)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
+                    s->shY = (unsigned short)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
                     cout << "# gameRun:RR # SessionID:" << s->dwSessionID << " / X:" << s->shX << " / Y:" << s->shY << "\n";
                 }
                 else s->byDirection = dfPACKET_MOVE_DIR_UU;
                 break;
             case dfPACKET_MOVE_DIR_RU:
-                if (s->shX < dfRANGE_MOVE_RIGHT) {
-                    s->shX = (uint16_t)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
+                if (s->shX > dfRANGE_MOVE_RIGHT) {
+                    s->shX = (unsigned short)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
                 }
                 if (s->shY > dfRANGE_MOVE_TOP) {
-                    s->shY = (uint16_t)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
+                    s->shY = (unsigned short)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
                 }
                 break;
             case dfPACKET_MOVE_DIR_RR:
                 if (s->shX < dfRANGE_MOVE_RIGHT)
                 {
-                    s->shX = (uint16_t)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
+                    s->shX = (unsigned short)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
                     cout << "# gameRun:RR # SessionID:" << s->dwSessionID << " / X:" << s->shX << " / Y:" << s->shY << "\n";
                 }
                 else s->byDirection = dfPACKET_MOVE_DIR_RR;
                 break;
             case dfPACKET_MOVE_DIR_RD:
                 if (s->shX < dfRANGE_MOVE_RIGHT) {
-                    s->shX = (uint16_t)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
+                    s->shX = (unsigned short)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
                 }
                 if (s->shY < dfRANGE_MOVE_BOTTOM) {
-                    s->shY = (uint16_t)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
+                    s->shY = (unsigned short)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
                 }
                 break;
             
             case dfPACKET_MOVE_DIR_DD:
                 if (s->shY < dfRANGE_MOVE_BOTTOM) {
                     cout << "# gameRun:RR # SessionID:" << s->dwSessionID << " / X:" << s->shX << " / Y:" << s->shY << "\n";
-                    s->shY = (uint16_t)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
+                    s->shY = (unsigned short)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
                 } 
                 else s->byDirection = dfPACKET_MOVE_DIR_DD;
                 break;
             case dfPACKET_MOVE_DIR_LD:
                 if (s->shX > dfRANGE_MOVE_LEFT) {
-                    s->shX = (uint16_t)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
+                    s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
                 }
                 if (s->shY < dfRANGE_MOVE_BOTTOM) {
-                    s->shY = (uint16_t)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
+                    s->shY = (unsigned short)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
                 }
                 break;
             default:
