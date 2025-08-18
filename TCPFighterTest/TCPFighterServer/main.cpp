@@ -687,15 +687,14 @@ void UpdateLogic(double dt) {
                     s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
                     cout << "# gameRun:RR # SessionID:" << s->dwSessionID << " / X:" << s->shX << " / Y:" << s->shY << "\n";
                 }
-                else s->byDirection = dfPACKET_MOVE_DIR_LL; // ¸ØÃã Ã³¸®: Å¬¶óÀÌ¾ðÆ® ±Ô°Ý¿¡ ¸Â°Ô º¯°æ °¡´É
+                else s->byDirection = dfPACKET_MOVE_DIR_LL; // ¸ØÃã Ã³¸®
                 break;
             case dfPACKET_MOVE_DIR_LU:
-                if (s->shX > dfRANGE_MOVE_LEFT) {
+                if (s->shX > dfRANGE_MOVE_LEFT && s->shY > dfRANGE_MOVE_TOP) {
                     s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
-                }
-                if (s->shY > dfRANGE_MOVE_TOP) {
                     s->shY = (unsigned short)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
                 }
+                else s->byDirection = dfPACKET_MOVE_DIR_LU; // ¸ØÃã Ã³¸®
                 break;
             case dfPACKET_MOVE_DIR_UU:
                 if (s->shY > dfRANGE_MOVE_TOP)
@@ -706,12 +705,11 @@ void UpdateLogic(double dt) {
                 else s->byDirection = dfPACKET_MOVE_DIR_UU;
                 break;
             case dfPACKET_MOVE_DIR_RU:
-                if (s->shX > dfRANGE_MOVE_RIGHT) {
+                if (s->shX < dfRANGE_MOVE_RIGHT && s->shY > dfRANGE_MOVE_TOP) {
                     s->shX = (unsigned short)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
-                }
-                if (s->shY > dfRANGE_MOVE_TOP) {
                     s->shY = (unsigned short)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
                 }
+                else s->byDirection = dfPACKET_MOVE_DIR_RU;
                 break;
             case dfPACKET_MOVE_DIR_RR:
                 if (s->shX < dfRANGE_MOVE_RIGHT)
@@ -722,12 +720,11 @@ void UpdateLogic(double dt) {
                 else s->byDirection = dfPACKET_MOVE_DIR_RR;
                 break;
             case dfPACKET_MOVE_DIR_RD:
-                if (s->shX < dfRANGE_MOVE_RIGHT) {
+                if (s->shX < dfRANGE_MOVE_RIGHT && s->shY < dfRANGE_MOVE_BOTTOM) {
                     s->shX = (unsigned short)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
-                }
-                if (s->shY < dfRANGE_MOVE_BOTTOM) {
                     s->shY = (unsigned short)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
                 }
+                else s->byDirection = dfPACKET_MOVE_DIR_RD;
                 break;
             
             case dfPACKET_MOVE_DIR_DD:
@@ -738,12 +735,11 @@ void UpdateLogic(double dt) {
                 else s->byDirection = dfPACKET_MOVE_DIR_DD;
                 break;
             case dfPACKET_MOVE_DIR_LD:
-                if (s->shX > dfRANGE_MOVE_LEFT) {
+                if (s->shX > dfRANGE_MOVE_LEFT && s->shY < dfRANGE_MOVE_BOTTOM) {
                     s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
-                }
-                if (s->shY < dfRANGE_MOVE_BOTTOM) {
                     s->shY = (unsigned short)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
                 }
+                else s->byDirection = dfPACKET_MOVE_DIR_LD;
                 break;
             default:
                 break;
