@@ -73,29 +73,24 @@ public:
 		//7
 		//3
 
-		vector<int> temp;
-		makeListWithRand(s,temp);
+		vector<int> vtemp;
+		makeListWithRand(s,vtemp);
 
 		//이제 정렬한 후
-		sort(temp.begin(), temp.end(), [](const int& i1, const int& i2)
+		sort(vtemp.begin(), vtemp.end(), [](const int& i1, const int& i2)
 			{
 				return i1 > i2;
 			});
 
-		struct tag_temp {
-			int data;
-			int index;
+		struct tag_length {
 			int s;
 			int e;
 		};
 
 
 		//완전 이진트리가 되도록 중앙에서부터 원소를 넣어준다.
-		queue<tag_temp> q;
-		tag_temp tt;
-		int middle = s / 2;
-		tt.data = temp[middle];
-		tt.index = middle;
+		queue<tag_length> q;
+		tag_length tt;
 		tt.s = 0;
 		tt.e = s - 1;
 
@@ -108,26 +103,26 @@ public:
 		{
 			//뻑킹 왜 무한 반복됨???------------------------------------------------------------
 			tt = q.front();
-			int f = tt.data;
-			v_data.push_back(f);
+			//중앙값을 빼서 벡터에 더해준다.
+			int index = (tt.e + tt.s) / 2;
+			int data = vtemp[index];
+			v_data.push_back(data);
 			q.pop();
-			//처음과 끝 지점을 제대로 넘겨줘야 함.
-			tag_temp left, right;
-			if (tt.index >= 0)
+
+
+			//이후 좌우변의 시작지점과 끝지점을 넘겨준다.
+			tag_length left, right;
+			if (tt.s <= index - 1)
 			{
-				left.index = (tt.s + tt.index - 1) / 2;
 				left.s = tt.s;
-				left.e = tt.index - 1;
-				left.data = temp[left.index];
+				left.e = index - 1;
 				q.push(left);
 			}
 
-			if (tt.index < s)
+			if (index + 1 <= tt.e)
 			{
-				right.index = (tt.e + tt.index + 1) / 2;
-				right.s = tt.index + 1;
+				right.s = index + 1;
 				right.e = tt.e;
-				right.data = temp[right.index];
 				q.push(right);
 			}
 		}
@@ -170,7 +165,7 @@ public:
 		cout << "원본 데이터 정렬 후: ";
 		sort(v_data.begin(), v_data.end(), [](const int& i1, const int& i2)
 			{
-				return i1 > i2;
+				return i1 < i2;
 			});
 		printfOriginalData();
 		cout << "트리 중위 순회 결과 : ";
