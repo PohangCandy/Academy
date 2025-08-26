@@ -1,0 +1,5 @@
+PlayerXPos = 40
+PlayerYPos = 23
+PlayerShape = P
+PlayerHp = 5
+PlayerActive = 1

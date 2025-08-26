@@ -1,3 +1,0 @@
-xpos = 30
-ypos = 10
-GameTitlemessage ="Press Space to Start Game"
