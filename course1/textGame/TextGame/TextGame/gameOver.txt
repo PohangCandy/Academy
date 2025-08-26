@@ -1,0 +1,3 @@
+xpos = 30
+ypos = 10
+GameOvermessage ="GameOver -> PressSpacetoReStart"

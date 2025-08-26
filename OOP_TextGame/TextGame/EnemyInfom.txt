@@ -1,6 +1,0 @@
-EnemyTypeNum = 5
-Enemy0
-Enemy1
-Enemy2
-Enemy3
-Enemy4
