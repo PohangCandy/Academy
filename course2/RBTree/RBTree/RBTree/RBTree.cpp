@@ -17,6 +17,9 @@ void RBTree::InsertData(stNODE** curNode, int d, stNODE* parent)
 		//데이터 삽입에 성공하면 삽입 후 
 		// 삽입된 노드를 중심으로 밸런싱이 일어난다.
 		MakeBalacingAfterInsert(curNode);
+		//밸런싱 후 루트노드와 닐 노드는 항상 Black으로 만들어줘야 함.
+		makeRootandNilBecomeBlack();
+
 		return;
 	}
 	//비어있지 않은 경우
@@ -68,6 +71,7 @@ void RBTree::MakeBalacingAfterInsert(stNODE** curNode)
 
 		stNODE* grandparent = parent->pParent;
 		stNODE* uncle;
+		//조부모 nullptr오류
 		if (grandparent->pLeft == parent)
 		{
 			uncle = grandparent->pRight;
@@ -131,25 +135,31 @@ void RBTree::MakeBalacingAfterInsert(stNODE** curNode)
 void RBTree::makeRightRotate(stNODE** curNode)
 {
 	//부모, 왼쪽 자식, 왼쪽 자식의 오른쪽 자식을 구해준다.
-	stNODE** parent = &(*curNode)->pParent;
+	stNODE* parent = (*curNode)->pParent;
 	stNODE** lc = &(*curNode)->pLeft;
 	stNODE** lrc = &(*lc)->pRight;
 	//현재 노드의 왼쪽 자식이 현재 노드의 부모가 됨.
 	//왼쪽 자식의 부모 노드는 현재 노드의 부모가 됨.
 	//부모 입장에선 자식이 교체됨.
+	(*lc)->pParent = parent;
 	(*curNode)->pParent = *lc;
-	(*lc)->pParent = *parent;
+
 	if (parent != nullptr)
 	{
-		if ((*parent)->pLeft == (*curNode))
+		if (parent->pLeft == (*curNode))
 		{
-			(*parent)->pLeft = *lc;
+		  parent->pLeft = *lc;
 		}
 		else
 		{
-			(*parent)->pRight = *lc;
+			parent->pRight = *lc;
 		}
 	}
+	else {
+		//현재 회전하는 노드가 root 노드였다면, root 멤버 변수가 lc를 가리키게 만들어준다.
+		root = *lc;
+	}
+
 	//왼쪽 자식의 오른쪽 자식은,
 	//현재 노드의 왼쪽 자식이 된다.
 	(*curNode)->pLeft = *lrc;
@@ -246,8 +256,8 @@ void RBTree::RemoveData(stNODE** curNode, int d)
 
 void RBTree::inorderTraversal(vector<int>& vout, stNODE* curNode)
 {
-	if (curNode == nullptr) return;
-
+	if (curNode == &Nil) return;
+	//curNode nullptr 오류
 	inorderTraversal(vout, curNode->pLeft);
 	cout << curNode->iData << " ";
 	vout.push_back(curNode->iData);
@@ -256,11 +266,17 @@ void RBTree::inorderTraversal(vector<int>& vout, stNODE* curNode)
 
 void RBTree::destroyTree(stNODE** curNode)
 {
-	if (*curNode == nullptr) return;
+	if (*curNode == &Nil) return;
 
 	destroyTree(&(*curNode)->pLeft);
 	destroyTree(&(*curNode)->pRight);
 	delete* curNode;
 	*curNode = nullptr;
+}
+
+void RBTree::makeRootandNilBecomeBlack()
+{
+	root->Color = BLACK;
+	Nil.Color = BLACK;
 }
 

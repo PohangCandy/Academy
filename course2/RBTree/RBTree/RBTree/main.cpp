@@ -1,6 +1,6 @@
 #include <iostream>
-#include "BinarySearchTree.h"
-#include "TestTree.h"
+#include "RBTree.h"
+#include "TestRBTree.h"
 using namespace std;
 
 
@@ -10,19 +10,18 @@ using namespace std;
 int main()
 {
 
-Nil.Color = BLACK;
-Nil.pParent = NULL;
-Nil.pLeft = NULL;
-Nil.pRight = NULL;
-
-
-	BT bt;
+	RBTree rbt;
 
 	TestTree tt(10);
-	//tt.makeUnBalancing();
-	tt.makePerfectBinaryTree();
-	tt.InsertTree(&bt);
-	tt.compareData(&bt);
+	tt.makeUnBalancing();
+	//tt.makePerfectBinaryTree();
+
+	cout << "원본 데이터 : " << "\n";
+	tt.printfData();
+	cout  << "\n";
+
+	tt.InsertTree(&rbt);
+	tt.compareData(&rbt);
 
 	//bool loop = true;
 	//while (loop)
