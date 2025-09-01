@@ -108,7 +108,7 @@ void TestTree::makeListWithRand(int s, vector<int>& v)
 	}
 }
 
-void TestTree::InsertTree(RBTree* rbt)
+void TestTree::InsertFullData(RBTree* rbt)
 {
 	for (auto& a : v_data)
 	{
@@ -116,19 +116,41 @@ void TestTree::InsertTree(RBTree* rbt)
 	}
 }
 
+void TestTree::RemoveAllData(RBTree* rbt)
+{
+	for (auto& a : v_data)
+	{
+		rbt->Remove(a);
+	}
+}
+
+void TestTree::RemoveData(RBTree* rbt, int data)
+{
+	for (auto& a : v_data)
+	{
+		if(a == data)
+		{
+			rbt->Remove(a);
+		}
+	}
+}
+
 void TestTree::compareData(RBTree* rbt)
 {
 	//오름차순으로 원본 데이터 정렬
 	cout << "원본 데이터 정렬 후: ";
-	sort(v_data.begin(), v_data.end());
-	printfData();
+
+	//실제 원본데이터를 변경시킬게 아니라 복사본으로 정렬한 데이터와 비교해야 될 듯
+	vector<int> v_temp = v_data;
+	sort(v_temp.begin(), v_temp.end());
+	printfVData(v_temp);
 	cout << "\n";
 	cout << "트리 중위 순회 결과 : ";
 
 	vector<int> InOrderResult;
 	rbt->InOrder(InOrderResult);
 	cout << "\n";
-	if (InOrderResult == v_data) {
+	if (InOrderResult == v_temp) {
 		cout << "일치함!";
 	}
 	else
@@ -137,9 +159,9 @@ void TestTree::compareData(RBTree* rbt)
 	}
 }
 
-void TestTree::printfData()
+void TestTree::printfVData(vector<int> v)
 {
-	for (auto& a : v_data)
+	for (auto& a : v)
 	{
 		cout << a << " ";
 	}
