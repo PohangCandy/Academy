@@ -17,10 +17,10 @@ int main()
 	//tt.makePerfectBinaryTree();
 
 	cout << "원본 데이터 : " << "\n";
-	tt.printfData();
+	tt.printfVOriginData();
 	cout  << "\n";
 
-	tt.InsertTree(&rbt);
+	tt.InsertFullData(&rbt);
 	tt.compareData(&rbt);
 
 	//bool loop = true;

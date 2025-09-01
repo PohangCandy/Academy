@@ -266,6 +266,9 @@ void RBTree::RemoveData(stNODE** curNode, int d)
 		RemoveData(&((*curNode)->pRight), d);
 	}
 	//삭제할 데이터를 찾은 경우
+	
+	//삭제할 노드의 색이 Red인지 확인
+
 	else
 	{
 		//해당 데이터의 자식 노드 유무에 따라 동작이 달라짐.

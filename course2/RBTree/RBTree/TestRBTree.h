@@ -39,15 +39,21 @@ public:
 
 
 
-	void InsertTree(RBTree* rbt);
+	void InsertFullData(RBTree* rbt);
+
+	void RemoveAllData(RBTree* rbt);
+	void RemoveData(RBTree* rbt, int data);
 
 
 
 	void compareData(RBTree* rbt);
 
+	void printfVOriginData()
+	{
+		printfVData(v_data);
+	}
 
-
-	void printfData();
+	void printfVData(std::vector<int> v);
 
 
 private:
