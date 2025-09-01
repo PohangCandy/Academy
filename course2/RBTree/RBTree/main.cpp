@@ -13,8 +13,8 @@ int main()
 	RBTree rbt;
 
 	TestTree tt(10);
-	//tt.makeUnBalancing();
-	tt.makePerfectBinaryTree();
+	tt.makeUnBalancing();
+	//tt.makePerfectBinaryTree();
 
 	cout << "원본 데이터 : " << "\n";
 	tt.printfData();
