@@ -90,7 +90,7 @@ void RBTree::MakeBalacingAfterInsert(stNODE** curNode)
 			if (bIsMyPosisLeft)
 			{
 				//조부모 노드를 우회전 시킨다.
-				makeRightRotate(&grandparent);
+				makeRightRotate(grandparent);
 				//부모의 색을 검은색으로 치환
 				//조부모의 색을 빨간색으로 치환한다.
 				ChangeColor(&parent, BLACK);
@@ -100,9 +100,9 @@ void RBTree::MakeBalacingAfterInsert(stNODE** curNode)
 			else
 			{
 				//부모노드를 기준으로 좌회전
-				makeLeftRotate(&parent);
+				makeLeftRotate(parent);
 				//이후 다시 조부모 노드를 기준으로 우회전
-				makeRightRotate(&grandparent);
+				makeRightRotate(grandparent);
 				//새로운 노드의 색은 검정이 되고
 				ChangeColor(curNode, BLACK);
 				//조부모 노드의 색은 빨간색이 된다.
@@ -134,21 +134,21 @@ void RBTree::MakeBalacingAfterInsert(stNODE** curNode)
 	
 }
 
-void RBTree::makeRightRotate(stNODE** curNode)
+void RBTree::makeRightRotate(stNODE* curNode)
 {
 	//부모, 왼쪽 자식, 왼쪽 자식의 오른쪽 자식을 구해준다.
-	stNODE* parent = (*curNode)->pParent;
-	stNODE* lc = (*curNode)->pLeft;
+	stNODE* parent = curNode->pParent;
+	stNODE* lc = curNode->pLeft;
 	stNODE* lrc = lc->pRight;
 	//현재 노드의 왼쪽 자식이 현재 노드의 부모가 됨.
 	//왼쪽 자식의 부모 노드는 현재 노드의 부모가 됨.
 	//부모 입장에선 자식이 교체됨.
 	lc->pParent = parent;
-	(*curNode)->pParent = lc;
+	curNode->pParent = lc;
 
 	if (parent != nullptr)
 	{
-		if (parent->pLeft == (*curNode))
+		if (parent->pLeft == curNode)
 		{
 		  parent->pLeft = lc;
 		}
@@ -164,26 +164,60 @@ void RBTree::makeRightRotate(stNODE** curNode)
 
 	//왼쪽 자식의 오른쪽 자식은,
 	//현재 노드의 왼쪽 자식이 된다.
-	(*curNode)->pLeft = lrc;
-	lrc->pParent = *curNode;
+	curNode->pLeft = lrc;
+	lrc->pParent = curNode;
 	//현재 노드는 원래 왼쪽 자식의 오른쪽 자식이 됨.
-	lc->pRight = *curNode;
+	lc->pRight = curNode;
 }
 
-void RBTree::makeLeftRotate(stNODE** curNode)
+void RBTree::makeLeftRotate(stNODE* curNode)
 {
 	//현재 노드의 부모. 오른쪽 자식, 오른쪽 자식의 왼쪽 자식을 확보한다.
+	stNODE* parent = curNode->pParent;
+	stNODE* rc = curNode->pRight;
+	stNODE* rlc = rc->pLeft;
 
+	//현재 노드 오른쪽 자식의 부모가 현재 노드의 부모가 됨.
+	rc->pParent = parent;
+	//현재 노드의 오른쪽 자식이 현재 노드의 부모의 자식이 됨.
+	curNode->pParent = rc;
 
+	//현재노드의 부모의 자식이 현재 노드 오른쪽 자식이 됨.
 
-	//현재 노드의 왼쪽 자식이 현재 노드의 부모 자식이 됨.
-	//현재노드의 부모의 자식이 현재 노드 왼쪽 자식이 됨.
-	//현재 노드 왼쪽 자식의 부모가 현재 노드의 부모가 됨.
 
 	//오른쪽 자식의 왼쪽 자식이 현재 노드의 오른쪽 자식이 되고
 	//오른쪽 자식의 부모가 현재 노드가 됨.
 	
 	//오른쪽 자식의 왼쪽 자식이 현재 노드가 됨. 
+
+
+	//현재 노드의 왼쪽 자식이 현재 노드의 부모가 됨.
+	//왼쪽 자식의 부모 노드는 현재 노드의 부모가 됨.
+	//부모 입장에선 자식이 교체됨.
+
+
+	if (parent != nullptr)
+	{
+		if (parent->pLeft == curNode)
+		{
+			parent->pLeft = lc;
+		}
+		else
+		{
+			parent->pRight = lc;
+		}
+	}
+	else {
+		//현재 회전하는 노드가 root 노드였다면, root 멤버 변수가 lc를 가리키게 만들어준다.
+		root = lc;
+	}
+
+	//왼쪽 자식의 오른쪽 자식은,
+	//현재 노드의 왼쪽 자식이 된다.
+	curNode->pLeft = lrc;
+	lrc->pParent = curNode;
+	//현재 노드는 원래 왼쪽 자식의 오른쪽 자식이 됨.
+	lc->pRight = curNode;
 }
 
 void RBTree::ChangeColor(stNODE** curNode, NODE_COLOR color)
