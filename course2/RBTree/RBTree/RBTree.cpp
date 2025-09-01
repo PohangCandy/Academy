@@ -40,6 +40,8 @@ void RBTree::InsertData(stNODE** curNode, int d, stNODE* parent)
 	}
 }
 
+//단일 포인터로도 충분할 것으로 보임.
+//직접 회전하면서 curnode를 갱신하진 않음.
 void RBTree::MakeBalacingAfterInsert(stNODE** curNode)
 {
 	//부모가 없다면 밸런싱 필요없음.
@@ -136,36 +138,36 @@ void RBTree::makeRightRotate(stNODE** curNode)
 {
 	//부모, 왼쪽 자식, 왼쪽 자식의 오른쪽 자식을 구해준다.
 	stNODE* parent = (*curNode)->pParent;
-	stNODE** lc = &(*curNode)->pLeft;
-	stNODE** lrc = &(*lc)->pRight;
+	stNODE* lc = (*curNode)->pLeft;
+	stNODE* lrc = lc->pRight;
 	//현재 노드의 왼쪽 자식이 현재 노드의 부모가 됨.
 	//왼쪽 자식의 부모 노드는 현재 노드의 부모가 됨.
 	//부모 입장에선 자식이 교체됨.
-	(*lc)->pParent = parent;
-	(*curNode)->pParent = *lc;
+	lc->pParent = parent;
+	(*curNode)->pParent = lc;
 
 	if (parent != nullptr)
 	{
 		if (parent->pLeft == (*curNode))
 		{
-		  parent->pLeft = *lc;
+		  parent->pLeft = lc;
 		}
 		else
 		{
-			parent->pRight = *lc;
+			parent->pRight = lc;
 		}
 	}
 	else {
 		//현재 회전하는 노드가 root 노드였다면, root 멤버 변수가 lc를 가리키게 만들어준다.
-		root = *lc;
+		root = lc;
 	}
 
 	//왼쪽 자식의 오른쪽 자식은,
 	//현재 노드의 왼쪽 자식이 된다.
-	(*curNode)->pLeft = *lrc;
-	(*lrc)->pParent = *curNode;
+	(*curNode)->pLeft = lrc;
+	lrc->pParent = *curNode;
 	//현재 노드는 원래 왼쪽 자식의 오른쪽 자식이 됨.
-	(*lc)->pRight = *curNode;
+	lc->pRight = *curNode;
 }
 
 void RBTree::makeLeftRotate(stNODE** curNode)
