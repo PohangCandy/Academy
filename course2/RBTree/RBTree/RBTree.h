@@ -57,7 +57,7 @@ private:
 
 	void makeLeftRotate(stNODE* curNode);
 
-	void ChangeColor(stNODE** curNode, NODE_COLOR color);
+	void ChangeColor(stNODE* curNode, NODE_COLOR color);
 
 	void RemoveData(stNODE** curNode, int d);
 
