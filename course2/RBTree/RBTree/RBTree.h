@@ -53,9 +53,9 @@ private:
 
 	void MakeBalacingAfterInsert(stNODE** curNode);
 
-	void makeRightRotate(stNODE** curNode);
+	void makeRightRotate(stNODE* curNode);
 
-	void makeLeftRotate(stNODE** curNode);
+	void makeLeftRotate(stNODE* curNode);
 
 	void ChangeColor(stNODE** curNode, NODE_COLOR color);
 
