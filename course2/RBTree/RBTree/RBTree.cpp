@@ -245,6 +245,8 @@ void RBTree::ChangeColor(stNODE* curNode, NODE_COLOR color)
 	curNode->Color = color;
 }
 
+//삭제할 노드를 찾는 함수와 실제 삭제가 이뤄질 노드의 색에 따라 밸런싱을 취할 함수를 구분해야 할 듯.
+
 void RBTree::RemoveData(stNODE** curNode, int d)
 {
 	//데이터를 찾아 지우자
@@ -267,48 +269,115 @@ void RBTree::RemoveData(stNODE** curNode, int d)
 	}
 	//삭제할 데이터를 찾은 경우
 	
-	//삭제할 노드의 색이 Red인지 확인
 
 	else
 	{
-		//해당 데이터의 자식 노드 유무에 따라 동작이 달라짐.
-		//자식이 없는 노드일 경우 걍 삭제
-		if ((*curNode)->pLeft == nullptr && (*curNode)->pRight == nullptr)
+		//삭제할 노드의 색이 Red인지 확인
+		if ((*curNode)->Color == RED)
 		{
-			delete (*curNode);
-			*curNode = nullptr;
+			//해당 데이터의 자식 노드 유무에 따라 동작이 달라짐.
+	       //자식이 없는 노드일 경우 걍 삭제
+			if ((*curNode)->pLeft == &Nil && (*curNode)->pRight == &Nil)
+			{
+				//부모가 닐을 가리키도록 해줌.
+				stNODE* parent = (*curNode)->pParent;
+				if (parent->pLeft == *curNode)
+				{
+					parent->pLeft = &Nil;
+				}
+				else
+				{
+					parent->pRight = &Nil;
+				}
+				delete (*curNode);
+				*curNode = nullptr;
+			}
+			//자식이 하나인 경우
+			//해당 자식과 부모를 연결 -> 삭제된 노드가 R이므로 부모와 자식은 반드시 B 
+			//오른쪽 자식만 있는 경우
+			else if ((*curNode)->pLeft == &Nil)
+			{
+				stNODE* right = (*curNode)->pRight;
+				//부모는 자식을 가리키고
+				//자식은 부모를 가리키도록 함.
+				stNODE* parent = (*curNode)->pParent;
+				if (parent->pLeft == *curNode)
+				{
+					parent->pLeft = right;
+				}
+				else
+				{
+					parent->pRight = right;
+				}
+				right->pParent = parent;
+
+				delete (*curNode);
+				*curNode = nullptr;
+			}
+			else if ((*curNode)->pRight == &Nil)
+			{
+				stNODE* left = (*curNode)->pRight;
+				//부모는 자식을 가리키고
+				//자식은 부모를 가리키도록 함.
+				stNODE* parent = (*curNode)->pParent;
+				if (parent->pLeft == *curNode)
+				{
+					parent->pLeft = left;
+				}
+				else
+				{
+					parent->pRight = left;
+				}
+				left->pParent = parent;
+
+				delete (*curNode);
+				*curNode = nullptr;
+			}
+			//자식이 2개있는 경우
+			//해당 자리를 대체할 수 있는 노드를 찾아야 함.
+			//왼쪽 자식의 가장 오른쪽 노드 or 오른쪽 자식의 가장 왼쪽 노드
+			//왼-오 노드로 선택
+			else {
+				stNODE* LeftChild = (*curNode)->pLeft;
+				while (LeftChild->pRight != &Nil)
+				{
+					stNODE* RightestChild = LeftChild->pRight;
+					LeftChild = RightestChild;
+				}
+				//왼오 노드의 데이터를 현재 위치에 대입한 후,
+				//왼오 노드는 삭제한다.
+				(*curNode)->iData = LeftChild->iData;
+				RemoveData(&(*curNode)->pLeft, LeftChild->iData);
+			}
 		}
-		else if ((*curNode)->pLeft == nullptr)
+		//삭제할 노드가 Black이라면
+		else
 		{
-			stNODE* tmp = *curNode;
-			*curNode = (*curNode)->pRight;
-			delete(tmp);
-			tmp = nullptr;
-		}
-		else if ((*curNode)->pRight == nullptr)
-		{
-			stNODE* tmp = *curNode;
-			*curNode = (*curNode)->pLeft;
-			delete(tmp);
-			tmp = nullptr;
-		}
-		//자식이 2개있는 경우
-		//해당 자리를 대체할 수 있는 노드를 찾아야 함.
-		//왼쪽 자식의 가장 오른쪽 노드 or 오른쪽 자식의 가장 왼쪽 노드
-		//왼-오 노드로 선택
-		else {
+			//삭제 노드를 대체할 자식이 Red인 경우
+			//대체 노드를 삭제하고 데이터만 현재 노드에 담으면 됨.
 			stNODE* LeftChild = (*curNode)->pLeft;
-			while (LeftChild->pRight != nullptr)
+			while (LeftChild->pRight != &Nil)
 			{
 				stNODE* RightestChild = LeftChild->pRight;
 				LeftChild = RightestChild;
 			}
-			//왼오 노드의 데이터를 현재 위치에 대입한 후,
-			//왼오 노드는 삭제한다.
-			(*curNode)->iData = LeftChild->iData;
-			RemoveData(&(*curNode)->pLeft, LeftChild->iData);
+			if (LeftChild->Color == RED)
+			{
+				(*curNode)->iData = LeftChild->iData;
+				RemoveData(&(*curNode)->pLeft, LeftChild->iData);
+			}
+
+
+
 		}
+
+	
 	}
+
+}
+
+void RBTree::MakeBalacingAfterRemove(stNODE** curNode)
+{
 
 }
 

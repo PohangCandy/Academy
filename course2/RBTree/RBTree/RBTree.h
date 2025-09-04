@@ -61,6 +61,8 @@ private:
 
 	void RemoveData(stNODE** curNode, int d);
 
+	void MakeBalacingAfterRemove(stNODE** curNode);
+
 	void inorderTraversal(std::vector<int>& vout, stNODE* curNode);
 
 	void destroyTree(stNODE** curNode);
