@@ -32,10 +32,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Client.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="CRingBuffer.cpp">
+    <ClCompile Include="WindowsProject1.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

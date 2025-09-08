@@ -135,8 +135,7 @@
     <ClInclude Include="WindowsProject1.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Client.cpp" />
-    <ClCompile Include="CRingBuffer.cpp" />
+    <ClCompile Include="WindowsProject1.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="WindowsProject1.rc" />
