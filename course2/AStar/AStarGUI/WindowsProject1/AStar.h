@@ -55,6 +55,7 @@ public:
 //1. 안정성을 위해 먼저 set으로 
 	std::set <Node*, CompareNode>_openlist;
 	std::list <Node*>_closelist;
+	std::list <Node*>_shortestRoutelist;
 
 	//AStar()
 	//{
