@@ -9,12 +9,16 @@
 
 #define MAX_LOADSTRING 100
 #define GRID_SIZE 16
+//#define GRID_SIZE 32
 #define GRID_WIDTH 100
 #define GRID_HEIGHT 50
+
+int g_iGridSize = GRID_SIZE;
 
 //나중에 출발지와 목적지를 겹치게 두면 출발지를 먼저 옮길 수 있는 예외처리도 해줘야 할 듯
 Grid g_start = { GRID_WIDTH / 3, GRID_HEIGHT /2 };
 Grid g_goal = { GRID_WIDTH * 2 / 3, GRID_HEIGHT / 2 };
+//Grid g_goal = { GRID_WIDTH / 3, GRID_HEIGHT / 2 };
 Dungeon g_Dungeon(GRID_HEIGHT,GRID_WIDTH);
 AStar g_AStar(g_start, g_goal,&g_Dungeon);
 
@@ -38,6 +42,10 @@ HBITMAP g_hMemDCBitmap;
 HBITMAP g_hMemDCBitmap_old;
 RECT g_MemDC_Rect;
 
+// 초기 배율 (100%)
+float g_fScale = 1.0f;
+POINT g_pan{ 0,0 }; // (옵션) 패닝용
+
 void RenderGrid(HDC hdc)
 {
     int iX = 0;
@@ -47,14 +55,14 @@ void RenderGrid(HDC hdc)
     for (int iCntW = 0; iCntW <= GRID_WIDTH;iCntW++)
     {
         MoveToEx(hdc, iX, 0, NULL);
-        LineTo(hdc, iX, GRID_HEIGHT * GRID_SIZE);
-        iX += GRID_SIZE;
+        LineTo(hdc, iX, GRID_HEIGHT * g_iGridSize);
+        iX += g_iGridSize;
     }
     for (int iCntH = 0;iCntH <= GRID_HEIGHT;iCntH++)
     {
         MoveToEx(hdc, 0, iY, NULL);
-        LineTo(hdc, GRID_WIDTH * GRID_SIZE, iY);
-        iY += GRID_SIZE;
+        LineTo(hdc, GRID_WIDTH * g_iGridSize, iY);
+        iY += g_iGridSize;
     }
     SelectObject(hdc, hOldBrush);
 }
@@ -77,10 +85,10 @@ void RenderObstacle(HDC hdc)
         {
             if (g_Dungeon.CheckTile(iCntH,iCntW))
             {
-                iX = iCntW * GRID_SIZE;
-                iY = iCntH * GRID_SIZE;
+                iX = iCntW * g_iGridSize;
+                iY = iCntH * g_iGridSize;
                 //테두리 크기가 있으므로 +2 한다.
-                Rectangle(hdc, iX, iY, iX + GRID_SIZE + 2, iY + GRID_SIZE + 2);
+                Rectangle(hdc, iX, iY, iX + g_iGridSize + 2, iY + g_iGridSize + 2);
             }
         }
     }
@@ -93,15 +101,15 @@ void RenderStartGoal(HDC hdc)
         SelectObject(hdc, g_hStartBrush);
         //Rectangle(hdc, g_AStar._start.x * GRID_SIZE, g_AStar._start.y * GRID_SIZE,
         //    (g_AStar._start.x + 1) * GRID_SIZE, (g_AStar._start.y + 1) * GRID_SIZE);
-        int iX = g_AStar._start.x * GRID_SIZE;
-        int iY = g_AStar._start.y * GRID_SIZE;
-        Rectangle(hdc, iX, iY, iX +  GRID_SIZE + 1, iY +  GRID_SIZE + 1);
+        int iX = g_AStar._start.x * g_iGridSize;
+        int iY = g_AStar._start.y * g_iGridSize;
+        Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
     }
     if (g_AStar._destination.x != -1) {
         SelectObject(hdc, g_hGoalBrush);
-        int iX = g_AStar._destination.x * GRID_SIZE;
-        int iY = g_AStar._destination.y* GRID_SIZE;
-        Rectangle(hdc, iX, iY, iX + GRID_SIZE + 1, iY + GRID_SIZE + 1);
+        int iX = g_AStar._destination.x * g_iGridSize;
+        int iY = g_AStar._destination.y* g_iGridSize;
+        Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
     }
 }
 
@@ -114,8 +122,8 @@ void RenderAStarList(HDC hdc)
         if (node->pos.x != -1)
         {
             SelectObject(hdc, g_hAstarListBrush);
-            Rectangle(hdc, node->pos.x * GRID_SIZE, node->pos.y * GRID_SIZE,
-                (node->pos.x + 1) * GRID_SIZE, (node->pos.y + 1) * GRID_SIZE);
+            Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
+                (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
         }
     }
 
@@ -124,8 +132,8 @@ void RenderAStarList(HDC hdc)
         if (node->pos.x != -1)
         {
             SelectObject(hdc, g_hAstarListBrush);
-            Rectangle(hdc, node->pos.x * GRID_SIZE, node->pos.y * GRID_SIZE,
-                (node->pos.x + 1) * GRID_SIZE, (node->pos.y + 1) * GRID_SIZE);
+            Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
+                (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
         }
     }
 
@@ -135,8 +143,8 @@ void RenderAStarList(HDC hdc)
         if (node->pos.x != -1)
         {
             SelectObject(hdc, g_hAstarAnswerListBrush);
-            Rectangle(hdc, node->pos.x * GRID_SIZE, node->pos.y * GRID_SIZE,
-                (node->pos.x + 1) * GRID_SIZE, (node->pos.y + 1) * GRID_SIZE);
+            Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
+                (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
         }
     }
 }
@@ -276,8 +284,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             int xPos = GET_X_LPARAM(lParam);
             int yPos = GET_Y_LPARAM(lParam);
-            int iTileX = xPos / GRID_SIZE;
-            int iTileY = yPos / GRID_SIZE;
+            int iTileX = xPos / g_iGridSize;
+            int iTileY = yPos / g_iGridSize;
 
             //선택 타일 우선 순위
             //첫 선택 타일이 장애물이면 지우기 모드 아니면 장애물 넣기 모드
@@ -319,8 +327,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             int xPos = GET_X_LPARAM(lParam);
             int yPos = GET_Y_LPARAM(lParam);
 
-            int iTileX = xPos / GRID_SIZE;
-            int iTileY = yPos / GRID_SIZE;
+            int iTileX = xPos / g_iGridSize;
+            int iTileY = yPos / g_iGridSize;
             if (g_bStartMove)
             {
                 //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
@@ -370,6 +378,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          //메모리DC 이미지 클리어
          PatBlt(g_hMemDC, 0, 0, g_MemDC_Rect.right, g_MemDC_Rect.bottom, WHITENESS);
 
+         // ====== 스케일 적용: 매핑 모드 방식 ======
+           // 논리 좌표계(window): 월드의 "원래 크기"
+         const int worldW = GRID_WIDTH * g_iGridSize;
+         const int worldH = GRID_HEIGHT * g_iGridSize;
+
+         SetMapMode(g_hMemDC, MM_ANISOTROPIC);
+
+         // 논리창(window) 크기(고정)
+         SetWindowOrgEx(g_hMemDC, 0, 0, nullptr);
+         SetWindowExtEx(g_hMemDC, worldW, worldH, nullptr);
+
+         // 뷰포트(viewport): 화면으로 나갈 크기(배율 반영)
+         // (옵션) g_pan.x/y 로 패닝 가능
+         SetViewportOrgEx(g_hMemDC, g_pan.x, g_pan.y, nullptr);
+         SIZE vp = { (int)(worldW * g_fScale), (int)(worldH * g_fScale) };
+         SetViewportExtEx(g_hMemDC, vp.cx, vp.cy, nullptr);
+         // =========================================
+          
+         
          //RenderObstacle,RenderGrid를 메모리 DC에 출력
          RenderGrid(g_hMemDC);
          RenderAStarList(g_hMemDC);
@@ -380,6 +407,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          hdc = BeginPaint(hWnd, &ps);
          BitBlt(hdc, 0, 0, g_MemDC_Rect.right, g_MemDC_Rect.bottom, g_hMemDC, 0, 0, SRCCOPY);
          EndPaint(hWnd, &ps);
+
          break;
      }
      break;
@@ -397,6 +425,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
          g_hMemDCBitmap_old = (HBITMAP)SelectObject(g_hMemDC, g_hMemDCBitmap);
      }
+     break;
+     case WM_MOUSEWHEEL:
+     {
+         int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+
+         if (zDelta > 0) g_iGridSize = (int)(g_iGridSize * 1.3f);  // 확대
+         else            g_iGridSize = (int)(g_iGridSize * 0.9f);  // 축소
+
+         if (g_iGridSize < 4)   g_iGridSize = 4;   // 최소 크기 제한
+         if (g_iGridSize > 128) g_iGridSize = 128; // 최대 크기 제한
+
+         InvalidateRect(hWnd, NULL, TRUE);
+     }
+     break;
      break;
     case WM_DESTROY:
         SelectObject(g_hMemDC, g_hMemDCBitmap_old);
