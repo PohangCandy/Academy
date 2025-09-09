@@ -20,6 +20,7 @@ HBRUSH g_hTileBrush;
 HBRUSH g_hStartBrush;
 HBRUSH g_hGoalBrush;
 HBRUSH g_hAstarListBrush;
+HBRUSH g_hAstarAnswerListBrush;
 HPEN g_hGridPen;
 
 // g_Tile[x][y]에 저장되는 값
@@ -95,13 +96,17 @@ void RenderStartGoal(HDC hdc)
 {
     if (g_AStar._start.x != -1) {
         SelectObject(hdc, g_hStartBrush);
-        Rectangle(hdc, g_AStar._start.x * GRID_SIZE, g_AStar._start.y * GRID_SIZE,
-            (g_AStar._start.x + 1) * GRID_SIZE, (g_AStar._start.y + 1) * GRID_SIZE);
+        //Rectangle(hdc, g_AStar._start.x * GRID_SIZE, g_AStar._start.y * GRID_SIZE,
+        //    (g_AStar._start.x + 1) * GRID_SIZE, (g_AStar._start.y + 1) * GRID_SIZE);
+        int iX = g_AStar._start.x * GRID_SIZE;
+        int iY = g_AStar._start.y * GRID_SIZE;
+        Rectangle(hdc, iX, iY, iX +  GRID_SIZE + 1, iY +  GRID_SIZE + 1);
     }
     if (g_AStar._destination.x != -1) {
         SelectObject(hdc, g_hGoalBrush);
-        Rectangle(hdc, g_AStar._destination.x * GRID_SIZE, g_AStar._destination.y * GRID_SIZE,
-            (g_AStar._destination.x + 1) * GRID_SIZE, (g_AStar._destination.y + 1) * GRID_SIZE);
+        int iX = g_AStar._destination.x * GRID_SIZE;
+        int iY = g_AStar._destination.y* GRID_SIZE;
+        Rectangle(hdc, iX, iY, iX + GRID_SIZE + 1, iY + GRID_SIZE + 1);
     }
 }
 
@@ -124,6 +129,17 @@ void RenderAStarList(HDC hdc)
         if (node->pos.x != -1)
         {
             SelectObject(hdc, g_hAstarListBrush);
+            Rectangle(hdc, node->pos.x * GRID_SIZE, node->pos.y * GRID_SIZE,
+                (node->pos.x + 1) * GRID_SIZE, (node->pos.y + 1) * GRID_SIZE);
+        }
+    }
+
+
+    for (auto node : g_AStar._shortestRoutelist)
+    {
+        if (node->pos.x != -1)
+        {
+            SelectObject(hdc, g_hAstarAnswerListBrush);
             Rectangle(hdc, node->pos.x * GRID_SIZE, node->pos.y * GRID_SIZE,
                 (node->pos.x + 1) * GRID_SIZE, (node->pos.y + 1) * GRID_SIZE);
         }
@@ -270,25 +286,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             //선택 타일 우선 순위
             //첫 선택 타일이 장애물이면 지우기 모드 아니면 장애물 넣기 모드
-            if (iTileX == g_AStar._start.x && iTileY == g_AStar._start.y)
-            {
-                g_bErase = false;
-                g_bStartMove = true;
-            }
-            //if (g_Tile[iTileY][iTileX] == TILE_START)
-            //{
-            //    g_bErase = false;
-            //    g_bStartMove = true;
-            //}
-            else if(g_Tile[iTileY][iTileX])
-            {
-                g_bErase = true;
-                g_bStartMove = false;
-            }
-            else if(!g_Tile[iTileY][iTileX])
-            {
-                g_bErase = false;
-                g_bStartMove = false;
+            if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT) {
+                if (iTileX == g_AStar._start.x && iTileY == g_AStar._start.y)
+                {
+                    g_bErase = false;
+                    g_bStartMove = true;
+                }
+                //if (g_Tile[iTileY][iTileX] == TILE_START)
+                //{
+                //    g_bErase = false;
+                //    g_bStartMove = true;
+                //}
+                else if (g_Tile[iTileY][iTileX])
+                {
+                    g_bErase = true;
+                    g_bStartMove = false;
+                }
+                else if (!g_Tile[iTileY][iTileX])
+                {
+                    g_bErase = false;
+                    g_bStartMove = false;
+                }
             }
         }
         break;
@@ -337,6 +355,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         g_hStartBrush = CreateSolidBrush(RGB(0, 200, 0));
         g_hGoalBrush = CreateSolidBrush(RGB(200, 0, 0));
         g_hAstarListBrush = CreateSolidBrush(RGB(0, 0, 200));
+        g_hAstarAnswerListBrush = CreateSolidBrush(RGB(200, 200, 0));
 
         //메모리DC 생성 코드
         //윈도우 생성 시 현 윈도우 크기와 동일한 메모리 DC 생성

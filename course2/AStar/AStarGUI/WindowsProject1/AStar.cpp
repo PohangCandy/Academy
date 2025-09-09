@@ -2,6 +2,11 @@
 #include <iostream>
 using namespace std;
 
+//지금 출발지와 도착지가 같을 경우, 출발지를 제외한 8방향으로 탐색을 시작하기 때문에 f값이 동일해
+//8개중 랜덤한 노드가 8방향을 탐사하며 목적지를 찾게되므로 불필요한 탐사가 일어나는 것처럼 보임.
+//하지만 정상
+//이걸 바꾸려면 8방향 탐사를 임의로 하지 않도록 알고리즘을 수정해야 함.
+
 //일단 제일 처음 좌표에서 도착지까지 H는 계산되야 함.
 //뉴클리드 계산
 float AStar::findGbyNode(Node* s, Node* d)
@@ -38,6 +43,7 @@ void AStar::insertListEightDirection(Node* sn)
 		newNode->H = findHbyGrid(&newNode->pos);
 		newNode->F = findF(newNode);
 
+		//방문한 노드인지 찾아본다.
 		//방문한 노드는 다시 방문하지 않도록 해준다.
 		//우선순위 큐라 값을 찾지 못한다.
 		bool visited = false;
@@ -93,6 +99,7 @@ void AStar::makeEmptyList()
 
 	_openlist.clear();
 	_closelist.clear();
+	_shortestRoutelist.clear();
 }
 
 void AStar::updateNode()
@@ -117,12 +124,21 @@ bool AStar::findPath()
 
 
 		//현재 방문한 노드 출력
-		cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
+		//cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
 		//cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
 		//최종 목적지에 도달했다면 중단
 		if (top->pos == _destination)
 		{
+			//cout << "--------------최단 거리 경로 출력------------------------------" << "\n";
 			//cout << "목적지에 도달했습니다." << "\n";
+			//실제 최단거리를 꺼내 벡터에 담고 gdi에서 해당 자료구조를 순회하도록 한다.
+			Node copy = *top;
+			while (!(copy.pos == _startNode.pos))
+			{
+				//cout << "[x pos] : " << copy.pos.x << " [y pos] : " << copy.pos.y << "\n";
+				_shortestRoutelist.push_back(copy.parent);
+				copy = *copy.parent;
+			}
 			return true;
 		}
 		insertListEightDirection(top);
