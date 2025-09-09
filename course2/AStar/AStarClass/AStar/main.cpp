@@ -1,4 +1,4 @@
-#include "Astar.h"
+#include "AStar.h"
 #include <iostream>
 using namespace std;
 

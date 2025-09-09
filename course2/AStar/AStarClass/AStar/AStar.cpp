@@ -1,4 +1,4 @@
-#include "Astar.h"
+#include "AStar.h"
 #include <iostream>
 using namespace std;
 
@@ -28,7 +28,7 @@ void AStar::insertListEightDirection(Node* sn)
 	{
 		int nx = sn->pos.x + dx[i];
 		int ny = sn->pos.y + dy[i];
-		if (nx < 0 || ny < 0 || nx >= width || ny >= length) continue;
+		if (nx < 0 || ny < 0 || nx >= ASTAR_WIDTH || ny >= ASTAR_Length) continue;
 
 		Node* newNode = new Node;
 		newNode->parent = sn;
@@ -86,8 +86,28 @@ void AStar::insertListEightDirection(Node* sn)
 	}
 }
 
+void AStar::makeEmptyList()
+{
+	for (auto n : _openlist) delete n;
+	for (auto n : _closelist) delete n;
+
+	_openlist.clear();
+	_closelist.clear();
+	_shortestRoutelist.clear();
+}
+
+void AStar::updateNode()
+{
+	_startNode.pos.x = _start.x;
+	_startNode.pos.y = _start.y;
+}
+
 bool AStar::findPath()
 {
+	makeEmptyList();
+
+	insertListEightDirection(&_startNode);
+
 	while (!_openlist.empty())
 	{
 		auto bestIt = _openlist.begin();
@@ -96,13 +116,23 @@ bool AStar::findPath()
 		//갔던 곳 다시 가지 않도록 표시
 		_closelist.push_back(top);
 
+
 		//현재 방문한 노드 출력
-		cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
-		cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
+		//cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
+		//cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
 		//최종 목적지에 도달했다면 중단
 		if (top->pos == _destination)
 		{
-			cout << "목적지에 도달했습니다." << "\n";
+			//cout << "--------------최단 거리 경로 출력------------------------------" << "\n";
+			//cout << "목적지에 도달했습니다." << "\n";
+			//실제 최단거리를 꺼내 벡터에 담고 gdi에서 해당 자료구조를 순회하도록 한다.
+			Node copy = *top;
+			while (!(copy.pos == _startNode.pos))
+			{
+				//cout << "[x pos] : " << copy.pos.x << " [y pos] : " << copy.pos.y << "\n";
+				_shortestRoutelist.push_back(copy.parent);
+				copy = *copy.parent;
+			}
 			return true;
 		}
 		insertListEightDirection(top);
