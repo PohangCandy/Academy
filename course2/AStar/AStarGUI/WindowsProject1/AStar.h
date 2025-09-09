@@ -9,8 +9,8 @@
 //int map[length][width];
 
 struct Grid {
-	float x;
-	float y;
+	int x;
+	int y;
 
 	bool operator == (Grid a)
 	{
@@ -48,6 +48,8 @@ public:
 	Grid _start;
 	Grid _destination;
 
+	Node _startNode;
+
 	//방문해야 할 리스트
 //우선 순위 큐로 했더니 openlist에 이미 방문한 노드가 있을 경우 탐색을 할 수 없음.
 //1. 안정성을 위해 먼저 set으로 
@@ -80,9 +82,10 @@ public:
 
 	bool findPath();
 
-private:
 
-	Node _startNode;
+	void updateNode();
+
+private:
 
 	float findHbyGrid(Grid* s);
 	float findGbyNode(Node* s, Node* d);

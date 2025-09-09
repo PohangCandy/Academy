@@ -21,19 +21,19 @@ HBRUSH g_hStartBrush;
 HBRUSH g_hGoalBrush;
 HBRUSH g_hAstarListBrush;
 HPEN g_hGridPen;
-char g_Tile[GRID_HEIGHT][GRID_WIDTH];
-
 
 // g_Tile[x][y]에 저장되는 값
-enum TileFlag
-{
-    TILE_EMPTY = 0x00,  // 아무것도 없는 빈 칸
-    TILE_OBSTACLE = 0x01,  // 장애물
-    TILE_START = 0x02,  // 출발지
-    TILE_GOAL = 0x04   // 목적지
-};
+//enum TileFlag
+//{
+//    TILE_EMPTY = 0x00,  // 아무것도 없는 빈 칸
+//    TILE_OBSTACLE = 0x01,  // 장애물
+//    TILE_START = 0x02,  // 출발지
+//    TILE_GOAL = 0x04   // 목적지
+//};
+char g_Tile[GRID_HEIGHT][GRID_WIDTH];
 
 bool g_bErase = false;
+bool g_bStartMove = false;
 bool g_bDrag = false;
 
 //메모리DC 관련 변수들
@@ -269,20 +269,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             int iTileY = yPos / GRID_SIZE;
 
             //선택 타일 우선 순위
-            // 
             //첫 선택 타일이 장애물이면 지우기 모드 아니면 장애물 넣기 모드
-            if (g_Tile[iTileY][iTileX] == 1)
-            {
-                g_bErase = true;
-            }
-            else
+            if (iTileX == g_AStar._start.x && iTileY == g_AStar._start.y)
             {
                 g_bErase = false;
+                g_bStartMove = true;
+            }
+            //if (g_Tile[iTileY][iTileX] == TILE_START)
+            //{
+            //    g_bErase = false;
+            //    g_bStartMove = true;
+            //}
+            else if(g_Tile[iTileY][iTileX])
+            {
+                g_bErase = true;
+                g_bStartMove = false;
+            }
+            else if(!g_Tile[iTileY][iTileX])
+            {
+                g_bErase = false;
+                g_bStartMove = false;
             }
         }
         break;
     case WM_LBUTTONUP:
         g_bDrag = false;
+        g_bStartMove = false;
         break;
     case WM_RBUTTONDOWN:
         g_AStar.findPath();
@@ -296,8 +308,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             int iTileX = xPos / GRID_SIZE;
             int iTileY = yPos / GRID_SIZE;
-            if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
-                g_Tile[iTileY][iTileX] = !g_bErase;
+            if (g_bStartMove)
+            {
+                //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
+                if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
+                {
+                    g_AStar._start.y = iTileY;
+                    g_AStar._start.x = iTileX;
+                    g_AStar.updateNode();
+                }
+            }
+            else
+            {
+                if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
+                {
+                    g_Tile[iTileY][iTileX] = !g_bErase;
+                }
+            }
             //마우스 드래그로 데이터가 변경되어 갱신을 요청 할 시 마지막 Erase 플래그를 false로 하여 화면 깜박임을 없앤다.
             //WM_PAINT에서는 윈도우 전체를 덮어쓰기 때문에 지우지 않아도 된다.
             InvalidateRect(hWnd, NULL, false);
