@@ -95,6 +95,12 @@ void AStar::makeEmptyList()
 	_closelist.clear();
 }
 
+void AStar::updateNode()
+{
+	_startNode.pos.x = _start.x;
+	_startNode.pos.y = _start.y;
+}
+
 bool AStar::findPath()
 {
 	makeEmptyList();
