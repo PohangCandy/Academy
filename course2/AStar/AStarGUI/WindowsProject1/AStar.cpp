@@ -86,8 +86,21 @@ void AStar::insertListEightDirection(Node* sn)
 	}
 }
 
+void AStar::makeEmptyList()
+{
+	for (auto n : _openlist) delete n;
+	for (auto n : _closelist) delete n;
+
+	_openlist.clear();
+	_closelist.clear();
+}
+
 bool AStar::findPath()
 {
+	makeEmptyList();
+
+	insertListEightDirection(&_startNode);
+
 	while (!_openlist.empty())
 	{
 		auto bestIt = _openlist.begin();
@@ -96,13 +109,14 @@ bool AStar::findPath()
 		//갔던 곳 다시 가지 않도록 표시
 		_closelist.push_back(top);
 
+
 		//현재 방문한 노드 출력
 		cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
-		cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
+		//cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
 		//최종 목적지에 도달했다면 중단
 		if (top->pos == _destination)
 		{
-			cout << "목적지에 도달했습니다." << "\n";
+			//cout << "목적지에 도달했습니다." << "\n";
 			return true;
 		}
 		insertListEightDirection(top);

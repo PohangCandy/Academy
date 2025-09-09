@@ -19,6 +19,7 @@ AStar g_AStar(g_start, g_goal);
 HBRUSH g_hTileBrush;
 HBRUSH g_hStartBrush;
 HBRUSH g_hGoalBrush;
+HBRUSH g_hAstarListBrush;
 HPEN g_hGridPen;
 char g_Tile[GRID_HEIGHT][GRID_WIDTH];
 
@@ -90,17 +91,42 @@ void RenderObstacle(HDC hdc)
     SelectObject(hdc, hOldBrush);
 }
 
-void RenderStartGoal(AStar* as ,HDC hdc)
+void RenderStartGoal(HDC hdc)
 {
-    if (as->_start.x != -1) {
+    if (g_AStar._start.x != -1) {
         SelectObject(hdc, g_hStartBrush);
-        Rectangle(hdc, as->_start.x * GRID_SIZE, as->_start.y * GRID_SIZE,
-            (as->_start.x + 1) * GRID_SIZE, (as->_start.y + 1) * GRID_SIZE);
+        Rectangle(hdc, g_AStar._start.x * GRID_SIZE, g_AStar._start.y * GRID_SIZE,
+            (g_AStar._start.x + 1) * GRID_SIZE, (g_AStar._start.y + 1) * GRID_SIZE);
     }
-    if (as->_destination.x != -1) {
+    if (g_AStar._destination.x != -1) {
         SelectObject(hdc, g_hGoalBrush);
-        Rectangle(hdc, as->_destination.x * GRID_SIZE, as->_destination.y * GRID_SIZE,
-            (as->_destination.x + 1) * GRID_SIZE, (as->_destination.y + 1) * GRID_SIZE);
+        Rectangle(hdc, g_AStar._destination.x * GRID_SIZE, g_AStar._destination.y * GRID_SIZE,
+            (g_AStar._destination.x + 1) * GRID_SIZE, (g_AStar._destination.y + 1) * GRID_SIZE);
+    }
+}
+
+//방문 가능성 노드, 방문 한 노드 파랗게 랜더링
+void RenderAStarList(HDC hdc)
+{
+
+    for (auto node : g_AStar._openlist)
+    {
+        if (node->pos.x != -1)
+        {
+            SelectObject(hdc, g_hAstarListBrush);
+            Rectangle(hdc, node->pos.x * GRID_SIZE, node->pos.y * GRID_SIZE,
+                (node->pos.x + 1) * GRID_SIZE, (node->pos.y + 1) * GRID_SIZE);
+        }
+    }
+
+    for (auto node : g_AStar._closelist)
+    {
+        if (node->pos.x != -1)
+        {
+            SelectObject(hdc, g_hAstarListBrush);
+            Rectangle(hdc, node->pos.x * GRID_SIZE, node->pos.y * GRID_SIZE,
+                (node->pos.x + 1) * GRID_SIZE, (node->pos.y + 1) * GRID_SIZE);
+        }
     }
 }
 
@@ -241,6 +267,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             int yPos = GET_Y_LPARAM(lParam);
             int iTileX = xPos / GRID_SIZE;
             int iTileY = yPos / GRID_SIZE;
+
+            //선택 타일 우선 순위
+            // 
             //첫 선택 타일이 장애물이면 지우기 모드 아니면 장애물 넣기 모드
             if (g_Tile[iTileY][iTileX] == 1)
             {
@@ -254,6 +283,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_LBUTTONUP:
         g_bDrag = false;
+        break;
+    case WM_RBUTTONDOWN:
+        g_AStar.findPath();
+        InvalidateRect(hWnd, NULL, false);
         break;
     case WM_MOUSEMOVE:
         if (g_bDrag)
@@ -276,6 +309,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         g_hTileBrush = CreateSolidBrush(RGB(100, 100, 100));
         g_hStartBrush = CreateSolidBrush(RGB(0, 200, 0));
         g_hGoalBrush = CreateSolidBrush(RGB(200, 0, 0));
+        g_hAstarListBrush = CreateSolidBrush(RGB(0, 0, 200));
+
         //메모리DC 생성 코드
         //윈도우 생성 시 현 윈도우 크기와 동일한 메모리 DC 생성
         HDC hdc = GetDC(hWnd);
@@ -295,9 +330,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          PatBlt(g_hMemDC, 0, 0, g_MemDC_Rect.right, g_MemDC_Rect.bottom, WHITENESS);
 
          //RenderObstacle,RenderGrid를 메모리 DC에 출력
-         RenderObstacle(g_hMemDC);
          RenderGrid(g_hMemDC);
-         RenderStartGoal(&g_AStar,g_hMemDC);
+         RenderAStarList(g_hMemDC);
+         RenderObstacle(g_hMemDC);
+         RenderStartGoal(g_hMemDC);
 
          //매모리 DC의 이미지를 윈도우 DC에 출력
          hdc = BeginPaint(hWnd, &ps);

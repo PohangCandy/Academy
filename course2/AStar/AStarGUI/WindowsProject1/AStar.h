@@ -48,6 +48,12 @@ public:
 	Grid _start;
 	Grid _destination;
 
+	//방문해야 할 리스트
+//우선 순위 큐로 했더니 openlist에 이미 방문한 노드가 있을 경우 탐색을 할 수 없음.
+//1. 안정성을 위해 먼저 set으로 
+	std::set <Node*, CompareNode>_openlist;
+	std::list <Node*>_closelist;
+
 	//AStar()
 	//{
 	//	Grid start = { 0,0 };
@@ -65,24 +71,17 @@ public:
 		_startNode.parent = nullptr;
 		_startNode.G = 0;
 		_startNode.H = findHbyGrid(&_startNode.pos);
-
-		insertListEightDirection(&_startNode);
 	}
 
 	~AStar()
 	{
-		for (auto n : _openlist) delete n;
-		for (auto n : _closelist) delete n;
+		makeEmptyList();
 	}
 
 	bool findPath();
 
 private:
-	//방문해야 할 리스트
-	//우선 순위 큐로 했더니 openlist에 이미 방문한 노드가 있을 경우 탐색을 할 수 없음.
-	//1. 안정성을 위해 먼저 set으로 
-	std::set <Node*, CompareNode>_openlist;
-	std::list <Node*>_closelist;
+
 	Node _startNode;
 
 	float findHbyGrid(Grid* s);
@@ -90,4 +89,6 @@ private:
 	float findF(Node* n);
 
 	void insertListEightDirection(Node* startNode);
+
+	void makeEmptyList();
 };
