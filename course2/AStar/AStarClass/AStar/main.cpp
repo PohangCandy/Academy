@@ -1,12 +1,14 @@
 #include "AStar.h"
+#include "Dungeon.h"
 #include <iostream>
 using namespace std;
 
 int main()
 {
+	Dungeon d;
 	Grid S = { 0,0 };
 	Grid D = { 10,0 };
-	AStar as(S, D);
+	AStar as(S, D,&d);
 
 	if (!as.findPath())
 	{
