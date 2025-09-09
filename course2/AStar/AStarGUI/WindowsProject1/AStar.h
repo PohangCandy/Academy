@@ -2,7 +2,7 @@
 #include <iostream>
 #include <list>
 #include <set>
-
+#include "IMap.h"
 #define ASTAR_WIDTH 100
 #define ASTAR_Length 100
 
@@ -45,6 +45,8 @@ struct CompareNode
 class AStar {
 
 public:
+	IMap* _map;
+
 	Grid _start;
 	Grid _destination;
 
@@ -64,7 +66,7 @@ public:
 
 	//}
 
-	AStar(Grid start, Grid destination)
+	AStar(Grid start, Grid destination, IMap* mapinstance) : _map(mapinstance)
 	{
 
 		_start = start;

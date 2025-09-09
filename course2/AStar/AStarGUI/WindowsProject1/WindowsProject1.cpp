@@ -1,10 +1,11 @@
 ﻿ //WindowsProject1.cpp : 애플리케이션에 대한 진입점을 정의합니다.
 
 
-#include "AStar.h"
 #include "framework.h"
 #include "WindowsProject1.h"
 #include "windowsx.h"
+#include "AStar.h"
+#include "Dungeon.h"
 
 #define MAX_LOADSTRING 100
 #define GRID_SIZE 16
@@ -14,7 +15,8 @@
 //나중에 출발지와 목적지를 겹치게 두면 출발지를 먼저 옮길 수 있는 예외처리도 해줘야 할 듯
 Grid g_start = { GRID_WIDTH / 3, GRID_HEIGHT /2 };
 Grid g_goal = { GRID_WIDTH * 2 / 3, GRID_HEIGHT / 2 };
-AStar g_AStar(g_start, g_goal);
+Dungeon g_Dungeon(GRID_HEIGHT,GRID_WIDTH);
+AStar g_AStar(g_start, g_goal,&g_Dungeon);
 
 HBRUSH g_hTileBrush;
 HBRUSH g_hStartBrush;
@@ -23,15 +25,8 @@ HBRUSH g_hAstarListBrush;
 HBRUSH g_hAstarAnswerListBrush;
 HPEN g_hGridPen;
 
-// g_Tile[x][y]에 저장되는 값
-//enum TileFlag
-//{
-//    TILE_EMPTY = 0x00,  // 아무것도 없는 빈 칸
-//    TILE_OBSTACLE = 0x01,  // 장애물
-//    TILE_START = 0x02,  // 출발지
-//    TILE_GOAL = 0x04   // 목적지
-//};
-char g_Tile[GRID_HEIGHT][GRID_WIDTH];
+//이제 전역 변수 타일 대신 던전의 맵으로 관리하자.
+//char g_Tile[GRID_HEIGHT][GRID_WIDTH];
 
 bool g_bErase = false;
 bool g_bStartMove = false;
@@ -80,7 +75,7 @@ void RenderObstacle(HDC hdc)
     {
         for (int iCntH = 0;iCntH < GRID_HEIGHT;iCntH++) 
         {
-            if (g_Tile[iCntH][iCntW])
+            if (g_Dungeon.CheckTile(iCntH,iCntW))
             {
                 iX = iCntW * GRID_SIZE;
                 iY = iCntH * GRID_SIZE;
@@ -297,12 +292,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //    g_bErase = false;
                 //    g_bStartMove = true;
                 //}
-                else if (g_Tile[iTileY][iTileX])
+                else if (g_Dungeon.CheckTile(iTileY, iTileX))
                 {
                     g_bErase = true;
                     g_bStartMove = false;
                 }
-                else if (!g_Tile[iTileY][iTileX])
+                else if (!g_Dungeon.CheckTile(iTileY, iTileX))
                 {
                     g_bErase = false;
                     g_bStartMove = false;
@@ -340,7 +335,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
                 if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
                 {
-                    g_Tile[iTileY][iTileX] = !g_bErase;
+                    g_Dungeon.ChangeTile(iTileY, iTileX, !g_bErase);
                 }
             }
             //마우스 드래그로 데이터가 변경되어 갱신을 요청 할 시 마지막 Erase 플래그를 false로 하여 화면 깜박임을 없앤다.
