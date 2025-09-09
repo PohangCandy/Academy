@@ -29,6 +29,9 @@ void AStar::insertListEightDirection(Node* sn)
 		int nx = sn->pos.x + dx[i];
 		int ny = sn->pos.y + dy[i];
 		if (nx < 0 || ny < 0 || nx >= ASTAR_WIDTH || ny >= ASTAR_Length) continue;
+		//여기서 장애물이 있는 지역은 못가게 해야하지 않을까?
+		//맵 인스턴스를 받아서 맵이 가진 장애물 체크 로직을 불러오게 하자.
+		if (_map->IsObstacle(ny, nx)) continue;
 
 		Node* newNode = new Node;
 		newNode->parent = sn;
@@ -118,18 +121,18 @@ bool AStar::findPath()
 
 
 		//현재 방문한 노드 출력
-		//cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
-		//cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
+		cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
+		cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
 		//최종 목적지에 도달했다면 중단
 		if (top->pos == _destination)
 		{
-			//cout << "--------------최단 거리 경로 출력------------------------------" << "\n";
+			cout << "--------------최단 거리 경로 출력------------------------------" << "\n";
 			//cout << "목적지에 도달했습니다." << "\n";
 			//실제 최단거리를 꺼내 벡터에 담고 gdi에서 해당 자료구조를 순회하도록 한다.
 			Node copy = *top;
 			while (!(copy.pos == _startNode.pos))
 			{
-				//cout << "[x pos] : " << copy.pos.x << " [y pos] : " << copy.pos.y << "\n";
+				cout << "[x pos] : " << copy.pos.x << " [y pos] : " << copy.pos.y << "\n";
 				_shortestRoutelist.push_back(copy.parent);
 				copy = *copy.parent;
 			}
