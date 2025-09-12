@@ -46,6 +46,9 @@ RECT g_MemDC_Rect;
 float g_fScale = 1.0f;
 POINT g_pan{ 0,0 }; // (옵션) 패닝용
 
+int g_originX = 0;
+int g_originY = 0;
+
 void RenderGrid(HDC hdc)
 {
     int iX = 0;
@@ -88,7 +91,7 @@ void RenderObstacle(HDC hdc)
                 iX = iCntW * g_iGridSize;
                 iY = iCntH * g_iGridSize;
                 //테두리 크기가 있으므로 +2 한다.
-                Rectangle(hdc, iX, iY, iX + g_iGridSize + 2, iY + g_iGridSize + 2);
+                Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
             }
         }
     }
@@ -284,8 +287,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             int xPos = GET_X_LPARAM(lParam);
             int yPos = GET_Y_LPARAM(lParam);
-            int iTileX = xPos / g_iGridSize;
-            int iTileY = yPos / g_iGridSize;
+
+            int iTileX = (xPos + g_originX) / g_iGridSize;
+            int iTileY = (yPos + g_originY) / g_iGridSize;
 
             //선택 타일 우선 순위
             //첫 선택 타일이 장애물이면 지우기 모드 아니면 장애물 넣기 모드
@@ -405,7 +409,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
          //매모리 DC의 이미지를 윈도우 DC에 출력
          hdc = BeginPaint(hWnd, &ps);
-         BitBlt(hdc, 0, 0, g_MemDC_Rect.right, g_MemDC_Rect.bottom, g_hMemDC, 0, 0, SRCCOPY);
+         BitBlt(hdc, 0, 0, g_MemDC_Rect.right, g_MemDC_Rect.bottom, g_hMemDC, g_originX, g_originY, SRCCOPY);
          EndPaint(hWnd, &ps);
 
          break;
@@ -439,7 +443,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          InvalidateRect(hWnd, NULL, TRUE);
      }
      break;
-     break;
+     case WM_KEYDOWN:
+         switch (wParam)
+         {
+         case VK_LEFT:  g_originX -= g_iGridSize; break;  // 화면 오른쪽으로 이동
+         case VK_RIGHT: g_originX += g_iGridSize; break;  // 화면 왼쪽으로 이동
+         case VK_UP:    g_originY -= g_iGridSize; break;  // 화면 아래로 이동
+         case VK_DOWN:   g_originY += g_iGridSize; break;  // 화면 위로 이동
+         }
+         InvalidateRect(hWnd, NULL, TRUE);
+         break;
     case WM_DESTROY:
         SelectObject(g_hMemDC, g_hMemDCBitmap_old);
         DeleteObject(g_hMemDCBitmap);

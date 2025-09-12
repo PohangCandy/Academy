@@ -7,7 +7,7 @@ using namespace std;
 float AStar::findGbyNode(Node* s, Node* d)
 {
 	//대각선으로 이동한 경우
-	if (abs(s->pos.x - d->pos.x) + abs(s->pos.y - d->pos.y) == 2) return s->G + 1.4;
+	if (abs(s->pos.x - d->pos.x) + abs(s->pos.y - d->pos.y) == 2) return s->G + 1.5;
 	//직선으로 이동한 경우
 	else return s->G + 1;
 }
@@ -49,6 +49,14 @@ void AStar::insertListEightDirection(Node* sn)
 		{
 			if (newNode->pos == a->pos)
 			{
+				//만약 새로운 경로의 F가 더 적다면 갱신해준다.
+				if (newNode->F < a->F)
+				{
+					a->G = newNode->G;
+					a->H = newNode->H;
+					a->F = newNode->F;
+					a->parent = newNode->parent;
+				}
 				visited = true;
 				break;
 			}
@@ -121,18 +129,18 @@ bool AStar::findPath()
 
 
 		//현재 방문한 노드 출력
-		cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
-		cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
+		//cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
+		//cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
 		//최종 목적지에 도달했다면 중단
 		if (top->pos == _destination)
 		{
-			cout << "--------------최단 거리 경로 출력------------------------------" << "\n";
+			//cout << "--------------최단 거리 경로 출력------------------------------" << "\n";
 			//cout << "목적지에 도달했습니다." << "\n";
 			//실제 최단거리를 꺼내 벡터에 담고 gdi에서 해당 자료구조를 순회하도록 한다.
 			Node copy = *top;
 			while (!(copy.pos == _startNode.pos))
 			{
-				cout << "[x pos] : " << copy.pos.x << " [y pos] : " << copy.pos.y << "\n";
+				//cout << "[x pos] : " << copy.pos.x << " [y pos] : " << copy.pos.y << "\n";
 				_shortestRoutelist.push_back(copy.parent);
 				copy = *copy.parent;
 			}
