@@ -85,7 +85,10 @@ public:
 
 	~AStar()
 	{
-		makeEmptyList();
+		makeInitList();
+		//startNode는 closeList에서 자동으로 삭제 되는 오류 주의
+		delete _startNode;
+		delete _goalNode;
 	}
 
 	bool findPath();
@@ -101,5 +104,5 @@ private:
 
 	void insertListEightDirection(Node* startNode);
 
-	void makeEmptyList();
+	void makeInitList();
 };
