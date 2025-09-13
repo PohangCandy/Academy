@@ -43,6 +43,7 @@ void AStar::insertListEightDirection(Node* sn)
 
 		//방문한 노드는 다시 방문하지 않도록 해준다.
 		//우선순위 큐라 값을 찾지 못한다.
+		//set으로 자료구조를 변경한다.
 		bool visited = false;
 
 		for (auto& a : _closelist)

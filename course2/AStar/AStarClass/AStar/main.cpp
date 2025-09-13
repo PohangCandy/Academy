@@ -7,7 +7,7 @@ int main()
 {
 	Dungeon d;
 	Grid S = { 0,0 };
-	Grid D = { 10,0 };
+	Grid D = { 6,2 };
 	AStar as(S, D,&d);
 
 	if (!as.findPath())
