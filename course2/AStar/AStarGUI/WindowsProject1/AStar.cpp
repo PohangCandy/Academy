@@ -41,22 +41,25 @@ void AStar::insertListEightDirection(Node* sn)
 		newNode->H = findHbyGrid(&newNode->pos);
 		newNode->F = findF(newNode);
 
+		
 		//방문한 노드는 다시 방문하지 않도록 해준다.
 		//우선순위 큐라 값을 찾지 못한다.
 		bool visited = false;
 
+		
 		for (auto& a : _closelist)
 		{
 			if (newNode->pos == a->pos)
 			{
-				//만약 새로운 경로의 F가 더 적다면 갱신해준다.
-				if (newNode->F < a->F)
-				{
-					a->G = newNode->G;
-					a->H = newNode->H;
-					a->F = newNode->F;
-					a->parent = newNode->parent;
-				}
+				//closedList는 이미 방문이 확정된 노드 즉, 가장 최솟값 F를 지난 것이므로 다시 갈 필요 없음.
+				////만약 새로운 경로의 F가 더 적다면 갱신해준다.
+				//if (newNode->F < a->F)
+				//{
+				//	a->G = newNode->G;
+				//	a->H = newNode->H;
+				//	a->F = newNode->F;
+				//	a->parent = newNode->parent;
+				//}
 				visited = true;
 				break;
 			}
@@ -67,7 +70,7 @@ void AStar::insertListEightDirection(Node* sn)
 			continue;
 		}
 
-		//openlist에도 이미 방문중인 노드일 수 있음.
+		//openlist에도 이미 방문 후보인 노드
 		visited = false;
 		for (auto& a : _openlist)
 		{
@@ -76,10 +79,8 @@ void AStar::insertListEightDirection(Node* sn)
 				//만약 새로운 경로의 F가 더 적다면 갱신해준다.
 				if (newNode->F < a->F)
 				{
-					a->G = newNode->G;
-					a->H = newNode->H;
-					a->F = newNode->F;
-					a->parent = newNode->parent;
+					_openlist.insert(newNode);
+					newNode = a;
 				}
 				visited = true;
 				break;
@@ -87,6 +88,7 @@ void AStar::insertListEightDirection(Node* sn)
 		}
 		if (visited)
 		{
+			_openlist.erase(newNode);
 			delete newNode;
 			continue;
 		}
@@ -97,10 +99,15 @@ void AStar::insertListEightDirection(Node* sn)
 	}
 }
 
-void AStar::makeEmptyList()
+void AStar::makeInitList()
 {
 	for (auto n : _openlist) delete n;
-	for (auto n : _closelist) delete n;
+	
+	for (auto n : _closelist)
+	{
+		if (n == _startNode) continue;
+		delete n;
+	}
 
 	_openlist.clear();
 	_closelist.clear();
@@ -117,7 +124,10 @@ void AStar::updateNode()
 
 bool AStar::findPath()
 {
-	makeEmptyList();
+	makeInitList();
+
+	//가장 처음 시작 노드를 넣어준다.
+	_closelist.push_back(_startNode);
 
 	insertListEightDirection(_startNode);
 
