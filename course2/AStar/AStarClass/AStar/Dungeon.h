@@ -8,10 +8,11 @@ class Dungeon : public IMap{
 
 public:
 	Dungeon() {
-		for (int i = 0; i < 10; i++)
+		for (int i = 0; i < 5; i++)
 		{
-			map[i][5] = 1;
+			map[2][i] = 1;
 		}
+		map[1][4] = 1;
 	}
 
 private:

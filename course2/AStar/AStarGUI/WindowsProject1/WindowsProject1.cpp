@@ -8,8 +8,7 @@
 #include "Dungeon.h"
 
 #define MAX_LOADSTRING 100
-#define GRID_SIZE 16
-//#define GRID_SIZE 32
+#define GRID_SIZE 32
 #define GRID_WIDTH 100
 #define GRID_HEIGHT 50
 
@@ -17,8 +16,7 @@ int g_iGridSize = GRID_SIZE;
 
 //나중에 출발지와 목적지를 겹치게 두면 출발지를 먼저 옮길 수 있는 예외처리도 해줘야 할 듯
 Grid g_start = { GRID_WIDTH / 3, GRID_HEIGHT /2 };
-Grid g_goal = { GRID_WIDTH * 2 / 3, GRID_HEIGHT / 2 };
-//Grid g_goal = { GRID_WIDTH / 3, GRID_HEIGHT / 2 };
+Grid g_goal = { GRID_WIDTH / 3, GRID_HEIGHT / 2 };
 Dungeon g_Dungeon(GRID_HEIGHT,GRID_WIDTH);
 AStar g_AStar(g_start, g_goal,&g_Dungeon);
 
@@ -34,6 +32,7 @@ HPEN g_hGridPen;
 
 bool g_bErase = false;
 bool g_bStartMove = false;
+bool g_bGoalMove = false;
 bool g_bDrag = false;
 
 //메모리DC 관련 변수들
@@ -293,11 +292,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             //선택 타일 우선 순위
             //첫 선택 타일이 장애물이면 지우기 모드 아니면 장애물 넣기 모드
-            if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT) {
+            if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT) 
+            {
                 if (iTileX == g_AStar._start.x && iTileY == g_AStar._start.y)
                 {
                     g_bErase = false;
                     g_bStartMove = true;
+                    g_bGoalMove = false;
+                }
+                else if (iTileX == g_AStar._destination.x && iTileY == g_AStar._destination.y)
+                {
+                    g_bErase = false;
+                    g_bStartMove = false;
+                    g_bGoalMove = true;
                 }
                 //if (g_Tile[iTileY][iTileX] == TILE_START)
                 //{
@@ -308,11 +315,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 {
                     g_bErase = true;
                     g_bStartMove = false;
+                    g_bGoalMove = false;
                 }
                 else if (!g_Dungeon.CheckTile(iTileY, iTileX))
                 {
                     g_bErase = false;
                     g_bStartMove = false;
+                    g_bGoalMove = false;
                 }
             }
         }
@@ -320,6 +329,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_LBUTTONUP:
         g_bDrag = false;
         g_bStartMove = false;
+        g_bGoalMove = false;
         break;
     case WM_RBUTTONDOWN:
         g_AStar.findPath();
@@ -340,6 +350,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 {
                     g_AStar._start.y = iTileY;
                     g_AStar._start.x = iTileX;
+                    g_AStar.updateNode();
+                }
+            }
+            else if (g_bGoalMove)
+            {
+                //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
+                if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
+                {
+                    g_AStar._destination.y = iTileY;
+                    g_AStar._destination.x = iTileX;
                     g_AStar.updateNode();
                 }
             }

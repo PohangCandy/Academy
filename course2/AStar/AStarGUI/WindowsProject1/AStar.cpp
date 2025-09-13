@@ -109,15 +109,17 @@ void AStar::makeEmptyList()
 
 void AStar::updateNode()
 {
-	_startNode.pos.x = _start.x;
-	_startNode.pos.y = _start.y;
+	_startNode->pos.x = _start.x;
+	_startNode->pos.y = _start.y;
+	_goalNode->pos.x = _destination.x;
+	_goalNode->pos.y = _destination.y;
 }
 
 bool AStar::findPath()
 {
 	makeEmptyList();
 
-	insertListEightDirection(&_startNode);
+	insertListEightDirection(_startNode);
 
 	while (!_openlist.empty())
 	{
@@ -138,7 +140,7 @@ bool AStar::findPath()
 			//cout << "목적지에 도달했습니다." << "\n";
 			//실제 최단거리를 꺼내 벡터에 담고 gdi에서 해당 자료구조를 순회하도록 한다.
 			Node copy = *top;
-			while (!(copy.pos == _startNode.pos))
+			while (!(copy.pos == _startNode->pos))
 			{
 				//cout << "[x pos] : " << copy.pos.x << " [y pos] : " << copy.pos.y << "\n";
 				_shortestRoutelist.push_back(copy.parent);

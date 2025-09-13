@@ -50,7 +50,8 @@ public:
 	Grid _start;
 	Grid _destination;
 
-	Node _startNode;
+	Node* _startNode;
+	Node* _goalNode;
 
 	//방문해야 할 리스트
 //우선 순위 큐로 했더니 openlist에 이미 방문한 노드가 있을 경우 탐색을 할 수 없음.
@@ -66,16 +67,20 @@ public:
 
 	//}
 
-	AStar(Grid start, Grid destination, IMap* mapinstance) : _map(mapinstance)
+	AStar(Grid start, Grid destination, IMap* mapinstance) : _map(mapinstance), _startNode(nullptr), _goalNode(nullptr)
 	{
 
 		_start = start;
 		_destination = destination;
 
-		_startNode.pos = start;
-		_startNode.parent = nullptr;
-		_startNode.G = 0;
-		_startNode.H = findHbyGrid(&_startNode.pos);
+		_startNode = new Node;
+		_startNode->pos = start;
+		_startNode->parent = nullptr;
+		_startNode->G = 0;
+		_startNode->H = findHbyGrid(&_startNode->pos);
+
+		_goalNode = new Node;
+		_goalNode->pos = _destination;
 	}
 
 	~AStar()
