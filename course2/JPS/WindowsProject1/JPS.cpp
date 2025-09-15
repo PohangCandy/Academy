@@ -163,7 +163,7 @@ bool JPS::findPath()
 		Node* top = *bestIt;
 		_openlist.erase(bestIt);
 		//갔던 곳 다시 가지 않도록 표시
-		_closelist.push_back(top);
+		//_closelist.push_back(top);
 
 
 		//현재 방문한 노드 출력
@@ -184,7 +184,7 @@ bool JPS::findPath()
 			}
 			return true;
 		}
-		insertListEightDirection(top);
+		findNodeWithDirection(top);
 	}
 	return false;
 }
@@ -198,22 +198,41 @@ void JPS::findNodeWithDirection(Node* n)
 	case LL:
 	{
 		//좌표가 맵안에 있으면 노드를 찾을때까지 계속 탐색
-		while (checkNodeIsInMap(n))
+		while (checkNodeIsInMap(temp))
 		{
 			//위 아래 노드가 또 맵 밖을 벗어나진 않는지 탐색해야 함...
-			Grid g = { n->pos.x, n->pos.y + 1 };
-			//n의 DD가 장애물 + LD가 빈 공간인 경우 노드 생성
-			if (_map->IsObstacle(n->pos.x, n->pos.y + 1) && !_map->IsObstacle(n->pos.x + 1, n->pos.y + 1))
+			Grid g = { temp->pos.x, temp->pos.y + 1 };
+			Grid g2 = { temp->pos.x - 1, temp->pos.y + 1 };
+			if (checkGridIsInMap(g) && checkGridIsInMap(g2))
+			{
+				//n의 DD가 장애물 + LD가 빈 공간인 경우 노드 생성
+				if (_map->IsObstacle(temp->pos.y + 1, temp->pos.x) && !_map->IsObstacle(temp->pos.y + 1, temp->pos.x - 1))
+				{
+					_openlist.insert(n);
+					break;
+				}
+			}
+
+			g = { temp->pos.x + 1, temp->pos.y - 1 };
+			g2 = { temp->pos.x - 1, temp->pos.y - 1 };
+			if (checkGridIsInMap(g))
+			{
+				//n의 UU가 장애물 + LU가 빈 공간이 경우 노드 생성
+				if (_map->IsObstacle(temp->pos.y - 1, temp->pos.x) && !_map->IsObstacle(temp->pos.y + 1,temp->pos.x - 1))
+				{
+					_openlist.insert(n);
+					break;
+				}
+			}
+
+			//목표를 만나도 노드를 집어넣고 반환한다.
+			if (temp->pos.x == _destination.x && temp->pos.y == _destination.y)
 			{
 				_openlist.insert(n);
 				break;
 			}
 
-
-			g = { n->pos.x + 1, n->pos.y + 1 };
-			//n의 UU가 장애물 + LU가 빈 공간이 경우 노드 생성
-			if (_map->IsObstacle(n->pos.x, n->pos.y - 1) && !_map->IsObstacle(n->pos.x + 1, n->pos.y + 1))
-				n->pos.x--;
+			temp->pos.x--;
 		}
 	}
 		
