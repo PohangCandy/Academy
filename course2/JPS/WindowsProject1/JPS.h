@@ -35,34 +35,45 @@ struct Node {
 
 	EDirection  getNodedirection()
 	{
-		if (this->pos.x> parent->pos.x)
+		if (this->pos.x > parent->pos.x)
 		{
 			if (this->pos.y > parent->pos.y)
 			{
-				return RU;
+				return RD;
 			}
 			else if (this->pos.y < parent->pos.y)
 			{
-				return RD;
+				return RU;
 			}
 			else
 			{
 				return RR;
 			}
 		}
-		else
+		else if(this->pos.x < parent->pos.x)
 		{
-			if (parent->pos.y > this->pos.y)
-			{
-				return LU;
-			}
-			else if (parent->pos.x < this->pos.x)
+			if (this->pos.y > parent->pos.y)
 			{
 				return LD;
+			}
+			else if (this->pos.y < parent->pos.y)
+			{
+				return LU;
 			}
 			else
 			{
 				return LL;
+			}
+		}
+		else
+		{
+			if (this->pos.y > parent->pos.y)
+			{
+				return UU;
+			}
+			else
+			{
+				return DD;
 			}
 		}
 	}
