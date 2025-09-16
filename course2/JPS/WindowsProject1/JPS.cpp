@@ -196,6 +196,9 @@ bool JPS::findPath()
 
 void JPS::setDirectionToTravel(Node* n, EDirection d)
 {
+	//해당 노드가 탐사 가능한 노드인지 탐색하는 작업을 이 함수에서 하겠다.
+
+
 	Node* temp = new Node;
 	temp->pos  = n->pos;
 	temp->G = n->G;
@@ -208,7 +211,7 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 	{
 		//좌표가 맵 안에서 노드를 찾을때까지 해당 방향으로 계속 탐색
 		//탐사했을때 아무것도 나오지 않은 공간은 검은색으로 나오도록 한다.
-		while (temp->pos.x >= 1)
+		while (temp->pos.x - 1 >= 0 && !_map->IsObstacle(temp->pos.y, temp->pos.x - 1))
 		{
 			temp->pos.x -= 1;
 			temp->G += 1;
@@ -261,7 +264,7 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 	case RR:
 	{
 		//좌표가 맵 안에서 노드를 찾을때까지 해당 방향으로 계속 탐색
-		while (temp->pos.x  + 1< _map->getwidth())
+		while (temp->pos.x + 1 < _map->getheight() && !_map->IsObstacle(temp->pos.y, temp->pos.x + 1))
 		{
 			temp->pos.x += 1;
 			temp->G += 1;
