@@ -38,7 +38,7 @@ void JPS::insertListEightDirection(Node* sn)
 		//진행 방향이 필요하므로 parent 정보가 있어야 할 것으로 보임.
 		//성능을 높이려면 new를 적게 쓰기위해 그리드 방향을 이용하되 parent의 방향만 이용하는게 나아보임.
 		//근데 일단 안전하게 먼저 노드 만들어서 추적하기 쉽게 진행.
-		Node* newNode = new Node;
+		Node* newNode =  new Node;
 		newNode->parent = sn;
 		newNode->pos.x = nx;
 		newNode->pos.y = ny;
@@ -161,9 +161,10 @@ bool JPS::findPath()
 	{
 		auto bestIt = _openlist.begin();
 		Node* top = *bestIt;
-		_openlist.erase(bestIt);
+		//_openlist.erase(bestIt);
 		//갔던 곳 다시 가지 않도록 표시
 		//_closelist.push_back(top);
+
 
 
 		//현재 방문한 노드 출력
@@ -189,53 +190,93 @@ bool JPS::findPath()
 	return false;
 }
 
-void JPS::findNodeWithDirection(Node* n)
+void JPS::setDirectionToTravel(Node* n, EDirection d)
 {
 	Node* temp = n;
-	EDirection d = n->getNodedirection();
+
 	switch (d)
 	{
 	case LL:
 	{
-		//좌표가 맵안에 있으면 노드를 찾을때까지 계속 탐색
+		temp->pos.x - 1;
+		//좌표가 맵 안에서 노드를 찾을때까지 해당 방향으로 계속 탐색
 		while (checkNodeIsInMap(temp))
 		{
-			//위 아래 노드가 또 맵 밖을 벗어나진 않는지 탐색해야 함...
-			Grid g = { temp->pos.x, temp->pos.y + 1 };
-			Grid g2 = { temp->pos.x - 1, temp->pos.y + 1 };
-			if (checkGridIsInMap(g) && checkGridIsInMap(g2))
+			int x = temp->pos.x;
+			int y = temp->pos.y;
+			
+
+			if (x - 1 >= 0 && y + 1 < _map->getheight())
 			{
 				//n의 DD가 장애물 + LD가 빈 공간인 경우 노드 생성
-				if (_map->IsObstacle(temp->pos.y + 1, temp->pos.x) && !_map->IsObstacle(temp->pos.y + 1, temp->pos.x - 1))
+				if (_map->IsObstacle(y + 1,x) && !_map->IsObstacle(y + 1, x - 1))
 				{
-					_openlist.insert(n);
+					_openlist.insert(temp);
 					break;
 				}
 			}
 
-			g = { temp->pos.x + 1, temp->pos.y - 1 };
-			g2 = { temp->pos.x - 1, temp->pos.y - 1 };
-			if (checkGridIsInMap(g))
+			if (x - 1 >= 0 && y - 1 >= 0)
 			{
 				//n의 UU가 장애물 + LU가 빈 공간이 경우 노드 생성
-				if (_map->IsObstacle(temp->pos.y - 1, temp->pos.x) && !_map->IsObstacle(temp->pos.y + 1,temp->pos.x - 1))
+				if (_map->IsObstacle(y - 1, x) && !_map->IsObstacle(y - 1, x - 1))
 				{
-					_openlist.insert(n);
+					_openlist.insert(temp);
 					break;
 				}
 			}
 
-			//목표를 만나도 노드를 집어넣고 반환한다.
-			if (temp->pos.x == _destination.x && temp->pos.y == _destination.y)
+			//목표를 만나면 목표를 집어넣고 반환한다.
+			if (x == _destination.x && y == _destination.y)
 			{
-				_openlist.insert(n);
+				_openlist.insert(temp);
 				break;
 			}
 
 			temp->pos.x--;
 		}
 	}
-		
+
+	break;
+	case LU:
+		break;
+	case UU:
+		break;
+	case RU:
+		break;
+	case RR:
+		break;
+	case RD:
+		break;
+	case DD:
+		break;
+	case LD:
+		break;
+	default:
+		break;
+	}
+}
+
+void JPS::findNodeWithDirection(Node* n)
+{
+	EDirection d = n->getNodedirection();
+	switch (d)
+	{
+	case LL:
+	{
+		setDirectionToTravel(n, LL);
+		//대각선 방향 탐사 여부 
+		//n의 DD가 장애물 + LD가 빈 공간인 경우 LD 방향 탐사
+		if (_map->IsObstacle(n->pos.y + 1, n->pos.x) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x - 1)))
+		{
+			setDirectionToTravel(n, LD);
+		}
+		//n의 UU가 장애물 + LU가 빈 공간이 경우 LU 방향 탐사
+		if (_map->IsObstacle(n->pos.y - 1, n->pos.x) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x - 1)))
+		{
+			setDirectionToTravel(n, LU);
+		}
+	}
 		break;
 	case LU:
 		break;

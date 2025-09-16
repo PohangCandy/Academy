@@ -152,6 +152,8 @@ public:
 
 private:
 
+	void setDirectionToTravel(Node* n, EDirection d);
+
 	void findNodeWithDirection(Node* n);
 
 	float findHbyGrid(Grid* s);
