@@ -125,10 +125,8 @@ void JPS::makeInitList()
 
 void JPS::updateNode()
 {
-	_startNode->pos.x = _start.x;
-	_startNode->pos.y = _start.y;
-	_goalNode->pos.x = _destination.x;
-	_goalNode->pos.y = _destination.y;
+	_startNode->pos = _map->getStart();
+	_goalNode->pos = _map->getGoal();
 }
 
 bool JPS::checkNodeIsInMap(Node* n)
@@ -174,8 +172,9 @@ bool JPS::findPath()
 		//cout << "[x pos] : " << top->pos.x << " [y pos] : " << top->pos.y << "\n";
 		//cout << " [G] : " << top->G << " [H] : " << top->H << " [F] : " << top->F << "\n";
 		//최종 목적지에 도달했다면 중단
-		if (top->pos == _destination)
+		if (top->pos == _goalNode->pos)
 		{
+			_openlist.erase(bestIt);
 			//cout << "--------------최단 거리 경로 출력------------------------------" << "\n";
 			//cout << "목적지에 도달했습니다." << "\n";
 			//실제 최단거리를 꺼내 벡터에 담고 gdi에서 해당 자료구조를 순회하도록 한다.
@@ -197,7 +196,7 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 {
 	Node* temp = new Node;
 	temp->pos  = n->pos;
-	temp->G += n->G;
+	temp->G = n->G;
 	temp->H = n->H;
 	temp->parent = n;
 
@@ -206,6 +205,7 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 	case LL:
 	{
 		//좌표가 맵 안에서 노드를 찾을때까지 해당 방향으로 계속 탐색
+		//탐사했을때 아무것도 나오지 않은 공간은 검은색으로 나오도록 한다.
 		while (temp->pos.x >= 1)
 		{
 			temp->pos.x -= 1;
@@ -236,7 +236,8 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 			}
 
 			//목표를 만나면 목표를 집어넣고 반환한다.
-			if (x == _destination.x && y == _destination.y)
+			//목표물은 나중에 랜더하기전에 리스트에서 지워야 할 듯
+			if (x == _goalNode->pos.x && y == _goalNode->pos.y)
 			{
 				_openlist.insert(temp);
 				break;
@@ -253,6 +254,47 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 	case RU:
 		break;
 	case RR:
+	{
+		//좌표가 맵 안에서 노드를 찾을때까지 해당 방향으로 계속 탐색
+		while (temp->pos.x < _map->getwidth())
+		{
+			temp->pos.x += 1;
+			temp->G += 1;
+			temp->H = findHbyGrid(&temp->pos);
+			temp->F = findF(temp);
+
+			int x = temp->pos.x;
+			int y = temp->pos.y;
+			if (x + 1 < _map->getwidth() && y + 1 < _map->getheight())
+			{
+				//n의 DD가 장애물 + RD가 빈 공간인 경우 노드 생성
+				if (_map->IsObstacle(y + 1, x) && !_map->IsObstacle(y + 1, x + 1))
+				{
+					_openlist.insert(temp);
+					break;
+				}
+			}
+
+			if (x + 1 < _map->getwidth() && y - 1 >= 0)
+			{
+				//n의 UU가 장애물 + RU가 빈 공간이 경우 노드 생성
+				if (_map->IsObstacle(y - 1, x) && !_map->IsObstacle(y - 1, x + 1))
+				{
+					_openlist.insert(temp);
+					break;
+				}
+			}
+
+			//목표를 만나면 목표를 집어넣고 반환한다.
+			//목표물은 나중에 랜더하기전에 리스트에서 지워야 할 듯
+			if (x == _goalNode->pos.x && y == _goalNode->pos.y)
+			{
+				_openlist.insert(temp);
+				break;
+			}
+
+		}
+	}
 		break;
 	case RD:
 		break;
@@ -289,14 +331,30 @@ void JPS::findNodeWithDirection(Node* n)
 	case LU:
 		break;
 	case UU:
+
 		break;
 	case RU:
 		break;
-	case RR:
+	case RR: 
+	{
+		setDirectionToTravel(n, RR);
+		//대각선 방향 탐사 여부 
+		//n의 DD가 장애물 + RD가 빈 공간인 경우 RD 방향 탐사
+		if (_map->IsObstacle(n->pos.y + 1, n->pos.x) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x + 1)))
+		{
+			setDirectionToTravel(n, RD);
+		}
+		//n의 UU가 장애물 + RU가 빈 공간이 경우 RU 방향 탐사
+		if (_map->IsObstacle(n->pos.y - 1, n->pos.x) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x + 1)))
+		{
+			setDirectionToTravel(n, RU);
+		}
+	}
 		break;
 	case RD:
 		break;
 	case DD:
+
 		break;
 	case LD:
 		break;
@@ -308,5 +366,5 @@ void JPS::findNodeWithDirection(Node* n)
 //일단 제일 처음 좌표에서 도착지까지 H는 계산되야 함.
 float JPS::findHbyGrid(Grid* s)
 {
-	return abs(s->x - _destination.x) + abs(s->y - _destination.y);
+	return abs(s->x - _goalNode->pos.x) + abs(s->y - _goalNode->pos.y);
 }

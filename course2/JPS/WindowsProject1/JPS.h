@@ -13,15 +13,15 @@ enum EDirection
 	LL, LU, UU, RU, RR, RD, DD, LD
 };
 
-struct Grid {
-	int x;
-	int y;
-	
-	bool operator == (Grid a)
-	{
-		return (this->x == a.x) && (this->y == a.y);
-	}
-};
+//struct Grid {
+//	int x;
+//	int y;
+//	
+//	bool operator == (Grid a)
+//	{
+//		return (this->x == a.x) && (this->y == a.y);
+//	}
+//};
 
 struct Node {
 	Grid pos;
@@ -97,8 +97,8 @@ class JPS {
 public:
 	IMap* _map;
 
-	Grid _start;
-	Grid _destination;
+	//Grid _start;
+	//Grid _destination;
 
 	Node* _startNode;
 	Node* _goalNode;
@@ -117,20 +117,19 @@ public:
 
 	//}
 
-	JPS(Grid start, Grid destination, IMap* mapinstance) : _map(mapinstance), _startNode(nullptr), _goalNode(nullptr)
+	JPS(IMap* mapinstance) : _map(mapinstance), _startNode(nullptr), _goalNode(nullptr)
 	{
 
-		_start = start;
-		_destination = destination;
+		//_start = start;
+		//_destination = destination;
+		_goalNode = new Node;
+		_goalNode->pos = _map->getGoal();
 
 		_startNode = new Node;
-		_startNode->pos = start;
+		_startNode->pos = _map->getStart();
 		_startNode->parent = nullptr;
 		_startNode->G = 0;
 		_startNode->H = findHbyGrid(&_startNode->pos);
-
-		_goalNode = new Node;
-		_goalNode->pos = _destination;
 	}
 
 	~JPS()
@@ -142,7 +141,6 @@ public:
 	}
 
 	bool findPath();
-
 
 	void updateNode();
 
