@@ -17,17 +17,23 @@ public:
 		{
 			for (int j = 0; j < _width; j++)
 			{
-				map[i][j] = 0;
+				map[i][j] = none;
 			}
 		}
 	}
 
-	int CheckTile(int y, int x);
+	ETileType CheckTile(int y, int x);
 
-	void ChangeTile(int y, int x, int v);
+	void ChangeTile(int y, int x, ETileType v);
 
 	int getwidth() { return  _width; }
 	int getheight() { return  _height; }
+
+	Grid getStart() { return _start; }
+	Grid getGoal() { return _goal; }
+
+	Grid _start = { 0, 0 };
+	Grid _goal = { 10, 0 };
 
 private:
 
@@ -35,7 +41,7 @@ private:
 
 	int _height = 0;
 
-	int map[DUNGEON_LENGTH][DUNGEON_WIDTH] = {0,};
+	ETileType map[DUNGEON_LENGTH][DUNGEON_WIDTH] = { none,};
 
 	bool IsObstacle(int y, int x);
 };

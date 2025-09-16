@@ -15,10 +15,10 @@
 int g_iGridSize = GRID_SIZE;
 
 //나중에 출발지와 목적지를 겹치게 두면 출발지를 먼저 옮길 수 있는 예외처리도 해줘야 할 듯
-Grid g_start = { GRID_WIDTH / 3, GRID_HEIGHT /2 };
-Grid g_goal = { GRID_WIDTH / 3, GRID_HEIGHT / 2 };
+//Grid g_start = { GRID_WIDTH / 3, GRID_HEIGHT /2 };
+//Grid g_goal = { GRID_WIDTH / 3, GRID_HEIGHT / 2 };
 Dungeon g_Dungeon(GRID_HEIGHT,GRID_WIDTH);
-JPS g_AStar(g_start, g_goal,&g_Dungeon);
+JPS g_AStar(&g_Dungeon);
 
 HBRUSH g_hTileBrush;
 HBRUSH g_hStartBrush;
@@ -69,6 +69,8 @@ void RenderGrid(HDC hdc)
     SelectObject(hdc, hOldBrush);
 }
 
+//이제 맵정보를 바탕으로 랜더링하도록 만들어본다.
+
 void RenderObstacle(HDC hdc)
 {
     int iX = 0;
@@ -85,7 +87,7 @@ void RenderObstacle(HDC hdc)
     {
         for (int iCntH = 0;iCntH < GRID_HEIGHT;iCntH++) 
         {
-            if (g_Dungeon.CheckTile(iCntH,iCntW))
+            if (g_Dungeon.CheckTile(iCntH,iCntW) == obs)
             {
                 iX = iCntW * g_iGridSize;
                 iY = iCntH * g_iGridSize;
@@ -99,18 +101,18 @@ void RenderObstacle(HDC hdc)
 
 void RenderStartGoal(HDC hdc)
 {
-    if (g_AStar._start.x != -1) {
+    if (g_Dungeon._start.x != -1) {
         SelectObject(hdc, g_hStartBrush);
         //Rectangle(hdc, g_AStar._start.x * GRID_SIZE, g_AStar._start.y * GRID_SIZE,
         //    (g_AStar._start.x + 1) * GRID_SIZE, (g_AStar._start.y + 1) * GRID_SIZE);
-        int iX = g_AStar._start.x * g_iGridSize;
-        int iY = g_AStar._start.y * g_iGridSize;
+        int iX = g_Dungeon._start.x * g_iGridSize;
+        int iY = g_Dungeon._start.y * g_iGridSize;
         Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
     }
-    if (g_AStar._destination.x != -1) {
+    if (g_Dungeon._goal.x != -1) {
         SelectObject(hdc, g_hGoalBrush);
-        int iX = g_AStar._destination.x * g_iGridSize;
-        int iY = g_AStar._destination.y* g_iGridSize;
+        int iX = g_Dungeon._goal.x * g_iGridSize;
+        int iY = g_Dungeon._goal.y* g_iGridSize;
         Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
     }
 }
@@ -294,13 +296,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             //첫 선택 타일이 장애물이면 지우기 모드 아니면 장애물 넣기 모드
             if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT) 
             {
-                if (iTileX == g_AStar._start.x && iTileY == g_AStar._start.y)
+                if (iTileX == g_Dungeon.getStart().x && iTileY == g_Dungeon.getStart().y)
                 {
                     g_bErase = false;
                     g_bStartMove = true;
                     g_bGoalMove = false;
                 }
-                else if (iTileX == g_AStar._destination.x && iTileY == g_AStar._destination.y)
+                else if (iTileX == g_Dungeon.getGoal().x && iTileY == g_Dungeon.getGoal().y)
                 {
                     g_bErase = false;
                     g_bStartMove = false;
@@ -348,8 +350,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
                 if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
                 {
-                    g_AStar._start.y = iTileY;
-                    g_AStar._start.x = iTileX;
+                    g_Dungeon._start.y = iTileY;
+                    g_Dungeon._start.x = iTileX;
                     g_AStar.updateNode();
                 }
             }
@@ -358,8 +360,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
                 if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
                 {
-                    g_AStar._destination.y = iTileY;
-                    g_AStar._destination.x = iTileX;
+                    g_Dungeon._goal.y = iTileY;
+                    g_Dungeon._goal.x = iTileX;
                     g_AStar.updateNode();
                 }
             }
@@ -367,7 +369,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
                 if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
                 {
-                    g_Dungeon.ChangeTile(iTileY, iTileX, !g_bErase);
+                    if (g_bErase)
+                    {
+                        g_Dungeon.ChangeTile(iTileY, iTileX, none);
+                    }
+                    else
+                    {
+                        g_Dungeon.ChangeTile(iTileY, iTileX, obs);
+                    }
                 }
             }
             //마우스 드래그로 데이터가 변경되어 갱신을 요청 할 시 마지막 Erase 플래그를 false로 하여 화면 깜박임을 없앤다.
