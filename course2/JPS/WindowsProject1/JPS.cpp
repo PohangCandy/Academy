@@ -21,88 +21,91 @@ float JPS::findF(Node* n)
 //탐색한 경로를 리스트에 담으면서 f가 가장 적은 곳을 먼저 탐색하도록 만든다.
 void JPS::insertListEightDirection(Node* sn)
 {
-	int dx[8] = { 0,1,1,1,0,-1,-1,-1 };
-	int dy[8] = { 1,1,0,-1,-1,-1,0,1 };
 
-	for (int i = 0; i < 8; i++)
-	{
-		int nx = sn->pos.x + dx[i];
-		int ny = sn->pos.y + dy[i];
-		if (nx < 0 || ny < 0 || nx >= _map->getwidth() || ny >= _map->getheight()) continue;
-		//여기서 장애물이 있는 지역은 못가게 해야하지 않을까?
-		//맵 인스턴스를 받아서 맵이 가진 장애물 체크 로직을 불러오게 하자.
-		if (_map->IsObstacle(ny, nx)) continue;
+	setDirectionToTravel(sn, UU);
+	setDirectionToTravel(sn, RU);
+	setDirectionToTravel(sn, RR);
+	setDirectionToTravel(sn, RD);
+	setDirectionToTravel(sn, DD);
+	setDirectionToTravel(sn, LD);
+	setDirectionToTravel(sn, LL);
+	setDirectionToTravel(sn, LU);
 
-		//그냥 그리드로 방문할 좌표만 넣어도 될 것 같은데?
-		//어차피 노드 만나기 전까진  F값 개무시하고 계속 탐사할 거임.
-		//진행 방향이 필요하므로 parent 정보가 있어야 할 것으로 보임.
-		//성능을 높이려면 new를 적게 쓰기위해 그리드 방향을 이용하되 parent의 방향만 이용하는게 나아보임.
-		//근데 일단 안전하게 먼저 노드 만들어서 추적하기 쉽게 진행.
-		Node* newNode =  new Node;
-		newNode->parent = sn;
-		newNode->pos.x = nx;
-		newNode->pos.y = ny;
-		newNode->G = findGbyNode(sn, newNode);
-		newNode->H = findHbyGrid(&newNode->pos);
-		newNode->F = findF(newNode);
+	//int dx[8] = { 0,1,1,1,0,-1,-1,-1 };
+	//int dy[8] = { 1,1,0,-1,-1,-1,0,1 };
 
-		findNodeWithDirection(newNode);
-		
-		//방문한 노드는 다시 방문하지 않도록 해준다.
-		//우선순위 큐라 값을 찾지 못한다.
-		//bool visited = false;
-
-		
-		//for (auto& a : _closelist)
-		//{
-		//	if (newNode->pos == a->pos)
-		//	{
-		//		//closedList는 이미 방문이 확정된 노드 즉, 가장 최솟값 F를 지난 것이므로 다시 갈 필요 없음.
-		//		////만약 새로운 경로의 F가 더 적다면 갱신해준다.
-		//		//if (newNode->F < a->F)
-		//		//{
-		//		//	a->G = newNode->G;
-		//		//	a->H = newNode->H;
-		//		//	a->F = newNode->F;
-		//		//	a->parent = newNode->parent;
-		//		//}
-		//		visited = true;
-		//		break;
-		//	}
-		//}
-		//if (visited)
-		//{
-		//	delete newNode;
-		//	continue;
-		//}
-
-		////openlist에도 이미 방문 후보인 노드
-		//visited = false;
-		//for (auto& a : _openlist)
-		//{
-		//	if (newNode->pos == a->pos)
-		//	{
-		//		//만약 새로운 경로의 F가 더 적다면 갱신해준다.
-		//		if (newNode->F < a->F)
-		//		{
-		//			_openlist.insert(newNode);
-		//			newNode = a;
-		//		}
-		//		visited = true;
-		//		break;
-		//	}
-		//}
-		//if (visited)
-		//{
-		//	_openlist.erase(newNode);
-		//	delete newNode;
-		//	continue;
-		//}
-
-
-
-		//_openlist.insert(newNode);
-	}
+	//for (int i = 0; i < 8; i++)
+	//{
+	//	int nx = sn->pos.x + dx[i];
+	//	int ny = sn->pos.y + dy[i];
+	//	if (nx < 0 || ny < 0 || nx >= _map->getwidth() || ny >= _map->getheight()) continue;
+	//	//여기서 장애물이 있는 지역은 못가게 해야하지 않을까?
+	//	//맵 인스턴스를 받아서 맵이 가진 장애물 체크 로직을 불러오게 하자.
+	//	if (_map->IsObstacle(ny, nx)) continue;
+	//	//그냥 그리드로 방문할 좌표만 넣어도 될 것 같은데?
+	//	//어차피 노드 만나기 전까진  F값 개무시하고 계속 탐사할 거임.
+	//	//진행 방향이 필요하므로 parent 정보가 있어야 할 것으로 보임.
+	//	//성능을 높이려면 new를 적게 쓰기위해 그리드 방향을 이용하되 parent의 방향만 이용하는게 나아보임.
+	//	//근데 일단 안전하게 먼저 노드 만들어서 추적하기 쉽게 진행.
+	//	Node* newNode =  new Node;
+	//	newNode->parent = sn;
+	//	newNode->pos.x = nx;
+	//	newNode->pos.y = ny;
+	//	newNode->G = findGbyNode(sn, newNode);
+	//	newNode->H = findHbyGrid(&newNode->pos);
+	//	newNode->F = findF(newNode);
+	//	findNodeWithDirection(newNode);
+	//	
+	//	//방문한 노드는 다시 방문하지 않도록 해준다.
+	//	//우선순위 큐라 값을 찾지 못한다.
+	//	//bool visited = false;
+	//	
+	//	//for (auto& a : _closelist)
+	//	//{
+	//	//	if (newNode->pos == a->pos)
+	//	//	{
+	//	//		//closedList는 이미 방문이 확정된 노드 즉, 가장 최솟값 F를 지난 것이므로 다시 갈 필요 없음.
+	//	//		////만약 새로운 경로의 F가 더 적다면 갱신해준다.
+	//	//		//if (newNode->F < a->F)
+	//	//		//{
+	//	//		//	a->G = newNode->G;
+	//	//		//	a->H = newNode->H;
+	//	//		//	a->F = newNode->F;
+	//	//		//	a->parent = newNode->parent;
+	//	//		//}
+	//	//		visited = true;
+	//	//		break;
+	//	//	}
+	//	//}
+	//	//if (visited)
+	//	//{
+	//	//	delete newNode;
+	//	//	continue;
+	//	//}
+	//	////openlist에도 이미 방문 후보인 노드
+	//	//visited = false;
+	//	//for (auto& a : _openlist)
+	//	//{
+	//	//	if (newNode->pos == a->pos)
+	//	//	{
+	//	//		//만약 새로운 경로의 F가 더 적다면 갱신해준다.
+	//	//		if (newNode->F < a->F)
+	//	//		{
+	//	//			_openlist.insert(newNode);
+	//	//			newNode = a;
+	//	//		}
+	//	//		visited = true;
+	//	//		break;
+	//	//	}
+	//	//}
+	//	//if (visited)
+	//	//{
+	//	//	_openlist.erase(newNode);
+	//	//	delete newNode;
+	//	//	continue;
+	//	//}
+	//	//_openlist.insert(newNode);
+	//}
 }
 
 void JPS::makeInitList()
@@ -192,20 +195,26 @@ bool JPS::findPath()
 
 void JPS::setDirectionToTravel(Node* n, EDirection d)
 {
-	Node* temp = n;
+	Node* temp = new Node;
+	temp->pos  = n->pos;
+	temp->G += n->G;
+	temp->H = n->H;
+	temp->parent = n;
 
 	switch (d)
 	{
 	case LL:
 	{
-		temp->pos.x - 1;
 		//좌표가 맵 안에서 노드를 찾을때까지 해당 방향으로 계속 탐색
-		while (checkNodeIsInMap(temp))
+		while (temp->pos.x >= 1)
 		{
+			temp->pos.x -= 1;
+			temp->G += 1;
+			temp->H = findHbyGrid(&temp->pos);
+			temp->F = findF(temp);
+
 			int x = temp->pos.x;
 			int y = temp->pos.y;
-			
-
 			if (x - 1 >= 0 && y + 1 < _map->getheight())
 			{
 				//n의 DD가 장애물 + LD가 빈 공간인 경우 노드 생성
@@ -233,7 +242,6 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 				break;
 			}
 
-			temp->pos.x--;
 		}
 	}
 
