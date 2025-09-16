@@ -372,6 +372,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     g_bStartMove = false;
                     g_bGoalMove = false;
                 }
+                else
+                {
+                    g_bDrag = false;
+                }
             }
         }
         break;
@@ -397,6 +401,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
                 if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
                 {
+                    //그냥 원래 이전 값으로 복원해준다.
+                    int e = g_Dungeon.CheckTile(g_Dungeon._start.y, g_Dungeon._start.x);
+
                     g_Dungeon.ChangeTile(g_Dungeon._start.y, g_Dungeon._start.x, none);
                     g_Dungeon._start.y = iTileY;
                     g_Dungeon._start.x = iTileX;
@@ -487,7 +494,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          
          //RenderObstacle,RenderGrid를 메모리 DC에 출력
          RenderGrid(g_hMemDC);
-         RenderAStarList(g_hMemDC);
+         //RenderAStarList(g_hMemDC);
          //RenderObstacle(g_hMemDC);
          //RenderStartGoal(g_hMemDC);
          RenderMap(g_hMemDC,g_Dungeon);
