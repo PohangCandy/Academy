@@ -13,11 +13,22 @@ public:
 		_width = x;
 		_height = y;
 
-		for (int i = 0; i < _height; i++)
+		for (int y = 0; y < _height; y++)
 		{
-			for (int j = 0; j < _width; j++)
+			for (int x = 0; x < _width; x++)
 			{
-				map[i][j] = none;
+				if (y == _start.y && x == _start.x)
+				{
+					map[y][x] = start;
+				}
+				else if (y == _goal.y && x == _goal.x)
+				{
+					map[y][x] = end;
+				}
+				else
+				{
+					map[y][x] = none;
+				}
 			}
 		}
 	}
@@ -34,6 +45,25 @@ public:
 
 	Grid _start = { 0, 0 };
 	Grid _goal = { 10, 0 };
+
+	void mapUpdate()
+	{
+		map[_start.y][_start.x] = start;
+		map[_goal.y][_goal.x] = end;
+	}
+
+	//장애물, 출발지, 도착지를 제외한 모든 노드 초기화
+	void InitMap()
+	{
+		for (int y = 0; y < _height; y++)
+		{
+			for (int x = 0; x < _width; x++)
+			{
+				if (map[y][x] == start || map[y][x] == end || map[y][x] == obs) continue;
+				map[y][x] = none;
+			}
+		}
+	}
 
 private:
 

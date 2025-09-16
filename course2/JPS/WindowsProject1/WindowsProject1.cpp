@@ -15,20 +15,17 @@
 int g_iGridSize = GRID_SIZE;
 
 //나중에 출발지와 목적지를 겹치게 두면 출발지를 먼저 옮길 수 있는 예외처리도 해줘야 할 듯
-//Grid g_start = { GRID_WIDTH / 3, GRID_HEIGHT /2 };
-//Grid g_goal = { GRID_WIDTH / 3, GRID_HEIGHT / 2 };
 Dungeon g_Dungeon(GRID_HEIGHT,GRID_WIDTH);
 JPS g_AStar(&g_Dungeon);
 
+HBRUSH g_hEmptyBrush;
 HBRUSH g_hTileBrush;
 HBRUSH g_hStartBrush;
 HBRUSH g_hGoalBrush;
-HBRUSH g_hAstarListBrush;
+HBRUSH g_hNodeListBrush;
 HBRUSH g_hAstarAnswerListBrush;
+HBRUSH g_hVisitedBrush;
 HPEN g_hGridPen;
-
-//이제 전역 변수 타일 대신 던전의 맵으로 관리하자.
-//char g_Tile[GRID_HEIGHT][GRID_WIDTH];
 
 bool g_bErase = false;
 bool g_bStartMove = false;
@@ -70,6 +67,54 @@ void RenderGrid(HDC hdc)
 }
 
 //이제 맵정보를 바탕으로 랜더링하도록 만들어본다.
+//none = 0,//빈칸 nothing
+//start,//스타트 지점 start
+//end,//끝 지점 end
+//obs,//장애물 obstacle
+//n,//JPS로 만들어진 노드 nodelist
+//v,//JPS로 탐색한 타일 visited
+void RenderMap(HDC hdc, IMap& map)
+{
+    
+    int iX = 0;
+    int iY = 0;
+    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, g_hStartBrush);
+
+    for (int iCntW = 0; iCntW < GRID_WIDTH;iCntW++)
+    {
+        for (int iCntH = 0;iCntH < GRID_HEIGHT;iCntH++)
+        {
+            iX = iCntW * g_iGridSize;
+            iY = iCntH * g_iGridSize;
+            switch (g_Dungeon.CheckTile(iCntH, iCntW))
+            {
+            case none:
+                hOldBrush = (HBRUSH)SelectObject(hdc, g_hEmptyBrush);
+                break;
+            case start:
+                hOldBrush = (HBRUSH)SelectObject(hdc, g_hStartBrush);
+                break;
+            case end:
+                hOldBrush = (HBRUSH)SelectObject(hdc, g_hGoalBrush);
+                break;
+            case   obs:
+                hOldBrush = (HBRUSH)SelectObject(hdc, g_hTileBrush);
+                break;
+            case nodelist:
+                hOldBrush = (HBRUSH)SelectObject(hdc, g_hNodeListBrush);
+                break;
+            case visited:
+                hOldBrush = (HBRUSH)SelectObject(hdc, g_hVisitedBrush);
+                break;
+            default:
+                break;
+            }
+            //SelectObject(hdc, GetStockObject(BLACK_BRUSH));
+            Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
+        }
+    }
+    SelectObject(hdc, hOldBrush);
+}
 
 void RenderObstacle(HDC hdc)
 {
@@ -121,25 +166,25 @@ void RenderStartGoal(HDC hdc)
 void RenderAStarList(HDC hdc)
 {
 
-    for (auto node : g_AStar._openlist)
-    {
-        if (node->pos.y < GRID_HEIGHT)
-        {
-            SelectObject(hdc, g_hAstarListBrush);
-            Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
-                (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
-        }
-    }
+    //for (auto node : g_AStar._openlist)
+    //{
+    //    if (node->pos.y < GRID_HEIGHT)
+    //    {
+    //        SelectObject(hdc, g_hNodeListBrush);
+    //        Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
+    //            (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
+    //    }
+    //}
 
-    for (auto node : g_AStar._closelist)
-    {
-        if (node->pos.y < GRID_HEIGHT)
-        {
-            SelectObject(hdc, g_hAstarListBrush);
-            Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
-                (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
-        }
-    }
+    //for (auto node : g_AStar._closelist)
+    //{
+    //    if (node->pos.y < GRID_HEIGHT)
+    //    {
+    //        SelectObject(hdc, g_hNodeListBrush);
+    //        Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
+    //            (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
+    //    }
+    //}
 
 
     for (auto node : g_AStar._shortestRoutelist)
@@ -298,12 +343,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
                 if (iTileX == g_Dungeon.getStart().x && iTileY == g_Dungeon.getStart().y)
                 {
+                    //g_Dungeon.ChangeTile(iTileY, iTileX, none);
                     g_bErase = false;
                     g_bStartMove = true;
                     g_bGoalMove = false;
                 }
                 else if (iTileX == g_Dungeon.getGoal().x && iTileY == g_Dungeon.getGoal().y)
                 {
+                    //g_Dungeon.ChangeTile(iTileY, iTileX, none);
                     g_bErase = false;
                     g_bStartMove = false;
                     g_bGoalMove = true;
@@ -313,13 +360,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //    g_bErase = false;
                 //    g_bStartMove = true;
                 //}
-                else if (g_Dungeon.CheckTile(iTileY, iTileX))
+                else if (g_Dungeon.CheckTile(iTileY, iTileX) == obs)
                 {
                     g_bErase = true;
                     g_bStartMove = false;
                     g_bGoalMove = false;
                 }
-                else if (!g_Dungeon.CheckTile(iTileY, iTileX))
+                else if (g_Dungeon.CheckTile(iTileY, iTileX) == none)
                 {
                     g_bErase = false;
                     g_bStartMove = false;
@@ -350,8 +397,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
                 if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
                 {
+                    g_Dungeon.ChangeTile(g_Dungeon._start.y, g_Dungeon._start.x, none);
                     g_Dungeon._start.y = iTileY;
                     g_Dungeon._start.x = iTileX;
+                    g_Dungeon.mapUpdate();
                     g_AStar.updateNode();
                 }
             }
@@ -360,8 +409,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
                 if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT)
                 {
+                    g_Dungeon.ChangeTile(g_Dungeon._goal.y, g_Dungeon._goal.x, none);
                     g_Dungeon._goal.y = iTileY;
                     g_Dungeon._goal.x = iTileX;
+                    g_Dungeon.mapUpdate();
                     g_AStar.updateNode();
                 }
             }
@@ -390,7 +441,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         g_hTileBrush = CreateSolidBrush(RGB(100, 100, 100));
         g_hStartBrush = CreateSolidBrush(RGB(0, 200, 0));
         g_hGoalBrush = CreateSolidBrush(RGB(200, 0, 0));
-        g_hAstarListBrush = CreateSolidBrush(RGB(0, 0, 200));
+        g_hNodeListBrush = CreateSolidBrush(RGB(0, 0, 200));
+        g_hVisitedBrush = CreateSolidBrush(RGB(2000, 2000, 2000));
+        g_hEmptyBrush = CreateSolidBrush(RGB(500, 500, 500));
+
+        //정답인 노드 덧칠
         g_hAstarAnswerListBrush = CreateSolidBrush(RGB(200, 200, 0));
 
         //메모리DC 생성 코드
@@ -433,8 +488,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          //RenderObstacle,RenderGrid를 메모리 DC에 출력
          RenderGrid(g_hMemDC);
          RenderAStarList(g_hMemDC);
-         RenderObstacle(g_hMemDC);
-         RenderStartGoal(g_hMemDC);
+         //RenderObstacle(g_hMemDC);
+         //RenderStartGoal(g_hMemDC);
+         RenderMap(g_hMemDC,g_Dungeon);
 
          //매모리 DC의 이미지를 윈도우 DC에 출력
          hdc = BeginPaint(hWnd, &ps);

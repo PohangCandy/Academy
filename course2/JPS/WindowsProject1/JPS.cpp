@@ -153,8 +153,10 @@ bool JPS::findPath()
 {
 	makeInitList();
 
-	//가장 처음 시작 노드를 넣어준다.
-	_closelist.push_back(_startNode);
+	_map->InitMap();
+
+	//가장 처음 시작 노드를 시작지점으로 잡아준다.
+	//_closelist.push_back(_startNode);
 
 	insertListEightDirection(_startNode);
 
@@ -221,6 +223,7 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 				if (_map->IsObstacle(y + 1,x) && !_map->IsObstacle(y + 1, x - 1))
 				{
 					_openlist.insert(temp);
+					_map->ChangeTile(y, x, nodelist);
 					break;
 				}
 			}
@@ -243,6 +246,8 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 				break;
 			}
 
+			//노드없이 탐사된 맵을 표시해준다.
+			_map->ChangeTile(y, x, visited);
 		}
 	}
 
@@ -256,7 +261,7 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 	case RR:
 	{
 		//좌표가 맵 안에서 노드를 찾을때까지 해당 방향으로 계속 탐색
-		while (temp->pos.x < _map->getwidth())
+		while (temp->pos.x  + 1< _map->getwidth())
 		{
 			temp->pos.x += 1;
 			temp->G += 1;
@@ -271,6 +276,7 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 				if (_map->IsObstacle(y + 1, x) && !_map->IsObstacle(y + 1, x + 1))
 				{
 					_openlist.insert(temp);
+					_map->ChangeTile(y, x, nodelist);
 					break;
 				}
 			}
@@ -281,6 +287,7 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 				if (_map->IsObstacle(y - 1, x) && !_map->IsObstacle(y - 1, x + 1))
 				{
 					_openlist.insert(temp);
+					_map->ChangeTile(y, x, nodelist);
 					break;
 				}
 			}
@@ -293,6 +300,8 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 				break;
 			}
 
+			//노드없이 탐사된 맵을 표시해준다.
+			_map->ChangeTile(y, x, visited);
 		}
 	}
 		break;

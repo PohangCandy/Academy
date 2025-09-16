@@ -7,8 +7,8 @@ enum ETileType {
 	start,//스타트 지점 start
 	end,//끝 지점 end
 	obs,//장애물 obstacle
-	n,//JPS로 만들어진 노드 nodelist
-	v,//JPS로 탐색한 타일 visited
+	nodelist,//JPS로 만들어진 노드 nodelist
+	visited,//JPS로 탐색한 타일 visited
 };
 
 struct Grid {
@@ -30,6 +30,9 @@ public:
 
 	virtual Grid getStart() = 0;
 	virtual Grid getGoal() = 0;
+	virtual void ChangeTile(int y, int x, ETileType v) = 0;
+	virtual void mapUpdate() = 0;
+	virtual void InitMap() = 0;
 
 	virtual ~IMap() = default;
 };
