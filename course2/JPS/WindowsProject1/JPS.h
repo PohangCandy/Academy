@@ -69,11 +69,11 @@ struct Node {
 		{
 			if (this->pos.y > parent->pos.y)
 			{
-				return UU;
+				return DD;
 			}
 			else
 			{
-				return DD;
+				return UU;
 			}
 		}
 	}
@@ -149,6 +149,9 @@ public:
 	bool checkGridIsInMap(Grid g);
 
 private:
+	bool CheckDiagonal(int x, int y, int dx, int dy);
+
+	void ExploreDirection(Node* temp, int dx, int dy);
 
 	void setDirectionToTravel(Node* n, EDirection d);
 
