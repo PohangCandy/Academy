@@ -23,15 +23,27 @@ enum EDirection
 //	}
 //};
 
-struct Node {
-	Grid pos;
-	Node* parent;
-	float G; //출발점으로부터의 이동 거리
-	float H; //목적지까지의 거리(장애물을 신경쓰지 않은 직선 거리)
+class Node {
+public:
+	Grid pos = {0,0};
+	Node* parent = nullptr;
+	float G = 0; //출발점으로부터의 이동 거리
+	float H = 0; //목적지까지의 거리(장애물을 신경쓰지 않은 직선 거리)
 	//즉 출발지와 가장 가깝고
 	//목적지와 가장 가까운
 	//F가 최솟값인 노드를 우선으로 탐색
-	float F; //G + H
+	float F = 0; //G + H
+	
+	Node(){}
+
+	Node(const Node& other) {
+		pos.x = other.pos.x;
+		pos.y = other.pos.y;
+		G = other.G;
+		H = other.H;
+		parent = other.parent;
+		//parent = new Node(*other.parent); // 깊은 복사가 필요하다면 new Node(*other.parent) 처리를 해야 함
+	}
 
 	EDirection  getNodedirection()
 	{
