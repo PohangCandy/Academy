@@ -366,7 +366,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     g_bStartMove = false;
                     g_bGoalMove = false;
                 }
-                else if (g_Dungeon.CheckTile(iTileY, iTileX) == none)
+                else if (g_Dungeon.CheckTile(iTileY, iTileX) != obs && g_Dungeon.CheckTile(iTileY, iTileX) != start && g_Dungeon.CheckTile(iTileY, iTileX) != end)
                 {
                     g_bErase = false;
                     g_bStartMove = false;
@@ -429,11 +429,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 {
                     if (g_bErase)
                     {
-                        g_Dungeon.ChangeTile(iTileY, iTileX, none);
+                        if (g_Dungeon.CheckTile(iTileY, iTileX) == obs)
+                        {
+                            g_Dungeon.ChangeTile(iTileY, iTileX, none);
+                        }
                     }
                     else
                     {
-                        g_Dungeon.ChangeTile(iTileY, iTileX, obs);
+                        if (g_Dungeon.CheckTile(iTileY, iTileX) != start && g_Dungeon.CheckTile(iTileY, iTileX) != end)
+                        {
+                            g_Dungeon.ChangeTile(iTileY, iTileX, obs);
+                        }
                     }
                 }
             }
@@ -494,7 +500,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          
          //RenderObstacle,RenderGrid를 메모리 DC에 출력
          RenderGrid(g_hMemDC);
-         //RenderAStarList(g_hMemDC);
+         RenderAStarList(g_hMemDC);
          //RenderObstacle(g_hMemDC);
          //RenderStartGoal(g_hMemDC);
          RenderMap(g_hMemDC,g_Dungeon);
