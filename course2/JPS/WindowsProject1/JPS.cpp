@@ -87,10 +87,11 @@ bool JPS::findPath()
 	{
 		auto bestIt = _openlist.begin();
 		Node* top = *bestIt;
-		_openlist.erase(bestIt);
+		//_openlist.erase(bestIt);
 
 		if (top->pos == _goalNode->pos)
 		{
+			_openlist.erase(bestIt);
 			Node copy = *top;
 			while (!(copy.pos == _startNode->pos))
 			{
@@ -152,8 +153,8 @@ bool JPS::CheckDiagonal(int x, int y, int dx, int dy)
 		{
 			// 아래 대각선
 			if (y + 1 < _map->getheight() &&
-				_map->IsObstacle(y + 1, x) &&
-				!_map->IsObstacle(y + 1, x + dx))
+				_map->IsObstacle(y - 1, x) &&
+				!_map->IsObstacle(y - 1, x + dx))
 				return true;
 		}
 
@@ -180,13 +181,15 @@ bool JPS::CheckDiagonal(int x, int y, int dx, int dy)
 	return false;
 }
 
+//주어진 노드를 부모 노드로 설정하여, 
+//주어진 방향으로 탐색하는 함수
 void JPS::ExploreDirection(Node* node, int dx, int dy)
 {
 	Node* temp = new Node;
 	temp->pos = node->pos;
 	temp->G = node->G;
 	temp->H = node->H;
-	temp->parent = node->parent;
+	temp->parent = node;
 
 	while (true)
 	{
@@ -225,22 +228,22 @@ void JPS::ExploreDirection(Node* node, int dx, int dy)
 		//대각선은 여기서 직선을 한번 더 탐사
 		if (dIsDiagonal)
 		{
-			//RR
+			//RU, RD
 			if (dx == 1)
 			{
 				ExploreDirection(temp, 1, 0);
 			}
-			//LL
+			//LU, LD
 			else
 			{
 				ExploreDirection(temp, -1, 0);
 			}
-			//UU
+			//RD,LD
 			if (dy == 1)
 			{
 				ExploreDirection(temp, 0, 1);
 			}
-			//DD
+			//RU,LU
 			else
 			{
 				ExploreDirection(temp, 0, -1);
@@ -278,62 +281,63 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 	//해당 노드가 탐사 가능한 노드인지 탐색하는 작업을 이 함수에서 하겠다.
 
 
-	Node* temp = new Node;
-	temp->pos  = n->pos;
-	temp->G = n->G;
-	temp->H = n->H;
-	temp->parent = n;
+	//Node* temp = new Node;
+	//temp->pos  = n->pos;
+	//temp->G = n->G;
+	//temp->H = n->H;
+	//temp->parent = n;
 
 	switch (d)
 	{
 	case LL:
 	{
-		ExploreDirection(temp, -1, 0);
+		ExploreDirection(n, -1, 0);
 	}
 	break;
 	case LU:
 	{
-		ExploreDirection(temp, -1, -1);
+		ExploreDirection(n, -1, -1);
 	}
 		break;
 	case UU:
 	{
-		ExploreDirection(temp, 0, -1);
+		ExploreDirection(n, 0, -1);
 	}
 		break;
 	case RU:
 	{
-		ExploreDirection(temp, 1, -1);
+		ExploreDirection(n, 1, -1);
 	}
 		break;
 	case RR:
 	{
-		ExploreDirection(temp, 1, 0);
+		ExploreDirection(n, 1, 0);
 	}
 		break;
 	case RD:
 	{
-		ExploreDirection(temp, 1, 1);
+		ExploreDirection(n, 1, 1);
 	}
 		break;
 	case DD:
 	{
-		ExploreDirection(temp, 0, 1);
+		ExploreDirection(n, 0, 1);
 	}
 		break;
 	case LD:
 	{
-		ExploreDirection(temp, -1, 1);
+		ExploreDirection(n, -1, 1);
 	}
 		break;
 	default:
 		break;
 	}
 
-	delete temp;
-	temp = nullptr;
+	//delete temp;
+	//temp = nullptr;
 }
 
+//리스트에 있는 노드 중 F값이 가장 작은 노드의 부모 노드 반대 방향으로 탐색 
 void JPS::findNodeWithDirection(Node* n)
 {
 	EDirection d = n->getNodedirection();
