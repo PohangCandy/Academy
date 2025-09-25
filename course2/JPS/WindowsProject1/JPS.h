@@ -43,6 +43,7 @@ public:
 		H = other.H;
 		parent = other.parent;
 		//parent = new Node(*other.parent); // 깊은 복사가 필요하다면 new Node(*other.parent) 처리를 해야 함
+		F = other.F;
 	}
 
 	EDirection  getNodedirection()
@@ -163,7 +164,7 @@ public:
 private:
 	bool CheckDiagonal(int x, int y, int dx, int dy);
 
-	void ExploreDirection(Node* temp, int dx, int dy);
+	bool ExploreDirection(Node* temp, int dx, int dy);
 
 	void setDirectionToTravel(Node* n, EDirection d);
 

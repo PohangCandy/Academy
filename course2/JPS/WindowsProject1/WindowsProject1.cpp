@@ -80,6 +80,8 @@ void RenderMap(HDC hdc, IMap& map)
     int iY = 0;
     HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, g_hStartBrush);
 
+    g_Dungeon.mapUpdate();
+
     for (int iCntW = 0; iCntW < GRID_WIDTH;iCntW++)
     {
         for (int iCntH = 0;iCntH < GRID_HEIGHT;iCntH++)
@@ -97,13 +99,18 @@ void RenderMap(HDC hdc, IMap& map)
             case end:
                 hOldBrush = (HBRUSH)SelectObject(hdc, g_hGoalBrush);
                 break;
-            case   obs:
+            case  obs:
                 hOldBrush = (HBRUSH)SelectObject(hdc, g_hTileBrush);
                 break;
             case nodelist:
                 hOldBrush = (HBRUSH)SelectObject(hdc, g_hNodeListBrush);
                 break;
             case visited:
+                //if ((iCntW == g_Dungeon.getStart().x && iCntH == g_Dungeon.getStart().y)
+                //    || (iCntW == g_Dungeon.getGoal().x && iCntH == g_Dungeon.getGoal().y))
+                //{
+                //    break;
+                //}
                 hOldBrush = (HBRUSH)SelectObject(hdc, g_hVisitedBrush);
                 break;
             default:

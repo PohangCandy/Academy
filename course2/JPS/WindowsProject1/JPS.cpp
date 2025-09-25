@@ -21,14 +21,14 @@ float JPS::findF(Node* n)
 //탐색한 경로를 리스트에 담으면서 f가 가장 적은 곳을 먼저 탐색하도록 만든다.
 void JPS::insertListEightDirection(Node* sn)
 {
+	setDirectionToTravel(sn, LL);
+	setDirectionToTravel(sn, LU);
 	setDirectionToTravel(sn, UU);
 	setDirectionToTravel(sn, RU);
 	setDirectionToTravel(sn, RR);
 	setDirectionToTravel(sn, RD);
 	setDirectionToTravel(sn, DD);
 	setDirectionToTravel(sn, LD);
-	setDirectionToTravel(sn, LL);
-	setDirectionToTravel(sn, LU);
 }
 
 void JPS::makeInitList()
@@ -81,17 +81,18 @@ bool JPS::findPath()
 	//가장 처음 시작 노드를 시작지점으로 잡아준다.
 	//_closelist.push_back(_startNode);
 
+	_map->ChangeTile(_startNode->pos.y, _startNode->pos.x, nodelist);
 	insertListEightDirection(_startNode);
 
 	while (!_openlist.empty())
 	{
 		auto bestIt = _openlist.begin();
 		Node* top = *bestIt;
-		//_openlist.erase(bestIt);
+		_openlist.erase(bestIt);
 
 		if (top->pos == _goalNode->pos)
 		{
-			_openlist.erase(bestIt);
+			//_openlist.erase(bestIt);
 			Node copy = *top;
 			while (!(copy.pos == _startNode->pos))
 			{
@@ -139,29 +140,30 @@ bool JPS::CheckDiagonal(int x, int y, int dx, int dy)
 	//대각선의 경우
 	else
 	{
-		//dy = 1, : RU, LU 
+
+		//dy = 1, : Down 방향으로 진행중
+		// 위칸 방해물 체크 후 대각선 방향 진행 결정
 		if (dy == 1)
 		{
-			// 아래 대각선
-			if (y + 1 < _map->getheight() &&
-				_map->IsObstacle(y + 1, x) &&
-				!_map->IsObstacle(y + 1, x + dx))
-				return true;
-		}
-		//dy = -1, : RD, LD 
-		else
-		{
-			// 아래 대각선
 			if (y + 1 < _map->getheight() &&
 				_map->IsObstacle(y - 1, x) &&
 				!_map->IsObstacle(y - 1, x + dx))
 				return true;
 		}
+		//dy = -1, : Up 방향으로 진행중
+		// 아래칸 방해물 체크 후 대각선 방향 진행 결정
+		else
+		{
+			if (y + 1 < _map->getheight() &&
+				_map->IsObstacle(y + 1, x) &&
+				!_map->IsObstacle(y + 1, x + dx))
+				return true;
+		}
 
-		//dx = 1, : RU, RD 
+		//dx = 1, : Right 방향으로 진행중
+		//좌측 방해물 확인 후 진행
 		if (dx == 1)
 		{
-			//좌측 대각선
 			if (x - 1 >= 0 &&
 				_map->IsObstacle(y, x - 1) &&
 				!_map->IsObstacle(y + dy, x - 1))
@@ -170,7 +172,6 @@ bool JPS::CheckDiagonal(int x, int y, int dx, int dy)
 		//dx = -1, : RD, LD 
 		else
 		{
-			//우측 대각선
 			if (x + 1 < _map->getwidth() &&
 				_map->IsObstacle(y, x + 1) &&
 				!_map->IsObstacle(y + dy, x + 1))
@@ -183,8 +184,10 @@ bool JPS::CheckDiagonal(int x, int y, int dx, int dy)
 
 //주어진 노드를 부모 노드로 설정하여, 
 //주어진 방향으로 탐색하는 함수
-void JPS::ExploreDirection(Node* node, int dx, int dy)
+bool JPS::ExploreDirection(Node* node, int dx, int dy)
 {
+	bool findNode = false;
+
 	Node* temp = new Node;
 	temp->pos = node->pos;
 	temp->G = node->G;
@@ -193,6 +196,7 @@ void JPS::ExploreDirection(Node* node, int dx, int dy)
 
 	while (true)
 	{
+		//대각선 방향인지 체크
 		bool dIsDiagonal = false;
 		if (abs(dx) + abs(dy) == 2) dIsDiagonal = true;
 
@@ -231,22 +235,22 @@ void JPS::ExploreDirection(Node* node, int dx, int dy)
 			//RU, RD
 			if (dx == 1)
 			{
-				ExploreDirection(temp, 1, 0);
+				if (ExploreDirection(temp, 1, 0)) break;
 			}
 			//LU, LD
 			else
 			{
-				ExploreDirection(temp, -1, 0);
+				if (ExploreDirection(temp, -1, 0)) break;
 			}
 			//RD,LD
 			if (dy == 1)
 			{
-				ExploreDirection(temp, 0, 1);
+				if (ExploreDirection(temp, 0, 1)) break;
 			}
 			//RU,LU
 			else
 			{
-				ExploreDirection(temp, 0, -1);
+				if (ExploreDirection(temp, 0, -1)) break;
 			}
 		}
 
@@ -254,17 +258,36 @@ void JPS::ExploreDirection(Node* node, int dx, int dy)
 		// (예: LL일 때 아래/위 왼쪽, RR일 때 아래/위 오른쪽)
 		if (CheckDiagonal(x, y, dx, dy))
 		{
-			Node* n = new Node(*temp);
+			Node* n;
+			if (_map->CheckTile(temp->parent->pos.y, temp->parent->pos.x) == nodelist)
+			{
+				n = new Node(*temp);
+			}
+			else
+			{
+				n = new Node(*temp->parent);
+			}
 			_openlist.insert(n);
-			_map->ChangeTile(y, x, nodelist);
+			_map->ChangeTile(n->pos.y, n->pos.x, nodelist);
+			findNode = true;
 			break;
 		}
 
 		// 목표 검사
 		if (x == _goalNode->pos.x && y == _goalNode->pos.y)
 		{
-			Node* n = new Node(*temp);
+			Node* n;
+			if (_map->CheckTile(temp->parent->pos.y, temp->parent->pos.x) == nodelist)
+			{
+				n = new Node(*temp);
+			}
+			else
+			{
+				n = new Node(*temp->parent);
+			}
 			_openlist.insert(n);
+			_map->ChangeTile(n->pos.y, n->pos.x, nodelist);
+			findNode = true;
 			break;
 		}
 
@@ -274,6 +297,8 @@ void JPS::ExploreDirection(Node* node, int dx, int dy)
 
 	delete temp;
 	temp = nullptr;
+
+	return findNode;
 }
 
 void JPS::setDirectionToTravel(Node* n, EDirection d)
