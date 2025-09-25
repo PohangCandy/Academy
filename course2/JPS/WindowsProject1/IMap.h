@@ -9,6 +9,8 @@ enum ETileType {
 	obs,//장애물 obstacle
 	nodelist,//JPS로 만들어진 노드 nodelist
 	visited,//JPS로 탐색한 타일 visited
+
+	out,//맵을 벗어난 지점
 };
 
 struct Grid {
