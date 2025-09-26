@@ -2,7 +2,7 @@
 
 ETileType Dungeon::CheckTile(int y, int x)
 {
-	if (y < 0 || x < 0 || y >= _height || x >= _height) return out;
+	if (y < 0 || x < 0 || y >= _height || x >= _width) return out;
 
 	return map[y][x].type;
 }

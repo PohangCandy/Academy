@@ -106,17 +106,11 @@ void RenderMap(HDC hdc, IMap& map)
                 hOldBrush = (HBRUSH)SelectObject(hdc, g_hNodeListBrush);
                 break;
             case visited:
-                //if ((iCntW == g_Dungeon.getStart().x && iCntH == g_Dungeon.getStart().y)
-                //    || (iCntW == g_Dungeon.getGoal().x && iCntH == g_Dungeon.getGoal().y))
-                //{
-                //    break;
-                //}
                 hOldBrush = (HBRUSH)SelectObject(hdc, g_hVisitedBrush);
                 break;
             default:
                 break;
             }
-            //SelectObject(hdc, GetStockObject(BLACK_BRUSH));
             Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
         }
     }
@@ -169,31 +163,9 @@ void RenderStartGoal(HDC hdc)
     }
 }
 
-//방문 가능성 노드, 방문 한 노드 파랗게 랜더링
+//최단거리
 void RenderAStarList(HDC hdc)
 {
-
-    //for (auto node : g_AStar._openlist)
-    //{
-    //    if (node->pos.y < GRID_HEIGHT)
-    //    {
-    //        SelectObject(hdc, g_hNodeListBrush);
-    //        Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
-    //            (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
-    //    }
-    //}
-
-    //for (auto node : g_AStar._closelist)
-    //{
-    //    if (node->pos.y < GRID_HEIGHT)
-    //    {
-    //        SelectObject(hdc, g_hNodeListBrush);
-    //        Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
-    //            (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
-    //    }
-    //}
-
-
     for (auto node : g_AStar._shortestRoutelist)
     {
         if (node->pos.x != -1)
@@ -203,6 +175,62 @@ void RenderAStarList(HDC hdc)
                 (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
         }
     }
+}
+//-----------------------------
+// // 1. 메모리 DC 크기 계산을 위한 헬퍼 함수
+void RecreateMemDC(HWND hWnd)
+{
+    // 기존 메모리 DC 자원 정리
+    if (g_hMemDCBitmap) SelectObject(g_hMemDC, g_hMemDCBitmap_old);
+    if (g_hMemDCBitmap) DeleteObject(g_hMemDCBitmap);
+    if (g_hMemDC) DeleteDC(g_hMemDC);
+
+    // 맵의 논리적 크기 (g_iGridSize 기준)
+    const int worldW = GRID_WIDTH * g_iGridSize;
+    const int worldH = GRID_HEIGHT * g_iGridSize;
+
+    // 배율(g_fScale)을 적용한 최종 메모리 DC의 픽셀 크기
+    int memDC_Width = (int)(worldW * g_fScale);
+    int memDC_Height = (int)(worldH * g_fScale);
+
+    // 최소 크기를 윈도우 크기로 설정 (최소한 윈도우 크기 이상이어야 함)
+    RECT clientRect;
+    GetClientRect(hWnd, &clientRect);
+
+    // 메모리 DC 크기는 맵 전체 크기 또는 윈도우 크기 중 더 큰 값으로 설정
+    // 맵이 윈도우보다 작더라도 맵 크기(g_MemDC_Rect는 맵 크기 용도로 사용)로 설정.
+    g_MemDC_Rect.right = memDC_Width;
+    g_MemDC_Rect.bottom = memDC_Height;
+
+    HDC hdc = GetDC(hWnd);
+    g_hMemDC = CreateCompatibleDC(hdc);
+
+    // 맵 전체 크기로 비트맵 생성 (여기서 g_MemDC_Rect는 맵 크기로 사용)
+    g_hMemDCBitmap = CreateCompatibleBitmap(hdc, g_MemDC_Rect.right, g_MemDC_Rect.bottom);
+    g_hMemDCBitmap_old = (HBITMAP)SelectObject(g_hMemDC, g_hMemDCBitmap);
+    ReleaseDC(hWnd, hdc);
+}
+//-----------------------------
+
+// 화면 픽셀 -> 그리드 타일 좌표 변환 (전역으로 추가)
+void ScreenToTile(int screenX, int screenY, int& outTileX, int& outTileY)
+{
+    // 1) 화면 픽셀 -> 뷰포트 기준(패닝 보정)
+    //    g_pan 는 WM_PAINT에서 SetViewportOrgEx로 사용되는 값이다.
+    float px = (float)screenX - (float)g_pan.x;
+    float py = (float)screenY - (float)g_pan.y;
+
+    // 2) 뷰포트 픽셀 -> 논리(월드) 좌표(스케일 보정)
+    //    WM_PAINT에서 SetWindowExtEx(worldW, worldH) 와 SetViewportExtEx(vp.cx, vp.cy)
+    //    을 통해서 실제 출력은 g_fScale에 의해 변환된다.
+    //    간단히, world = px / scale
+    float worldX = px / g_fScale;
+    float worldY = py / g_fScale;
+
+    // 3) 논리 좌표 -> 타일 인덱스
+    //    g_iGridSize는 한 타일의 논리(원래) 픽셀 크기
+    outTileX = (int)(worldX) / g_iGridSize;
+    outTileY = (int)(worldY) / g_iGridSize;
 }
 
 //// 전역 변수:
@@ -401,8 +429,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             int xPos = GET_X_LPARAM(lParam);
             int yPos = GET_Y_LPARAM(lParam);
 
-            int iTileX = xPos / g_iGridSize;
-            int iTileY = yPos / g_iGridSize;
+            int iTileX = (xPos + g_originX) / g_iGridSize;
+            int iTileY = (yPos + g_originY) / g_iGridSize;
+
+            //int iTileX, iTileY;
+            //ScreenToTile(xPos, yPos, iTileX, iTileY);
+
             if (g_bStartMove)
             {
                 //g_Tile[g_AStar._start.y][g_AStar._start.x] = TILE_EMPTY;
@@ -468,14 +500,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //정답인 노드 덧칠
         g_hAstarAnswerListBrush = CreateSolidBrush(RGB(200, 200, 0));
 
+        //----------------------------------------------------
         //메모리DC 생성 코드
         //윈도우 생성 시 현 윈도우 크기와 동일한 메모리 DC 생성
-        HDC hdc = GetDC(hWnd);
+       /* HDC hdc = GetDC(hWnd);
         GetClientRect(hWnd, &g_MemDC_Rect);
         g_hMemDCBitmap = CreateCompatibleBitmap(hdc, g_MemDC_Rect.right, g_MemDC_Rect.bottom);
         g_hMemDC = CreateCompatibleDC(hdc);
         ReleaseDC(hWnd, hdc);
-        g_hMemDCBitmap_old = (HBITMAP)SelectObject(g_hMemDC, g_hMemDCBitmap);
+        g_hMemDCBitmap_old = (HBITMAP)SelectObject(g_hMemDC, g_hMemDCBitmap);*/
+        //----------------------------------------------------
+        RecreateMemDC(hWnd);
     }
     break;
      case WM_PAINT:
@@ -522,29 +557,45 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
      break;
      case WM_SIZE:
      {
-         SelectObject(g_hMemDC, g_hMemDCBitmap_old);
-         DeleteObject(g_hMemDCBitmap);
-         DeleteDC(g_hMemDC);
 
-         HDC hdc = GetDC(hWnd);
-         GetClientRect(hWnd, &g_MemDC_Rect);
-         g_hMemDCBitmap = CreateCompatibleBitmap(hdc, g_MemDC_Rect.right, g_MemDC_Rect.bottom);
-         g_hMemDC = CreateCompatibleDC(hdc);
-         ReleaseDC(hWnd, hdc);
+         //------------------------------------------------------------------
+         //SelectObject(g_hMemDC, g_hMemDCBitmap_old);
+         //DeleteObject(g_hMemDCBitmap);
+         //DeleteDC(g_hMemDC);
 
-         g_hMemDCBitmap_old = (HBITMAP)SelectObject(g_hMemDC, g_hMemDCBitmap);
+         //HDC hdc = GetDC(hWnd);
+         //GetClientRect(hWnd, &g_MemDC_Rect);
+         //g_hMemDCBitmap = CreateCompatibleBitmap(hdc, g_MemDC_Rect.right, g_MemDC_Rect.bottom);
+         //g_hMemDC = CreateCompatibleDC(hdc);
+         //ReleaseDC(hWnd, hdc);
+
+         //g_hMemDCBitmap_old = (HBITMAP)SelectObject(g_hMemDC, g_hMemDCBitmap);
+         //------------------------------------------------------------------
+         RecreateMemDC(hWnd);
      }
      break;
      case WM_MOUSEWHEEL:
      {
          int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
 
-         if (zDelta > 0) g_iGridSize = (int)(g_iGridSize * 1.3f);  // 확대
-         else            g_iGridSize = (int)(g_iGridSize * 0.9f);  // 축소
+         if (zDelta > 0) {
+             g_iGridSize = (int)(g_iGridSize * 2.0f);  // 확대
+             //g_GRID_WIDTH *= 2;
+             //g_GRID_HEIGHT *= 2;
+         } 
+         else
+         {
+             g_iGridSize = (int)(g_iGridSize * 0.5f);  // 축소
+             //g_GRID_WIDTH /= 2;
+             //g_GRID_HEIGHT /= 2;
+         }
 
-         if (g_iGridSize < 4)   g_iGridSize = 4;   // 최소 크기 제한
+         if (g_iGridSize < GRID_SIZE)   g_iGridSize = GRID_SIZE;   // 최소 크기 제한
          if (g_iGridSize > 128) g_iGridSize = 128; // 최대 크기 제한
 
+         //InvalidateRect(hWnd, NULL, TRUE);
+         //int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+         RecreateMemDC(hWnd);
          InvalidateRect(hWnd, NULL, TRUE);
      }
      break;
