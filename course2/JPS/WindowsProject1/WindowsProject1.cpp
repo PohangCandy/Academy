@@ -507,10 +507,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          
          //RenderObstacle,RenderGrid를 메모리 DC에 출력
          RenderGrid(g_hMemDC);
-         RenderAStarList(g_hMemDC);
          //RenderObstacle(g_hMemDC);
          //RenderStartGoal(g_hMemDC);
          RenderMap(g_hMemDC,g_Dungeon);
+         RenderAStarList(g_hMemDC);
 
          //매모리 DC의 이미지를 윈도우 DC에 출력
          hdc = BeginPaint(hWnd, &ps);

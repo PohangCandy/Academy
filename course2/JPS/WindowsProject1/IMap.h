@@ -17,6 +17,12 @@ struct Grid {
 	int x;
 	int y;
 
+	ETileType type;
+
+	float h;
+	float g;
+	float f;
+
 	bool operator == (Grid a)
 	{
 		return (this->x == a.x) && (this->y == a.y);
@@ -35,6 +41,9 @@ public:
 	virtual void ChangeTile(int y, int x, ETileType v) = 0;
 	virtual void mapUpdate() = 0;
 	virtual void InitMap() = 0;
+
+	virtual float getGridFdata(int y, int x) = 0;
+	virtual void setMapData(int x, int y, float g, float h, float F) = 0;
 
 	virtual ~IMap() = default;
 };

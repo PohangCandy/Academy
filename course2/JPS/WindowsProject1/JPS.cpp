@@ -96,12 +96,32 @@ bool JPS::findPath()
 			Node copy = *top;
 			while (!(copy.pos == _startNode->pos))
 			{
-				_shortestRoutelist.push_back(copy.parent);
+				if (copy.parent == nullptr)
+				{
+					cout << "w";
+					//잡있다ㅣ 요놈
+				}
+				if (copy.parent->pos == _startNode->pos)
+				{
+
+				}
+				else
+				{
+					_shortestRoutelist.push_back(copy.parent);
+				}
 				copy = *copy.parent;
+				if (top == nullptr)
+				{
+					cout << "w";
+					//잡있다ㅣ 요놈
+				}
 			}
 			return true;
 		}
-		findNodeWithDirection(top);
+		else
+		{
+			findNodeWithDirection(top);
+		}
 	}
 	return false;
 }
@@ -217,7 +237,7 @@ bool JPS::ExploreDirection(Node* node, int dx, int dy)
 		temp->pos.y = newY;
 		if (dIsDiagonal)
 		{
-			temp->G += 1.4;
+			temp->G += 1.5;
 		}
 		else
 		{
@@ -228,6 +248,22 @@ bool JPS::ExploreDirection(Node* node, int dx, int dy)
 
 		int x = temp->pos.x;
 		int y = temp->pos.y;
+
+		//방문한 노드 재방문
+		if (_map->CheckTile(y, x) == visited)
+		{
+			//최단 경로 갱신되는 경우 진행
+			//대각선 노드로 인해 미리 만들어둔 노드도 방문 표시하므로 F값이 같은 곳을 방문하는 상황도 있음.
+			if (temp->F > _map->getGridFdata(y, x)) break;
+		}
+		else
+		{
+			// 방문 마킹
+			_map->ChangeTile(y, x, visited);
+			//_map->setMapData(y, x, temp->G, temp->H, temp->F);
+		}
+
+		_map->setMapData(y, x, temp->G, temp->H, temp->F);
 
 		//대각선은 여기서 직선을 한번 더 탐사
 		if (dIsDiagonal)
@@ -291,8 +327,7 @@ bool JPS::ExploreDirection(Node* node, int dx, int dy)
 			break;
 		}
 
-		// 방문 마킹
-		_map->ChangeTile(y, x, visited);
+
 	}
 
 	delete temp;

@@ -19,15 +19,15 @@ public:
 			{
 				if (y == _start.y && x == _start.x)
 				{
-					map[y][x] = start;
+					map[y][x].type = start;
 				}
 				else if (y == _goal.y && x == _goal.x)
 				{
-					map[y][x] = end;
+					map[y][x].type = end;
 				}
 				else
 				{
-					map[y][x] = none;
+					map[y][x].type = none;
 				}
 			}
 		}
@@ -48,8 +48,8 @@ public:
 
 	void mapUpdate()
 	{
-		map[_start.y][_start.x] = start;
-		map[_goal.y][_goal.x] = end;
+		map[_start.y][_start.x].type = start;
+		map[_goal.y][_goal.x].type = end;
 	}
 
 	//장애물, 출발지, 도착지를 제외한 모든 노드 초기화
@@ -59,11 +59,17 @@ public:
 		{
 			for (int x = 0; x < _width; x++)
 			{
-				if (map[y][x] == start || map[y][x] == end || map[y][x] == obs) continue;
-				map[y][x] = none;
+				if (map[y][x].type == start || map[y][x].type == end || map[y][x].type == obs) continue;
+				map[y][x].type = none;
+				map[y][x].h = 0;
+				map[y][x].g = 0;
+				map[y][x].f = 0;
 			}
 		}
 	}
+
+	float getGridFdata(int y, int x);
+	void setMapData(int y, int x, float g, float h, float F);
 
 private:
 
@@ -71,7 +77,7 @@ private:
 
 	int _height = 0;
 
-	ETileType map[DUNGEON_LENGTH][DUNGEON_WIDTH] = { none,};
+	Grid map[DUNGEON_LENGTH][DUNGEON_WIDTH];
 
 	bool IsObstacle(int y, int x);
 };
