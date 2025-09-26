@@ -82,9 +82,9 @@ void RenderMap(HDC hdc, IMap& map)
 
     g_Dungeon.mapUpdate();
 
-    for (int iCntW = 0; iCntW < GRID_WIDTH;iCntW++)
+    for (int iCntH = 0; iCntH < GRID_HEIGHT;iCntH++)
     {
-        for (int iCntH = 0;iCntH < GRID_HEIGHT;iCntH++)
+        for (int  iCntW = 0; iCntW < GRID_WIDTH;iCntW++)
         {
             iX = iCntW * g_iGridSize;
             iY = iCntH * g_iGridSize;
@@ -135,9 +135,9 @@ void RenderObstacle(HDC hdc)
     // GetStock은 시스템의 고정적인 범용 GDI라서 삭제할 필요가 없다.
     //시스템 전역적인 GDI Object를 얻어서 사용한다는 개념
 
-    for (int iCntW = 0; iCntW < GRID_WIDTH;iCntW++)
+    for (int iCntH  = 0; iCntH < GRID_HEIGHT;iCntH++)
     {
-        for (int iCntH = 0;iCntH < GRID_HEIGHT;iCntH++) 
+        for (int iCntW = 0;iCntW < GRID_WIDTH;iCntW++)
         {
             if (g_Dungeon.CheckTile(iCntH,iCntW) == obs)
             {

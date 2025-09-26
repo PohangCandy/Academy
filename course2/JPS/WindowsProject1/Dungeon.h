@@ -1,8 +1,8 @@
 #pragma once
 #include "IMap.h"
 
-#define DUNGEON_WIDTH 100
-#define DUNGEON_LENGTH 100
+#define DUNGEON_WIDTH 1000
+#define DUNGEON_LENGTH 1000
 
 class Dungeon : public IMap{
 
