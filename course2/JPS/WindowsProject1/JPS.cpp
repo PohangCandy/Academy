@@ -19,37 +19,43 @@ float JPS::findF(Node* n)
 
 //도착지가 맴버로 저장되어있으므로 출발지만 갱신하면서 재귀해주면 될 것으로 보임.
 //탐색한 경로를 리스트에 담으면서 f가 가장 적은 곳을 먼저 탐색하도록 만든다.
-void JPS::insertListEightDirection(Node* sn)
+void JPS::insertListEightDirection()
 {
-	setDirectionToTravel(sn, LL);
-	setDirectionToTravel(sn, LU);
-	setDirectionToTravel(sn, UU);
-	setDirectionToTravel(sn, RU);
-	setDirectionToTravel(sn, RR);
-	setDirectionToTravel(sn, RD);
-	setDirectionToTravel(sn, DD);
-	setDirectionToTravel(sn, LD);
+	setDirectionToTravel(_startGrid, LL);
+	setDirectionToTravel(_startGrid, LU);
+	setDirectionToTravel(_startGrid, UU);
+	setDirectionToTravel(_startGrid, RU);
+	setDirectionToTravel(_startGrid, RR);
+	setDirectionToTravel(_startGrid, RD);
+	setDirectionToTravel(_startGrid, DD);
+	setDirectionToTravel(_startGrid, LD);
 }
 
 void JPS::makeInitList()
 {
-	for (auto n : _openlist) delete n;
+	//for (auto n : _openlist) delete n;
 	
-	for (auto n : _closelist)
-	{
-		if (n == _startNode) continue;
-		delete n;
-	}
+	//for (auto n : _closelist)
+	//{
+	//	if (n == _startNode) continue;
+	//	delete n;
+	//}
+
+	//for (auto n : _shortestRoutelist)
+	//{
+	//	if (n == _startNode) continue;
+	//	if (n == _goalNode) continue;
+	//}
 
 	_openlist.clear();
-	_closelist.clear();
-	_shortestRoutelist.clear();
+	//_closelist.clear();
+	//_shortestRoutelist.clear();
 }
 
 void JPS::updateNode()
 {
-	_startNode->pos = _map->getStart();
-	_goalNode->pos = _map->getGoal();
+	_startGrid = _map->getStart();
+	_goalGrid = _map->getGoal();
 }
 
 bool JPS::checkNodeIsInMap(Node* n)
@@ -74,6 +80,9 @@ bool JPS::checkGridIsInMap(Grid pos)
 
 bool JPS::findPath()
 {
+	//메모리 누수 테스트용
+	//Node* n = new Node[100];
+
 	makeInitList();
 
 	_map->InitMap();
@@ -81,35 +90,45 @@ bool JPS::findPath()
 	//가장 처음 시작 노드를 시작지점으로 잡아준다.
 	//_closelist.push_back(_startNode);
 
-	_map->ChangeTile(_startNode->pos.y, _startNode->pos.x, nodelist);
-	insertListEightDirection(_startNode);
+	_map->ChangeTile(_startGrid->y, _startGrid->x, nodelist);
+	_startGrid->h = findHbyGrid(_startGrid->y, _startGrid->x);
+	insertListEightDirection();
 
 	while (!_openlist.empty())
 	{
 		auto bestIt = _openlist.begin();
-		Node* top = *bestIt;
-		_openlist.erase(bestIt);
+		Grid* top = _map->getGrid((*bestIt)->y, (*bestIt)->x);
 
-		if (top->pos == _goalNode->pos)
+		if (top == nullptr)
+		{
+			cout << "w";
+			//잡있다ㅣ 요놈
+		}
+		//그리드 속성이 더 정확해보이는데?
+		//그리드의 부모로 찾아준다.
+		//그리고 리스트에서 뽑아낸 친구는 바로 제거하자.
+		if (top == _goalGrid)
 		{
 			//_openlist.erase(bestIt);
-			Node copy = *top;
-			while (!(copy.pos == _startNode->pos))
+			//Node copy = *top;
+			while (!(top == _startGrid))
 			{
-				if (copy.parent == nullptr)
+				if (top->gparent == nullptr)
 				{
 					cout << "w";
 					//잡있다ㅣ 요놈
 				}
-				if (copy.parent->pos == _startNode->pos)
+				if (top->gparent == _startGrid)
 				{
 
 				}
 				else
 				{
-					_shortestRoutelist.push_back(copy.parent);
+					//top->parent->pos.type = shortest;
+					//_shortestRoutelist.push_back(top->parent);
+					_map->ChangeTile(top->gparent->y, top->gparent->x, shortest);
 				}
-				copy = *copy.parent;
+				top = top->gparent;
 				if (top == nullptr)
 				{
 					cout << "w";
@@ -120,8 +139,13 @@ bool JPS::findPath()
 		}
 		else
 		{
-			findNodeWithDirection(top);
+			findNodeWithDirection(*bestIt);
 		}
+
+		//해제가 일어나야 하지 않나?
+		_openlist.erase(bestIt);
+		//delete* bestIt;
+		//(*bestIt) = nullptr;
 	}
 	return false;
 }
@@ -204,70 +228,74 @@ bool JPS::CheckDiagonal(int x, int y, int dx, int dy)
 
 //주어진 노드를 부모 노드로 설정하여, 
 //주어진 방향으로 탐색하는 함수
-bool JPS::ExploreDirection(Node* node, int dx, int dy)
+bool JPS::ExploreDirection(Grid* g, int dx, int dy)
 {
 	bool findNode = false;
 
-	Node* temp = new Node;
-	temp->pos = node->pos;
-	temp->G = node->G;
-	temp->H = node->H;
-	temp->parent = node;
+	//Node* temp = new Node;
+	//temp->pos = node->pos;
+	//temp->G = node->G;
+	//temp->H = node->H;
+	//temp->parent = node;
+	/*temp->pos.gparent = &node->pos;*/
+
+	int newX = g->x;
+	int newY = g->y;
+	int newH = g->h;
+	int newG = g->g;
+	int newF = g->f;
 
 	while (true)
 	{
-		//대각선 방향인지 체크
+
+		//좌표와 설정 값 계산
+		newX = newX + dx;
+		newY = newY + dy;
+
+		//대각선 체크
 		bool dIsDiagonal = false;
 		if (abs(dx) + abs(dy) == 2) dIsDiagonal = true;
 
-		int newX = temp->pos.x + dx;
-		int newY = temp->pos.y + dy;
+		if (dIsDiagonal)
+		{
+			newG += 1.5;
+		}
+		else
+		{
+			newG += 1;
+		}
 
-		// 맵 범위 체크
+		newH = findHbyGrid(newY,newX);
+		newF = newG + newH;
+
+
+		//갈 수 없는 상황
+
+		//1. 맵 범위 밖
 		if (newX < 0 || newX >= _map->getwidth() ||
 			newY < 0 || newY >= _map->getheight())
 			break;
 
-		// 장애물이면 종료
+		//2. 장애물
 		if (_map->IsObstacle(newY, newX))
 			break;
 
-		// 이동
-		temp->pos.x = newX;
-		temp->pos.y = newY;
+		//이미 방문함 + F값이 더 적게 기록되어 있음.
+		if (_map->CheckTile(newY, newX) == visited || _map->CheckTile(newY, newX) == nodelist)
+		{
+			Grid* curG = _map->getGrid(newY, newX);
+			if( newF > curG->f ) break;
+			//새로운 F값이 같거나 더 적은 경우 갱신
+			//같은 값인 F값을 갱신시키도록 허락하는게 맞을까?
+		}
+
+		_map->ChangeTile(newY, newX, visited);
+		_map->setMapData(newY, newX, newG, newH, newF, g);
+
+		//대각선은 여기서 직선을 한번 더 탐사해야 함.
 		if (dIsDiagonal)
 		{
-			temp->G += 1.5;
-		}
-		else
-		{
-			temp->G += 1;
-		}
-		temp->H = findHbyGrid(&temp->pos);
-		temp->F = findF(temp);
-
-		int x = temp->pos.x;
-		int y = temp->pos.y;
-
-		//방문한 노드 재방문
-		if (_map->CheckTile(y, x) == visited)
-		{
-			//최단 경로 갱신되는 경우 진행
-			//대각선 노드로 인해 미리 만들어둔 노드도 방문 표시하므로 F값이 같은 곳을 방문하는 상황도 있음.
-			if (temp->F > _map->getGridFdata(y, x)) break;
-		}
-		else
-		{
-			// 방문 마킹
-			_map->ChangeTile(y, x, visited);
-			//_map->setMapData(y, x, temp->G, temp->H, temp->F);
-		}
-
-		_map->setMapData(y, x, temp->G, temp->H, temp->F);
-
-		//대각선은 여기서 직선을 한번 더 탐사
-		if (dIsDiagonal)
-		{
+			Grid* temp = _map->getGrid(newY, newX);
 			//RU, RD
 			if (dx == 1)
 			{
@@ -292,37 +320,38 @@ bool JPS::ExploreDirection(Node* node, int dx, int dy)
 
 		// --- 양옆 대각선 검사 ---
 		// (예: LL일 때 아래/위 왼쪽, RR일 때 아래/위 오른쪽)
-		if (CheckDiagonal(x, y, dx, dy))
+		if (CheckDiagonal(newX, newY, dx, dy))
 		{
-			Node* n;
-			if (_map->CheckTile(temp->parent->pos.y, temp->parent->pos.x) == nodelist)
+			Grid* pG;
+			if (_map->CheckTile(g->y, g->x) == nodelist)
 			{
-				n = new Node(*temp);
+				pG = _map->getGrid(newY, newX);
 			}
 			else
 			{
-				n = new Node(*temp->parent);
+				pG = g;
 			}
-			_openlist.insert(n);
-			_map->ChangeTile(n->pos.y, n->pos.x, nodelist);
+			_openlist.insert(pG);
+			_map->ChangeTile(pG->y, pG->x, nodelist);
 			findNode = true;
 			break;
 		}
 
 		// 목표 검사
-		if (x == _goalNode->pos.x && y == _goalNode->pos.y)
+		//위와 또 같은 로직
+		if (newX == _goalGrid->x && newY == _goalGrid->y)
 		{
-			Node* n;
-			if (_map->CheckTile(temp->parent->pos.y, temp->parent->pos.x) == nodelist)
+			Grid* pG;
+			if (_map->CheckTile(g->y, g->x) == nodelist)
 			{
-				n = new Node(*temp);
+				pG = _map->getGrid(newY, newX);
 			}
 			else
 			{
-				n = new Node(*temp->parent);
+				pG = g;
 			}
-			_openlist.insert(n);
-			_map->ChangeTile(n->pos.y, n->pos.x, nodelist);
+			_openlist.insert(pG);
+			_map->ChangeTile(pG->y, pG->x, nodelist);
 			findNode = true;
 			break;
 		}
@@ -330,13 +359,10 @@ bool JPS::ExploreDirection(Node* node, int dx, int dy)
 
 	}
 
-	delete temp;
-	temp = nullptr;
-
 	return findNode;
 }
 
-void JPS::setDirectionToTravel(Node* n, EDirection d)
+void JPS::setDirectionToTravel(Grid* g, EDirection d)
 {
 	//해당 노드가 탐사 가능한 노드인지 탐색하는 작업을 이 함수에서 하겠다.
 
@@ -351,42 +377,42 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 	{
 	case LL:
 	{
-		ExploreDirection(n, -1, 0);
+		ExploreDirection(g, -1, 0);
 	}
 	break;
 	case LU:
 	{
-		ExploreDirection(n, -1, -1);
+		ExploreDirection(g, -1, -1);
 	}
 		break;
 	case UU:
 	{
-		ExploreDirection(n, 0, -1);
+		ExploreDirection(g, 0, -1);
 	}
 		break;
 	case RU:
 	{
-		ExploreDirection(n, 1, -1);
+		ExploreDirection(g, 1, -1);
 	}
 		break;
 	case RR:
 	{
-		ExploreDirection(n, 1, 0);
+		ExploreDirection(g, 1, 0);
 	}
 		break;
 	case RD:
 	{
-		ExploreDirection(n, 1, 1);
+		ExploreDirection(g, 1, 1);
 	}
 		break;
 	case DD:
 	{
-		ExploreDirection(n, 0, 1);
+		ExploreDirection(g, 0, 1);
 	}
 		break;
 	case LD:
 	{
-		ExploreDirection(n, -1, 1);
+		ExploreDirection(g, -1, 1);
 	}
 		break;
 	default:
@@ -398,142 +424,142 @@ void JPS::setDirectionToTravel(Node* n, EDirection d)
 }
 
 //리스트에 있는 노드 중 F값이 가장 작은 노드의 부모 노드 반대 방향으로 탐색 
-void JPS::findNodeWithDirection(Node* n)
+void JPS::findNodeWithDirection(Grid* g)
 {
-	EDirection d = n->getNodedirection();
+	EDirection d = g->getNodedirection();
 	switch (d)
 	{
 	case LL:
 	{
-		setDirectionToTravel(n, LL);
+		setDirectionToTravel(g, LL);
 		//대각선 방향 탐사 여부 
 		//n의 DD가 장애물 + LD가 빈 공간인 경우 LD 방향 탐사
-		if (_map->IsObstacle(n->pos.y + 1, n->pos.x) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x - 1)))
+		if (_map->IsObstacle(g->y + 1, g->x) && !(_map->IsObstacle(g->y + 1, g->x - 1)))
 		{
-			setDirectionToTravel(n, LD);
+			setDirectionToTravel(g, LD);
 		}
 		//n의 UU가 장애물 + LU가 빈 공간이 경우 LU 방향 탐사
-		if (_map->IsObstacle(n->pos.y - 1, n->pos.x) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x - 1)))
+		if (_map->IsObstacle(g->y - 1, g->x) && !(_map->IsObstacle(g->y - 1, g->x - 1)))
 		{
-			setDirectionToTravel(n, LU);
+			setDirectionToTravel(g, LU);
 		}
 	}
 		break;
 	case LU:
 	{
-		setDirectionToTravel(n, LU);
-		setDirectionToTravel(n, LL);
-		setDirectionToTravel(n, UU);
+		setDirectionToTravel(g, LU);
+		setDirectionToTravel(g, LL);
+		setDirectionToTravel(g, UU);
 		//대각선 방향 탐사 여부 
 		//n의 DD가 장애물 + LD가 빈 공간인 경우 LD 방향 탐사
-		if (_map->IsObstacle(n->pos.y + 1, n->pos.x) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x - 1)))
+		if (_map->IsObstacle(g->y + 1, g->x) && !(_map->IsObstacle(g->y + 1, g->x - 1)))
 		{
-			setDirectionToTravel(n, LD);
+			setDirectionToTravel(g, LD);
 		}
 		//n의 RR가 장애물 + RU가 빈 공간이 경우 RU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x + 1) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x + 1)))
+		if (_map->IsObstacle(g->y, g->x + 1) && !(_map->IsObstacle(g->y - 1, g->x + 1)))
 		{
-			setDirectionToTravel(n, RU);
+			setDirectionToTravel(g, RU);
 		}
 	}
 		break;
 	case UU:
 	{
-		setDirectionToTravel(n, UU);
+		setDirectionToTravel(g, UU);
 		//대각선 방향 탐사 여부 
 		//n의 LL가 장애물 + LU가 빈 공간인 경우 LU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x - 1) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x - 1)))
+		if (_map->IsObstacle(g->y, g->x - 1) && !(_map->IsObstacle(g->y - 1, g->x - 1)))
 		{
-			setDirectionToTravel(n, LU);
+			setDirectionToTravel(g, LU);
 		}
 		//n의 RR가 장애물 + RU가 빈 공간이 경우 RU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x + 1) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x + 1)))
+		if (_map->IsObstacle(g->y, g->x + 1) && !(_map->IsObstacle(g->y - 1, g->x + 1)))
 		{
-			setDirectionToTravel(n, RU);
+			setDirectionToTravel(g, RU);
 		}
 	}
 		break;
 	case RU:
 	{
-		setDirectionToTravel(n, RU);
-		setDirectionToTravel(n, RR);
-		setDirectionToTravel(n, UU);
+		setDirectionToTravel(g, RU);
+		setDirectionToTravel(g, RR);
+		setDirectionToTravel(g, UU);
 		//대각선 방향 탐사 여부 
 		//n의 DD가 장애물 + RD가 빈 공간인 경우 RD 방향 탐사
-		if (_map->IsObstacle(n->pos.y + 1, n->pos.x) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x + 1)))
+		if (_map->IsObstacle(g->y + 1, g->x) && !(_map->IsObstacle(g->y + 1, g->x + 1)))
 		{
-			setDirectionToTravel(n, RD);
+			setDirectionToTravel(g, RD);
 		}
 		//n의 LL가 장애물 + LU가 빈 공간인 경우 LU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x - 1) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x - 1)))
+		if (_map->IsObstacle(g->y, g->x - 1) && !(_map->IsObstacle(g->y - 1, g->x - 1)))
 		{
-			setDirectionToTravel(n, LU);
+			setDirectionToTravel(g, LU);
 		}
 	}
 		break;
 	case RR: 
 	{
-		setDirectionToTravel(n, RR);
+		setDirectionToTravel(g, RR);
 		//대각선 방향 탐사 여부 
 		//n의 DD가 장애물 + RD가 빈 공간인 경우 RD 방향 탐사
-		if (_map->IsObstacle(n->pos.y + 1, n->pos.x) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x + 1)))
+		if (_map->IsObstacle(g->y + 1, g->x) && !(_map->IsObstacle(g->y + 1, g->x + 1)))
 		{
-			setDirectionToTravel(n, RD);
+			setDirectionToTravel(g, RD);
 		}
 		//n의 UU가 장애물 + RU가 빈 공간이 경우 RU 방향 탐사
-		if (_map->IsObstacle(n->pos.y - 1, n->pos.x) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x + 1)))
+		if (_map->IsObstacle(g->y - 1, g->x) && !(_map->IsObstacle(g->y - 1, g->x + 1)))
 		{
-			setDirectionToTravel(n, RU);
+			setDirectionToTravel(g, RU);
 		}
 	}
 		break;
 	case RD:
 	{
-		setDirectionToTravel(n, RD);
-		setDirectionToTravel(n, RR);
-		setDirectionToTravel(n, DD);
+		setDirectionToTravel(g, RD);
+		setDirectionToTravel(g, RR);
+		setDirectionToTravel(g, DD);
 		//n의 UU가 장애물 + RU가 빈 공간이 경우 RU 방향 탐사
-		if (_map->IsObstacle(n->pos.y - 1, n->pos.x) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x + 1)))
+		if (_map->IsObstacle(g->y - 1, g->x) && !(_map->IsObstacle(g->y - 1, g->x + 1)))
 		{
-			setDirectionToTravel(n, RU);
+			setDirectionToTravel(g, RU);
 		}
 		//n의 LL가 장애물 + LD가 빈 공간인 경우 LU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x - 1) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x - 1)))
+		if (_map->IsObstacle(g->y, g->x - 1) && !(_map->IsObstacle(g->y + 1, g->x - 1)))
 		{
-			setDirectionToTravel(n, LD);
+			setDirectionToTravel(g, LD);
 		}
 	}
 		break;
 	case DD:
 	{
-		setDirectionToTravel(n, DD);
+		setDirectionToTravel(g, DD);
 		//대각선 방향 탐사 여부 
 		//n의 LL가 장애물 + LD가 빈 공간인 경우 LU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x - 1) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x - 1)))
+		if (_map->IsObstacle(g->y, g->x - 1) && !(_map->IsObstacle(g->y + 1, g->x - 1)))
 		{
-			setDirectionToTravel(n, LD);
+			setDirectionToTravel(g, LD);
 		}
 		//n의 RR가 장애물 + RU가 빈 공간이 경우 RU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x + 1) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x + 1)))
+		if (_map->IsObstacle(g->y, g->x + 1) && !(_map->IsObstacle(g->y + 1, g->x + 1)))
 		{
-			setDirectionToTravel(n, RD);
+			setDirectionToTravel(g, RD);
 		}
 	}
 		break;
 	case LD:
 	{
-		setDirectionToTravel(n, LD);
-		setDirectionToTravel(n, LL);
-		setDirectionToTravel(n, DD);
+		setDirectionToTravel(g, LD);
+		setDirectionToTravel(g, LL);
+		setDirectionToTravel(g, DD);
 		//n의 LL가 장애물 + LU가 빈 공간인 경우 LU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x - 1) && !(_map->IsObstacle(n->pos.y - 1, n->pos.x - 1)))
+		if (_map->IsObstacle(g->y, g->x - 1) && !(_map->IsObstacle(g->y - 1, g->x - 1)))
 		{
-			setDirectionToTravel(n, LU);
+			setDirectionToTravel(g, LU);
 		}
 		//n의 RR가 장애물 + RU가 빈 공간이 경우 RU 방향 탐사
-		if (_map->IsObstacle(n->pos.y, n->pos.x + 1) && !(_map->IsObstacle(n->pos.y + 1, n->pos.x + 1)))
+		if (_map->IsObstacle(g->y, g->x + 1) && !(_map->IsObstacle(g->y + 1, g->x + 1)))
 		{
-			setDirectionToTravel(n, RD);
+			setDirectionToTravel(g, RD);
 		}
 	}
 		break;
@@ -543,7 +569,7 @@ void JPS::findNodeWithDirection(Node* n)
 }
 
 //일단 제일 처음 좌표에서 도착지까지 H는 계산되야 함.
-float JPS::findHbyGrid(Grid* s)
+float JPS::findHbyGrid(int y, int x)
 {
-	return abs(s->x - _goalNode->pos.x) + abs(s->y - _goalNode->pos.y);
+	return abs(x - _goalGrid->x) + abs(y - _goalGrid->y);
 }
