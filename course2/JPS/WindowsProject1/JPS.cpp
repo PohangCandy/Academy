@@ -4,18 +4,18 @@ using namespace std;
 
 //일단 제일 처음 좌표에서 도착지까지 H는 계산되야 함.
 //뉴클리드 계산
-float JPS::findGbyNode(Node* s, Node* d)
-{
-	//대각선으로 이동한 경우
-	if (abs(s->pos.x - d->pos.x) + abs(s->pos.y - d->pos.y) == 2) return s->G + 1.5;
-	//직선으로 이동한 경우
-	else return s->G + 1;
-}
+//float JPS::findGbyNode(Node* s, Node* d)
+//{
+//	//대각선으로 이동한 경우
+//	if (abs(s->pos.x - d->pos.x) + abs(s->pos.y - d->pos.y) == 2) return s->G + 1.5;
+//	//직선으로 이동한 경우
+//	else return s->G + 1;
+//}
 
-float JPS::findF(Node* n)
-{
-	return n->H + n->G;
-}
+//float JPS::findF(Node* n)
+//{
+//	return n->H + n->G;
+//}
 
 //도착지가 맴버로 저장되어있으므로 출발지만 갱신하면서 재귀해주면 될 것으로 보임.
 //탐색한 경로를 리스트에 담으면서 f가 가장 적은 곳을 먼저 탐색하도록 만든다.
@@ -58,15 +58,15 @@ void JPS::updateNode()
 	_goalGrid = _map->getGoal();
 }
 
-bool JPS::checkNodeIsInMap(Node* n)
-{
-	if (n->pos.x < 0 || n->pos.y < 0 || n->pos.x >= _map->getwidth() || n->pos.y >= _map->getheight())
-	{
-		return false;
-	}
-
-	return true;
-}
+//bool JPS::checkNodeIsInMap(Node* n)
+//{
+//	if (n->pos.x < 0 || n->pos.y < 0 || n->pos.x >= _map->getwidth() || n->pos.y >= _map->getheight())
+//	{
+//		return false;
+//	}
+//
+//	return true;
+//}
 
 bool JPS::checkGridIsInMap(Grid pos)
 {
@@ -91,7 +91,8 @@ bool JPS::findPath()
 	//_closelist.push_back(_startNode);
 
 	_map->ChangeTile(_startGrid->y, _startGrid->x, nodelist);
-	_startGrid->h = findHbyGrid(_startGrid->y, _startGrid->x);
+	int sH = findHbyGrid(_startGrid->y, _startGrid->x);
+	_map->setMapData(_startGrid->y, _startGrid->x, 0, sH, 0, nullptr);
 	insertListEightDirection();
 
 	while (!_openlist.empty())
@@ -241,9 +242,9 @@ bool JPS::ExploreDirection(Grid* g, int dx, int dy)
 
 	int newX = g->x;
 	int newY = g->y;
-	int newH = g->h;
-	int newG = g->g;
-	int newF = g->f;
+	float newH = g->h;
+	float newG = g->g;
+	float newF = g->f;
 
 	while (true)
 	{
@@ -551,8 +552,8 @@ void JPS::findNodeWithDirection(Grid* g)
 		setDirectionToTravel(g, LD);
 		setDirectionToTravel(g, LL);
 		setDirectionToTravel(g, DD);
-		//n의 LL가 장애물 + LU가 빈 공간인 경우 LU 방향 탐사
-		if (_map->IsObstacle(g->y, g->x - 1) && !(_map->IsObstacle(g->y - 1, g->x - 1)))
+		//n의 UU가 장애물 + LU가 빈 공간인 경우 LU 방향 탐사
+		if (_map->IsObstacle(g->y - 1, g->x) && !(_map->IsObstacle(g->y - 1, g->x - 1)))
 		{
 			setDirectionToTravel(g, LU);
 		}

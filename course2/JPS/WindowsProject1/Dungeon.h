@@ -13,24 +13,7 @@ public:
 		_width = x;
 		_height = y;
 
-		for (int y = 0; y < _height; y++)
-		{
-			for (int x = 0; x < _width; x++)
-			{
-				if (y == _start.y && x == _start.x)
-				{
-					map[y][x].type = start;
-				}
-				else if (y == _goal.y && x == _goal.x)
-				{
-					map[y][x].type = end;
-				}
-				else
-				{
-					map[y][x].type = none;
-				}
-			}
-		}
+		InitMap();
 	}
 
 	ETileType CheckTile(int y, int x);
@@ -49,9 +32,12 @@ public:
 	void mapUpdate()
 	{
 		map[_start.y][_start.x].type = start;
+		map[_start.y][_start.x].y = _start.y;
+		map[_start.y][_start.x].x = _start.x;
 		map[_start.y][_start.x].g = 0;
-		map[_start.y][_start.x].h = 0;
-		map[_start.y][_start.x].f = 0;
+		map[_start.y][_start.x].f = map[_start.y][_start.x].h;
+		map[_goal.y][_goal.x].y = _goal.y;
+		map[_goal.y][_goal.x].x = _goal.x;
 		map[_goal.y][_goal.x].type = end;
 	}
 
@@ -64,13 +50,16 @@ public:
 		{
 			for (int x = 0; x < _width; x++)
 			{
-				if (map[y][x].type == start || map[y][x].type == end || map[y][x].type == obs) continue;
-				map[y][x].type = none;
+				if (map[y][x].type == nodelist || map[y][x].type == shortest || map[y][x].type == visited) map[y][x].type = none;
+				map[y][x].y = y;
+				map[y][x].x = x;
 				map[y][x].h = 0;
 				map[y][x].g = 0;
 				map[y][x].f = 0;
+				map[y][x].gparent = nullptr;
 			}
 		}
+
 	}
 
 	float getGridFdata(int y, int x);
