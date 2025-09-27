@@ -40,8 +40,8 @@ public:
 	int getwidth() { return  _width; }
 	int getheight() { return  _height; }
 
-	Grid getStart() { return _start; }
-	Grid getGoal() { return _goal; }
+	Grid* getStart() { return getGrid(_start.y, _start.x); }
+	Grid* getGoal() { return getGrid(_goal.y, _goal.x); }
 
 	Grid _start = { 0, 0 };
 	Grid _goal = { 10, 0 };
@@ -49,12 +49,17 @@ public:
 	void mapUpdate()
 	{
 		map[_start.y][_start.x].type = start;
+		map[_start.y][_start.x].g = 0;
+		map[_start.y][_start.x].h = 0;
+		map[_start.y][_start.x].f = 0;
 		map[_goal.y][_goal.x].type = end;
 	}
 
 	//장애물, 출발지, 도착지를 제외한 모든 노드 초기화
 	void InitMap()
 	{
+		mapUpdate();
+
 		for (int y = 0; y < _height; y++)
 		{
 			for (int x = 0; x < _width; x++)
@@ -69,7 +74,9 @@ public:
 	}
 
 	float getGridFdata(int y, int x);
-	void setMapData(int y, int x, float g, float h, float F);
+	Grid* getGrid(int y, int x);
+	void setMapData(int y, int x, float g, float h, float F, Grid* parent);
+	//Grid GetGridWithPos(int y, int x);
 
 private:
 

@@ -9,6 +9,12 @@ ETileType Dungeon::CheckTile(int y, int x)
 
 void Dungeon::ChangeTile(int y, int x, ETileType v)
 {
+	if (v == none || v == obs)
+	{
+		map[y][x].h = 0;
+		map[y][x].g = 0;
+		map[y][x].f = 0;
+	}
 	map[y][x].type = v;
 }
 
@@ -17,14 +23,21 @@ float Dungeon::getGridFdata(int y, int x)
 	return map[y][x].f;
 }
 
-void Dungeon::setMapData(int y, int x, float g, float h, float F)
+Grid* Dungeon::getGrid(int y, int x)
+{
+	return &map[y][x];
+}
+
+void Dungeon::setMapData(int y, int x, float g, float h, float F, Grid* parent)
 {
 	map[y][x].x = x;
 	map[y][x].y = y;
 	map[y][x].h = h;
 	map[y][x].g = g;
 	map[y][x].f = F;
+	map[y][x].gparent = parent;
 }
+
 
 bool Dungeon::IsObstacle(int y, int x)
 {

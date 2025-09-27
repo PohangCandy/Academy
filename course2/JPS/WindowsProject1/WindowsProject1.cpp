@@ -32,6 +32,9 @@ bool g_bStartMove = false;
 bool g_bGoalMove = false;
 bool g_bDrag = false;
 
+//선분을 길찾기 시행때만 찾는다.
+bool g_bFindPath = false;
+
 //메모리DC 관련 변수들
 HDC g_hMemDC;
 HBITMAP g_hMemDCBitmap;
@@ -108,74 +111,210 @@ void RenderMap(HDC hdc, IMap& map)
             case visited:
                 hOldBrush = (HBRUSH)SelectObject(hdc, g_hVisitedBrush);
                 break;
+            case shortest:
+                hOldBrush = (HBRUSH)SelectObject(hdc, g_hAstarAnswerListBrush);
+                break;
             default:
                 break;
             }
             Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
+
+            Grid* g = g_Dungeon.getGrid(iCntH, iCntW);
+            if (g && g_iGridSize >= 64 && g->type != obs)
+            {
+                // GDI 텍스트 설정을 위해 기존 설정을 저장합니다.
+                COLORREF oldTextColor = GetTextColor(hdc);
+                int oldBkMode = GetBkMode(hdc);
+
+                // ----------------------------------------------------
+                // ⭐️ 폰트 설정 (타일 크기에 맞춰 동적으로 크기 계산) ⭐️
+                // ----------------------------------------------------
+                // 타일 높이의 약 1/3을 폰트 높이로 사용합니다. (세 줄을 출력하기 위해)
+                // 음수 높이는 픽셀 크기를 지정합니다.
+                int fontHeight = -(g_iGridSize / 6);
+
+                // 폰트 생성 및 선택
+                HFONT hFont = CreateFont(
+                    fontHeight,                   // 폰트 높이
+                    0,                            // 폰트 너비 (자동)
+                    0, 0, 0,                      // 기타 설정 (각도, 기울임 등)
+                    FALSE, FALSE, FALSE,          // 밑줄, 취소선 등
+                    DEFAULT_CHARSET,              // 문자셋
+                    OUT_DEFAULT_PRECIS,
+                    CLIP_DEFAULT_PRECIS,
+                    DEFAULT_QUALITY,
+                    DEFAULT_PITCH | FF_SWISS,
+                    L"Arial"                      // 폰트 이름
+                );
+                HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+
+
+                // 텍스트 배경을 투명하게 설정합니다. (타일 색상 위에 텍스트를 올리기 위해)
+                SetBkMode(hdc, TRANSPARENT);
+                SetTextColor(hdc, RGB(0, 0, 0)); // 텍스트 색상을 검은색으로 설정
+
+                // 버퍼에 g, h, f 값을 문자열로 만듭니다.
+                char buffer[64];
+
+                // 1. g 값 출력 (타일 좌상단) - 소수점 3자리
+                sprintf_s(buffer, "g: %.1f", g->g);
+                TextOutA(hdc, iX + 2, iY + 2, buffer, strlen(buffer));
+
+                // 2. h 값 출력 (타일 중앙) - 소수점 3자리
+                sprintf_s(buffer, "h: %.1f", g->h);
+                TextOutA(hdc, iX + 2, iY + g_iGridSize / 3 + 2, buffer, strlen(buffer));
+
+                // 3. f 값 출력 (타일 중앙 하단) - 소수점 3자리
+                sprintf_s(buffer, "f: %.1f", g->f);
+                TextOutA(hdc, iX + 2, iY + 2 * g_iGridSize / 3 + 2, buffer, strlen(buffer));
+
+
+                // ----------------------------------------------------
+                 // ⭐️ 폰트 복구 및 삭제 ⭐️
+                 // ----------------------------------------------------
+                SelectObject(hdc, hOldFont);
+                DeleteObject(hFont);
+
+                // GDI 텍스트 설정 복구
+                SetBkMode(hdc, oldBkMode);
+                SetTextColor(hdc, oldTextColor);
+            }
+
+            //if (g && g->gparent &&( g->type == shortest || g->type == end || g->type == nodelist))
+            //{
+            //    // 1. 현재 타일의 중심 좌표 계산 (불필요한 오프셋 제거)
+            //    int iCenterX = iX + g_iGridSize / 2;
+            //    int iCenterY = iY + g_iGridSize / 2;
+
+            //    // 2. 부모 타일의 인덱스
+            //    int iParentX = g->gparent->x;
+            //    int iParentY = g->gparent->y;
+
+            //    // 3. 부모 타일의 월드 좌표 중심점
+            //    int iParentCenterX = iParentX * g_iGridSize + g_iGridSize / 2;
+            //    int iParentCenterY = iParentY * g_iGridSize + g_iGridSize / 2;
+
+            //    // 4. 선 그리기
+            //    HPEN hPen = CreatePen(PS_SOLID, 2, RGB(0, 0, 255)); // 파란색, 두께 2
+            //    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+
+            //    // 시작점을 정확한 중심 좌표로 설정
+            //    MoveToEx(hdc, iCenterX, iCenterY, NULL);        // 현재 노드의 중심
+            //    LineTo(hdc, iParentCenterX, iParentCenterY);    // 부모 노드의 중심까지 선분 연결
+
+            //    // 5. GDI 자원 복구
+            //    SelectObject(hdc, hOldPen);
+            //    DeleteObject(hPen);
+            //}
         }
     }
     SelectObject(hdc, hOldBrush);
 }
 
-void RenderObstacle(HDC hdc)
+void RenderLine(HDC hdc, IMap& map)
 {
     int iX = 0;
     int iY = 0;
-    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, g_hTileBrush);
-    SelectObject(hdc, GetStockObject(BLACK_BRUSH));
-    // 사각형 테두리 부분을 보이게 하기위해 BLACK_BRUSH를 지정한다.
-    // CreatPen으로 BLACK_BRUSH을 생성해도 되지만, 
-    //GerStockObject를 사용해서 시스템에 미리 만들어진 고정 GDI 객체를 사용한다.
-    // GetStock은 시스템의 고정적인 범용 GDI라서 삭제할 필요가 없다.
-    //시스템 전역적인 GDI Object를 얻어서 사용한다는 개념
 
-    for (int iCntH  = 0; iCntH < GRID_HEIGHT;iCntH++)
+    for (int iCntH = 0; iCntH < GRID_HEIGHT;iCntH++)
     {
-        for (int iCntW = 0;iCntW < GRID_WIDTH;iCntW++)
+        for (int iCntW = 0; iCntW < GRID_WIDTH;iCntW++)
         {
-            if (g_Dungeon.CheckTile(iCntH,iCntW) == obs)
+            iX = iCntW * g_iGridSize;
+            iY = iCntH * g_iGridSize;
+
+            Grid* g = g_Dungeon.getGrid(iCntH, iCntW);
+
+            if (g && g->gparent && (g->type == shortest || g->type == end))
             {
-                iX = iCntW * g_iGridSize;
-                iY = iCntH * g_iGridSize;
-                //테두리 크기가 있으므로 +2 한다.
-                Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
+                // 1. 현재 타일의 중심 좌표 계산 (불필요한 오프셋 제거)
+                int iCenterX = iX + g_iGridSize / 2;
+                int iCenterY = iY + g_iGridSize / 2;
+
+                // 2. 부모 타일의 인덱스
+                int iParentX = g->gparent->x;
+                int iParentY = g->gparent->y;
+
+                // 3. 부모 타일의 월드 좌표 중심점
+                int iParentCenterX = iParentX * g_iGridSize + g_iGridSize / 2;
+                int iParentCenterY = iParentY * g_iGridSize + g_iGridSize / 2;
+
+                // 4. 선 그리기
+                HPEN hPen = CreatePen(PS_SOLID, 2, RGB(0, 0, 255)); // 파란색, 두께 2
+                HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+
+                // 시작점을 정확한 중심 좌표로 설정
+                MoveToEx(hdc, iCenterX, iCenterY, NULL);        // 현재 노드의 중심
+                LineTo(hdc, iParentCenterX, iParentCenterY);    // 부모 노드의 중심까지 선분 연결
+
+                // 5. GDI 자원 복구
+                SelectObject(hdc, hOldPen);
+                DeleteObject(hPen);
             }
         }
     }
-    SelectObject(hdc, hOldBrush);
+    g_bFindPath = false;
 }
 
-void RenderStartGoal(HDC hdc)
-{
-    if (g_Dungeon._start.x != -1) {
-        SelectObject(hdc, g_hStartBrush);
-        //Rectangle(hdc, g_AStar._start.x * GRID_SIZE, g_AStar._start.y * GRID_SIZE,
-        //    (g_AStar._start.x + 1) * GRID_SIZE, (g_AStar._start.y + 1) * GRID_SIZE);
-        int iX = g_Dungeon._start.x * g_iGridSize;
-        int iY = g_Dungeon._start.y * g_iGridSize;
-        Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
-    }
-    if (g_Dungeon._goal.x != -1) {
-        SelectObject(hdc, g_hGoalBrush);
-        int iX = g_Dungeon._goal.x * g_iGridSize;
-        int iY = g_Dungeon._goal.y* g_iGridSize;
-        Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
-    }
-}
+//void RenderObstacle(HDC hdc)
+//{
+//    int iX = 0;
+//    int iY = 0;
+//    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, g_hTileBrush);
+//    SelectObject(hdc, GetStockObject(BLACK_BRUSH));
+//    // 사각형 테두리 부분을 보이게 하기위해 BLACK_BRUSH를 지정한다.
+//    // CreatPen으로 BLACK_BRUSH을 생성해도 되지만, 
+//    //GerStockObject를 사용해서 시스템에 미리 만들어진 고정 GDI 객체를 사용한다.
+//    // GetStock은 시스템의 고정적인 범용 GDI라서 삭제할 필요가 없다.
+//    //시스템 전역적인 GDI Object를 얻어서 사용한다는 개념
+//
+//    for (int iCntH  = 0; iCntH < GRID_HEIGHT;iCntH++)
+//    {
+//        for (int iCntW = 0;iCntW < GRID_WIDTH;iCntW++)
+//        {
+//            if (g_Dungeon.CheckTile(iCntH,iCntW) == obs)
+//            {
+//                iX = iCntW * g_iGridSize;
+//                iY = iCntH * g_iGridSize;
+//                //테두리 크기가 있으므로 +2 한다.
+//                Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
+//            }
+//        }
+//    }
+//    SelectObject(hdc, hOldBrush);
+//}
+
+//void RenderStartGoal(HDC hdc)
+//{
+//    if (g_Dungeon._start.x != -1) {
+//        SelectObject(hdc, g_hStartBrush);
+//        //Rectangle(hdc, g_AStar._start.x * GRID_SIZE, g_AStar._start.y * GRID_SIZE,
+//        //    (g_AStar._start.x + 1) * GRID_SIZE, (g_AStar._start.y + 1) * GRID_SIZE);
+//        int iX = g_Dungeon._start.x * g_iGridSize;
+//        int iY = g_Dungeon._start.y * g_iGridSize;
+//        Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
+//    }
+//    if (g_Dungeon._goal.x != -1) {
+//        SelectObject(hdc, g_hGoalBrush);
+//        int iX = g_Dungeon._goal.x * g_iGridSize;
+//        int iY = g_Dungeon._goal.y* g_iGridSize;
+//        Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
+//    }
+//}
 
 //최단거리
-void RenderAStarList(HDC hdc)
-{
-    for (auto node : g_AStar._shortestRoutelist)
-    {
-        if (node->pos.x != -1)
-        {
-            SelectObject(hdc, g_hAstarAnswerListBrush);
-            Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
-                (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
-        }
-    }
-}
+//void RenderAStarList(HDC hdc)
+//{
+//    for (auto node : g_AStar._shortestRoutelist)
+//    {
+//        if (node->pos.x != -1)
+//        {
+//            SelectObject(hdc, g_hAstarAnswerListBrush);
+//            Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
+//                (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
+//        }
+//    }
+//}
 //-----------------------------
 // // 1. 메모리 DC 크기 계산을 위한 헬퍼 함수
 void RecreateMemDC(HWND hWnd)
@@ -376,14 +515,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             //첫 선택 타일이 장애물이면 지우기 모드 아니면 장애물 넣기 모드
             if (iTileX >= 0 && iTileX < GRID_WIDTH && iTileY >= 0 && iTileY < GRID_HEIGHT) 
             {
-                if (iTileX == g_Dungeon.getStart().x && iTileY == g_Dungeon.getStart().y)
+                if (iTileX == g_Dungeon.getStart()->x && iTileY == g_Dungeon.getStart()->y)
                 {
                     //g_Dungeon.ChangeTile(iTileY, iTileX, none);
                     g_bErase = false;
                     g_bStartMove = true;
                     g_bGoalMove = false;
                 }
-                else if (iTileX == g_Dungeon.getGoal().x && iTileY == g_Dungeon.getGoal().y)
+                else if (iTileX == g_Dungeon.getGoal()->x && iTileY == g_Dungeon.getGoal()->y)
                 {
                     //g_Dungeon.ChangeTile(iTileY, iTileX, none);
                     g_bErase = false;
@@ -421,6 +560,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_RBUTTONDOWN:
         g_AStar.findPath();
+        g_bFindPath = true;
         InvalidateRect(hWnd, NULL, false);
         break;
     case WM_MOUSEMOVE:
@@ -493,7 +633,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         g_hTileBrush = CreateSolidBrush(RGB(100, 100, 100));
         g_hStartBrush = CreateSolidBrush(RGB(0, 200, 0));
         g_hGoalBrush = CreateSolidBrush(RGB(200, 0, 0));
-        g_hNodeListBrush = CreateSolidBrush(RGB(0, 0, 200));
+        g_hNodeListBrush = CreateSolidBrush(RGB(100, 100, 200));
         g_hVisitedBrush = CreateSolidBrush(RGB(2000, 2000, 2000));
         g_hEmptyBrush = CreateSolidBrush(RGB(500, 500, 500));
 
@@ -545,7 +685,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          //RenderObstacle(g_hMemDC);
          //RenderStartGoal(g_hMemDC);
          RenderMap(g_hMemDC,g_Dungeon);
-         RenderAStarList(g_hMemDC);
+         //RenderAStarList(g_hMemDC);
+         if (g_bFindPath)
+         {
+             RenderLine(g_hMemDC, g_Dungeon);
+         }
 
          //매모리 DC의 이미지를 윈도우 DC에 출력
          hdc = BeginPaint(hWnd, &ps);

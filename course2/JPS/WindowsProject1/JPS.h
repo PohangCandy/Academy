@@ -8,10 +8,7 @@
 
 //int map[length][width];
 
-enum EDirection
-{
-	LL, LU, UU, RU, RR, RD, DD, LD
-};
+
 
 //struct Grid {
 //	int x;
@@ -45,63 +42,18 @@ public:
 		//parent = new Node(*other.parent); // 깊은 복사가 필요하다면 new Node(*other.parent) 처리를 해야 함
 		F = other.F;
 	}
-
-	EDirection  getNodedirection()
-	{
-		if (this->pos.x > parent->pos.x)
-		{
-			if (this->pos.y > parent->pos.y)
-			{
-				return RD;
-			}
-			else if (this->pos.y < parent->pos.y)
-			{
-				return RU;
-			}
-			else
-			{
-				return RR;
-			}
-		}
-		else if(this->pos.x < parent->pos.x)
-		{
-			if (this->pos.y > parent->pos.y)
-			{
-				return LD;
-			}
-			else if (this->pos.y < parent->pos.y)
-			{
-				return LU;
-			}
-			else
-			{
-				return LL;
-			}
-		}
-		else
-		{
-			if (this->pos.y > parent->pos.y)
-			{
-				return DD;
-			}
-			else
-			{
-				return UU;
-			}
-		}
-	}
 };
 
-struct CompareNode
+struct CompareGrid
 {
-	bool operator()(const Node* a, const Node* b) const
+	bool operator()(const Grid* a, const Grid* b) const
 	{
 		//일단 set을 망치지 않기 위해 이렇게 세팅해두고
 		//나중에 성능좋은 자료구조로 다시 바꿔주자.
-		if (a->F != b->F) return a->F < b->F; // F 기준
-		if (a->H != b->H) return a->H < b->H; // tie-break
-		if (a->pos.x != b->pos.x) return a->pos.x < b->pos.x;
-		return a->pos.y < b->pos.y;
+		if (a->f != b->f) return a->f < b->f; // F 기준
+		if (a->h != b->h) return a->h < b->h; // tie-break
+		if (a->x != b->x) return a->x < b->x;
+		return a->y < b->y;
 	}
 };
 
@@ -113,15 +65,15 @@ public:
 	//Grid _start;
 	//Grid _destination;
 
-	Node* _startNode;
-	Node* _goalNode;
+	Grid* _startGrid;
+	Grid* _goalGrid;
 
 	//방문해야 할 리스트
 //우선 순위 큐로 했더니 openlist에 이미 방문한 노드가 있을 경우 탐색을 할 수 없음.
 //1. 안정성을 위해 먼저 set으로 
-	std::multiset <Node*, CompareNode>_openlist;
-	std::list <Node*>_closelist;
-	std::list <Node*>_shortestRoutelist;
+	std::multiset <Grid*, CompareGrid>_openlist;
+	//std::list <Node*>_closelist;
+	//std::list <Node*>_shortestRoutelist;
 
 	//AStar()
 	//{
@@ -130,27 +82,21 @@ public:
 
 	//}
 
-	JPS(IMap* mapinstance) : _map(mapinstance), _startNode(nullptr), _goalNode(nullptr)
+	JPS(IMap* mapinstance) : _map(mapinstance), _startGrid(nullptr), _goalGrid(nullptr)
 	{
 
 		//_start = start;
 		//_destination = destination;
-		_goalNode = new Node;
-		_goalNode->pos = _map->getGoal();
-
-		_startNode = new Node;
-		_startNode->pos = _map->getStart();
-		_startNode->parent = nullptr;
-		_startNode->G = 0;
-		_startNode->H = findHbyGrid(&_startNode->pos);
+		_goalGrid = _map->getGoal();
+		_startGrid = _map->getStart();
 	}
 
 	~JPS()
 	{
 		makeInitList();
 		//startNode는 closeList에서 자동으로 삭제 되는 오류 주의
-		delete _startNode;
-		delete _goalNode;
+		//delete _startGrid;
+		//delete _goalGrid;
 	}
 
 	bool findPath();
@@ -164,17 +110,17 @@ public:
 private:
 	bool CheckDiagonal(int x, int y, int dx, int dy);
 
-	bool ExploreDirection(Node* temp, int dx, int dy);
+	bool ExploreDirection(Grid* g, int dx, int dy);
 
-	void setDirectionToTravel(Node* n, EDirection d);
+	void setDirectionToTravel(Grid* g, EDirection d);
 
-	void findNodeWithDirection(Node* n);
+	void findNodeWithDirection(Grid* g);
 
-	float findHbyGrid(Grid* s);
+	float findHbyGrid(int y, int x);
 	float findGbyNode(Node* s, Node* d);
 	float findF(Node* n);
 
-	void insertListEightDirection(Node* startNode);
+	void insertListEightDirection();
 
 	void makeInitList();
 };
