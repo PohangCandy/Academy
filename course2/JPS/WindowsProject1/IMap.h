@@ -23,6 +23,7 @@ struct Grid
 {
 	int x;
 	int y;
+	int rgb;
 
 	ETileType type;
 
@@ -87,20 +88,21 @@ struct Grid
 
 class IMap {
 public:
-	virtual int getwidth() = 0;
-	virtual int getheight() = 0;
-	virtual bool IsObstacle(int y, int x) = 0;
-	virtual ETileType CheckTile(int y, int x) = 0;
+	//virtual int getwidth() = 0;
+	//virtual int getheight() = 0;
+	//virtual bool IsObstacle(int y, int x) = 0;
+	//virtual ETileType CheckTile(int y, int x) = 0;
 
-	virtual Grid* getStart() = 0;
-	virtual Grid* getGoal() = 0;
-	virtual void ChangeTile(int y, int x, ETileType v) = 0;
-	virtual void mapUpdate() = 0;
-	virtual void InitMap() = 0;
+	//virtual Grid* getStart() = 0;
+	//virtual Grid* getGoal() = 0;
+	//virtual void ChangeTile(int y, int x, ETileType v) = 0;
+	//virtual void mapUpdate() = 0;
+	//virtual void InitMap() = 0;
 
-	virtual float getGridFdata(int y, int x) = 0;
-	virtual void setMapData(int y, int x, float g, float h, float F, Grid* parent) = 0;
-	virtual Grid* getGrid(int y, int x) = 0;
+	//virtual float getGridFdata(int y, int x) = 0;
+	//virtual void setMapData(int y, int x, float g, float h, float F, Grid* parent, int g_rgb) = 0;
+	//virtual Grid* getGrid(int y, int x) = 0;
+	//virtual int getRGB(int y, int x) = 0;
 
 	virtual ~IMap() = default;
 };

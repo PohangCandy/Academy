@@ -2,7 +2,8 @@
 #include <iostream>
 #include <list>
 #include <set>
-#include "IMap.h"
+//#include "IMap.h"
+#include "Dungeon.h"
 //#define ASTAR_WIDTH 100
 //#define ASTAR_Length 100
 
@@ -60,7 +61,7 @@ struct CompareGrid
 class JPS {
 
 public:
-	IMap* _map;
+	Dungeon* _map;
 
 	//Grid _start;
 	//Grid _destination;
@@ -82,7 +83,7 @@ public:
 
 	//}
 
-	JPS(IMap* mapinstance) : _map(mapinstance), _startGrid(nullptr), _goalGrid(nullptr)
+	JPS(Dungeon* mapinstance) : _map(mapinstance), _startGrid(nullptr), _goalGrid(nullptr)
 	{
 
 		//_start = start;
@@ -98,6 +99,10 @@ public:
 		//delete _startGrid;
 		//delete _goalGrid;
 	}
+
+	bool bfirst = true;
+	int g_rgb;
+	bool findPathwithRender();
 
 	bool findPath();
 
