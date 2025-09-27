@@ -36,9 +36,11 @@ public:
 		map[_start.y][_start.x].x = _start.x;
 		map[_start.y][_start.x].g = 0;
 		map[_start.y][_start.x].f = map[_start.y][_start.x].h;
+		map[_start.y][_start.x].gparent = nullptr;
 		map[_goal.y][_goal.x].y = _goal.y;
 		map[_goal.y][_goal.x].x = _goal.x;
 		map[_goal.y][_goal.x].type = end;
+		//map[_goal.y][_goal.x].gparent = nullptr;
 	}
 
 	//장애물, 출발지, 도착지를 제외한 모든 노드 초기화
@@ -64,8 +66,10 @@ public:
 
 	float getGridFdata(int y, int x);
 	Grid* getGrid(int y, int x);
-	void setMapData(int y, int x, float g, float h, float F, Grid* parent);
+	void setMapData(int y, int x, float g, float h, float F, Grid* parent, int g_rgb);
 	//Grid GetGridWithPos(int y, int x);
+	int getRGB(int y, int x);
+	bool IsObstacle(int y, int x);
 
 private:
 
@@ -75,5 +79,5 @@ private:
 
 	Grid map[DUNGEON_LENGTH][DUNGEON_WIDTH];
 
-	bool IsObstacle(int y, int x);
+	
 };

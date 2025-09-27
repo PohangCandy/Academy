@@ -28,7 +28,7 @@ Grid* Dungeon::getGrid(int y, int x)
 	return &map[y][x];
 }
 
-void Dungeon::setMapData(int y, int x, float g, float h, float F, Grid* parent)
+void Dungeon::setMapData(int y, int x, float g, float h, float F, Grid* parent, int g_rgb)
 {
 	map[y][x].x = x;
 	map[y][x].y = y;
@@ -36,6 +36,12 @@ void Dungeon::setMapData(int y, int x, float g, float h, float F, Grid* parent)
 	map[y][x].g = g;
 	map[y][x].f = F;
 	map[y][x].gparent = parent;
+	map[y][x].rgb = g_rgb;
+}
+
+int Dungeon::getRGB(int y, int x)
+{
+	return map[y][x].rgb;
 }
 
 

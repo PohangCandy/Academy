@@ -9,8 +9,8 @@
 
 #define MAX_LOADSTRING 100
 #define GRID_SIZE 32
-#define GRID_WIDTH 100
-#define GRID_HEIGHT 50
+#define GRID_WIDTH 200
+#define GRID_HEIGHT 100
 
 int g_iGridSize = GRID_SIZE;
 
@@ -25,7 +25,22 @@ HBRUSH g_hGoalBrush;
 HBRUSH g_hNodeListBrush;
 HBRUSH g_hAstarAnswerListBrush;
 HBRUSH g_hVisitedBrush;
+
+HBRUSH g_hVisitedBrush1;
+HBRUSH g_hVisitedBrush2;
+HBRUSH g_hVisitedBrush3;
+HBRUSH g_hVisitedBrush4;
+HBRUSH g_hVisitedBrush5;
+HBRUSH g_hVisitedBrush6;
+HBRUSH g_hVisitedBrush7;
+HBRUSH g_hVisitedBrush8;
+HBRUSH g_hVisitedBrush9;
+
 HPEN g_hGridPen;
+HPEN g_hPathLinePen; // 경로 선분용 펜
+
+HFONT g_hDisplayFont = NULL; // 전역 폰트 핸들
+HFONT g_hOldFont = NULL;
 
 bool g_bErase = false;
 bool g_bStartMove = false;
@@ -47,6 +62,18 @@ POINT g_pan{ 0,0 }; // (옵션) 패닝용
 
 int g_originX = 0;
 int g_originY = 0;
+
+void RecreateFont(HWND hWnd)
+{
+    if (g_hDisplayFont) DeleteObject(g_hDisplayFont);
+
+    int fontHeight = -(g_iGridSize / 6);
+    g_hDisplayFont = CreateFont(
+        fontHeight, 0, 0, 0, 0, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial"
+    );
+}
 
 void RenderGrid(HDC hdc)
 {
@@ -94,25 +121,60 @@ void RenderMap(HDC hdc, IMap& map)
             switch (g_Dungeon.CheckTile(iCntH, iCntW))
             {
             case none:
-                hOldBrush = (HBRUSH)SelectObject(hdc, g_hEmptyBrush);
+               SelectObject(hdc, g_hEmptyBrush);
                 break;
             case start:
-                hOldBrush = (HBRUSH)SelectObject(hdc, g_hStartBrush);
+               SelectObject(hdc, g_hStartBrush);
                 break;
             case end:
-                hOldBrush = (HBRUSH)SelectObject(hdc, g_hGoalBrush);
+                SelectObject(hdc, g_hGoalBrush);
                 break;
             case  obs:
-                hOldBrush = (HBRUSH)SelectObject(hdc, g_hTileBrush);
+                SelectObject(hdc, g_hTileBrush);
                 break;
             case nodelist:
-                hOldBrush = (HBRUSH)SelectObject(hdc, g_hNodeListBrush);
+               SelectObject(hdc, g_hNodeListBrush);
                 break;
             case visited:
-                hOldBrush = (HBRUSH)SelectObject(hdc, g_hVisitedBrush);
+            {
+                switch (g_Dungeon.getRGB(iCntH, iCntW) % 10)
+                {
+                case 1:
+                    SelectObject(hdc, g_hVisitedBrush1);
+                    break;
+                case 2:
+                    SelectObject(hdc, g_hVisitedBrush2);
+                    break;
+                case 3:
+                    SelectObject(hdc, g_hVisitedBrush3);
+                    break;
+                case 4:
+                    SelectObject(hdc, g_hVisitedBrush4);
+                    break;
+                case 5:
+                    SelectObject(hdc, g_hVisitedBrush5);
+                    break;
+                case 6:
+                    SelectObject(hdc, g_hVisitedBrush6);
+                    break;
+                case 7:
+                   SelectObject(hdc, g_hVisitedBrush7);
+                    break;
+                case 8:
+                    SelectObject(hdc, g_hVisitedBrush8);
+                    break;
+                case 9:
+                   SelectObject(hdc, g_hVisitedBrush9);
+                    break;
+                default:
+                    SelectObject(hdc, g_hVisitedBrush);
+                    break;
+                }
+            }
+               
                 break;
             case shortest:
-                hOldBrush = (HBRUSH)SelectObject(hdc, g_hAstarAnswerListBrush);
+                SelectObject(hdc, g_hAstarAnswerListBrush);
                 break;
             default:
                 break;
@@ -120,92 +182,37 @@ void RenderMap(HDC hdc, IMap& map)
             Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
 
             Grid* g = g_Dungeon.getGrid(iCntH, iCntW);
-            if (g && g_iGridSize >= 64 && g->type != obs)
+            if (g && g_iGridSize >= 64 && g->type != obs && g->type != none)
             {
-                // GDI 텍스트 설정을 위해 기존 설정을 저장합니다.
+                // 폰트 설정은 WM_CREATE와 WM_MOUSEWHEEL에서 미리 완료되었음.
+                HFONT hOldFont = (HFONT)SelectObject(hdc, g_hDisplayFont);
+
                 COLORREF oldTextColor = GetTextColor(hdc);
                 int oldBkMode = GetBkMode(hdc);
 
-                // ----------------------------------------------------
-                // ⭐️ 폰트 설정 (타일 크기에 맞춰 동적으로 크기 계산) ⭐️
-                // ----------------------------------------------------
-                // 타일 높이의 약 1/3을 폰트 높이로 사용합니다. (세 줄을 출력하기 위해)
-                // 음수 높이는 픽셀 크기를 지정합니다.
-                int fontHeight = -(g_iGridSize / 6);
-
-                // 폰트 생성 및 선택
-                HFONT hFont = CreateFont(
-                    fontHeight,                   // 폰트 높이
-                    0,                            // 폰트 너비 (자동)
-                    0, 0, 0,                      // 기타 설정 (각도, 기울임 등)
-                    FALSE, FALSE, FALSE,          // 밑줄, 취소선 등
-                    DEFAULT_CHARSET,              // 문자셋
-                    OUT_DEFAULT_PRECIS,
-                    CLIP_DEFAULT_PRECIS,
-                    DEFAULT_QUALITY,
-                    DEFAULT_PITCH | FF_SWISS,
-                    L"Arial"                      // 폰트 이름
-                );
-                HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
-
-
-                // 텍스트 배경을 투명하게 설정합니다. (타일 색상 위에 텍스트를 올리기 위해)
                 SetBkMode(hdc, TRANSPARENT);
-                SetTextColor(hdc, RGB(0, 0, 0)); // 텍스트 색상을 검은색으로 설정
+                SetTextColor(hdc, RGB(0, 0, 0));
 
-                // 버퍼에 g, h, f 값을 문자열로 만듭니다.
                 char buffer[64];
 
-                // 1. g 값 출력 (타일 좌상단) - 소수점 3자리
+                // 1. g 값 출력 (타일 좌상단)
                 sprintf_s(buffer, "g: %.1f", g->g);
                 TextOutA(hdc, iX + 2, iY + 2, buffer, strlen(buffer));
 
-                // 2. h 값 출력 (타일 중앙) - 소수점 3자리
+                // 2. h 값 출력 (타일 중앙)
                 sprintf_s(buffer, "h: %.1f", g->h);
                 TextOutA(hdc, iX + 2, iY + g_iGridSize / 3 + 2, buffer, strlen(buffer));
 
-                // 3. f 값 출력 (타일 중앙 하단) - 소수점 3자리
+                // 3. f 값 출력 (타일 중앙 하단)
                 sprintf_s(buffer, "f: %.1f", g->f);
                 TextOutA(hdc, iX + 2, iY + 2 * g_iGridSize / 3 + 2, buffer, strlen(buffer));
 
 
-                // ----------------------------------------------------
-                 // ⭐️ 폰트 복구 및 삭제 ⭐️
-                 // ----------------------------------------------------
                 SelectObject(hdc, hOldFont);
-                DeleteObject(hFont);
 
-                // GDI 텍스트 설정 복구
                 SetBkMode(hdc, oldBkMode);
                 SetTextColor(hdc, oldTextColor);
             }
-
-            //if (g && g->gparent &&( g->type == shortest || g->type == end || g->type == nodelist))
-            //{
-            //    // 1. 현재 타일의 중심 좌표 계산 (불필요한 오프셋 제거)
-            //    int iCenterX = iX + g_iGridSize / 2;
-            //    int iCenterY = iY + g_iGridSize / 2;
-
-            //    // 2. 부모 타일의 인덱스
-            //    int iParentX = g->gparent->x;
-            //    int iParentY = g->gparent->y;
-
-            //    // 3. 부모 타일의 월드 좌표 중심점
-            //    int iParentCenterX = iParentX * g_iGridSize + g_iGridSize / 2;
-            //    int iParentCenterY = iParentY * g_iGridSize + g_iGridSize / 2;
-
-            //    // 4. 선 그리기
-            //    HPEN hPen = CreatePen(PS_SOLID, 2, RGB(0, 0, 255)); // 파란색, 두께 2
-            //    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
-
-            //    // 시작점을 정확한 중심 좌표로 설정
-            //    MoveToEx(hdc, iCenterX, iCenterY, NULL);        // 현재 노드의 중심
-            //    LineTo(hdc, iParentCenterX, iParentCenterY);    // 부모 노드의 중심까지 선분 연결
-
-            //    // 5. GDI 자원 복구
-            //    SelectObject(hdc, hOldPen);
-            //    DeleteObject(hPen);
-            //}
         }
     }
     SelectObject(hdc, hOldBrush);
@@ -225,7 +232,7 @@ void RenderLine(HDC hdc, IMap& map)
 
             Grid* g = g_Dungeon.getGrid(iCntH, iCntW);
 
-            if (g && g->gparent && (g->type == shortest || g->type == end))
+            if (g && g->gparent && (g->type == shortest || g->type == end || g->type == nodelist))
             {
                 // 1. 현재 타일의 중심 좌표 계산 (불필요한 오프셋 제거)
                 int iCenterX = iX + g_iGridSize / 2;
@@ -240,81 +247,62 @@ void RenderLine(HDC hdc, IMap& map)
                 int iParentCenterY = iParentY * g_iGridSize + g_iGridSize / 2;
 
                 // 4. 선 그리기
-                HPEN hPen = CreatePen(PS_SOLID, 2, RGB(0, 0, 255)); // 파란색, 두께 2
-                HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
-
+                HPEN hOldPen = (HPEN)SelectObject(hdc, g_hPathLinePen);
                 // 시작점을 정확한 중심 좌표로 설정
                 MoveToEx(hdc, iCenterX, iCenterY, NULL);        // 현재 노드의 중심
-                LineTo(hdc, iParentCenterX, iParentCenterY);    // 부모 노드의 중심까지 선분 연결
+                if (g->type == nodelist)
+                {
+                    // 1. 방향 벡터 (부모 -> 자식의 반대 방향, 즉 자식 -> 부모 방향)
+                       // dx, dy는 -1, 0, 1 중 하나가 됩니다.
+                    int dx = g->gparent->x - g->x;
+                    int dy = g->gparent->y - g->y;
+                    if (dx < 0) dx = -1;
+                    else if (dx == 0) dx = 0;
+                    else dx = 1;
+                    if (dy < 0) dy = -1;
+                    else if (dy == 0) dy = 0;
+                    else dy = 1;
+
+                    // 2. 고정 길이 설정
+                    const float HALF_GRID_SIZE = (float)g_iGridSize / 2.0f;
+                    // 대각선 거리 비율: 1/sqrt(2) 또는 0.707. (타일 중심에서 모서리 방향으로의 길이)
+                    const float DIAG_RATIO = 0.707f;
+
+                    // 3. 선분 끝점 좌표 초기화
+                    float fEndShortX = (float)iCenterX;
+                    float fEndShortY = (float)iCenterY;
+
+                    // 4. 방향에 따른 끝점 계산
+                    if (dx != 0 && dy != 0) // 대각선 방향 (4방향)
+                    {
+                        // 대각선 이동 (dx, dy 모두 0이 아님)
+                        fEndShortX += (float)dx * HALF_GRID_SIZE * DIAG_RATIO;
+                        fEndShortY += (float)dy * HALF_GRID_SIZE * DIAG_RATIO;
+                    }
+                    else // 직교 방향 (상하좌우 4방향)
+                    {
+                        // 상하좌우 이동 (dx 또는 dy 중 하나만 0이 아님)
+                        fEndShortX += (float)dx * HALF_GRID_SIZE;
+                        fEndShortY += (float)dy * HALF_GRID_SIZE;
+                    }
+
+                    // 5. 선 그리기 (float 좌표를 int로 변환하여 사용)
+                    LineTo(hdc, (int)fEndShortX, (int)fEndShortY);
+                }
+                else
+                {
+                    LineTo(hdc, iParentCenterX, iParentCenterY);    // 부모 노드의 중심까지 선분 연결
+                }
 
                 // 5. GDI 자원 복구
                 SelectObject(hdc, hOldPen);
-                DeleteObject(hPen);
             }
         }
     }
     g_bFindPath = false;
 }
 
-//void RenderObstacle(HDC hdc)
-//{
-//    int iX = 0;
-//    int iY = 0;
-//    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, g_hTileBrush);
-//    SelectObject(hdc, GetStockObject(BLACK_BRUSH));
-//    // 사각형 테두리 부분을 보이게 하기위해 BLACK_BRUSH를 지정한다.
-//    // CreatPen으로 BLACK_BRUSH을 생성해도 되지만, 
-//    //GerStockObject를 사용해서 시스템에 미리 만들어진 고정 GDI 객체를 사용한다.
-//    // GetStock은 시스템의 고정적인 범용 GDI라서 삭제할 필요가 없다.
-//    //시스템 전역적인 GDI Object를 얻어서 사용한다는 개념
-//
-//    for (int iCntH  = 0; iCntH < GRID_HEIGHT;iCntH++)
-//    {
-//        for (int iCntW = 0;iCntW < GRID_WIDTH;iCntW++)
-//        {
-//            if (g_Dungeon.CheckTile(iCntH,iCntW) == obs)
-//            {
-//                iX = iCntW * g_iGridSize;
-//                iY = iCntH * g_iGridSize;
-//                //테두리 크기가 있으므로 +2 한다.
-//                Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
-//            }
-//        }
-//    }
-//    SelectObject(hdc, hOldBrush);
-//}
 
-//void RenderStartGoal(HDC hdc)
-//{
-//    if (g_Dungeon._start.x != -1) {
-//        SelectObject(hdc, g_hStartBrush);
-//        //Rectangle(hdc, g_AStar._start.x * GRID_SIZE, g_AStar._start.y * GRID_SIZE,
-//        //    (g_AStar._start.x + 1) * GRID_SIZE, (g_AStar._start.y + 1) * GRID_SIZE);
-//        int iX = g_Dungeon._start.x * g_iGridSize;
-//        int iY = g_Dungeon._start.y * g_iGridSize;
-//        Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
-//    }
-//    if (g_Dungeon._goal.x != -1) {
-//        SelectObject(hdc, g_hGoalBrush);
-//        int iX = g_Dungeon._goal.x * g_iGridSize;
-//        int iY = g_Dungeon._goal.y* g_iGridSize;
-//        Rectangle(hdc, iX, iY, iX + g_iGridSize + 1, iY + g_iGridSize + 1);
-//    }
-//}
-
-//최단거리
-//void RenderAStarList(HDC hdc)
-//{
-//    for (auto node : g_AStar._shortestRoutelist)
-//    {
-//        if (node->pos.x != -1)
-//        {
-//            SelectObject(hdc, g_hAstarAnswerListBrush);
-//            Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
-//                (node->pos.x + 1) * g_iGridSize, (node->pos.y + 1) * g_iGridSize);
-//        }
-//    }
-//}
 //-----------------------------
 // // 1. 메모리 DC 크기 계산을 위한 헬퍼 함수
 void RecreateMemDC(HWND hWnd)
@@ -559,7 +547,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         g_bGoalMove = false;
         break;
     case WM_RBUTTONDOWN:
-        g_AStar.findPath();
+        g_AStar.findPathwithRender();
         g_bFindPath = true;
         InvalidateRect(hWnd, NULL, false);
         break;
@@ -574,6 +562,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             //int iTileX, iTileY;
             //ScreenToTile(xPos, yPos, iTileX, iTileY);
+
+            g_AStar.bfirst = true;
 
             if (g_bStartMove)
             {
@@ -630,15 +620,30 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_CREATE:
     {
         g_hGridPen = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
+        g_hPathLinePen = CreatePen(PS_SOLID, 2, RGB(0, 0, 255)); // 파란색, 두께 2
+
         g_hTileBrush = CreateSolidBrush(RGB(100, 100, 100));
         g_hStartBrush = CreateSolidBrush(RGB(0, 200, 0));
         g_hGoalBrush = CreateSolidBrush(RGB(200, 0, 0));
         g_hNodeListBrush = CreateSolidBrush(RGB(100, 100, 200));
-        g_hVisitedBrush = CreateSolidBrush(RGB(2000, 2000, 2000));
-        g_hEmptyBrush = CreateSolidBrush(RGB(500, 500, 500));
+
+        g_hVisitedBrush = CreateSolidBrush(RGB(180, 210, 250)); 
+        g_hVisitedBrush1 = CreateSolidBrush(RGB(250, 210, 170)); 
+        g_hVisitedBrush2 = CreateSolidBrush(RGB(190, 250, 180));
+        g_hVisitedBrush3 = CreateSolidBrush(RGB(250, 190, 200));
+        g_hVisitedBrush4 = CreateSolidBrush(RGB(175, 240, 230));
+        g_hVisitedBrush5 = CreateSolidBrush(RGB(250, 250, 180));
+        g_hVisitedBrush6 = CreateSolidBrush(RGB(220, 210, 240));
+        g_hVisitedBrush7 = CreateSolidBrush(RGB(250, 230, 190)); 
+        g_hVisitedBrush8 = CreateSolidBrush(RGB(200, 220, 245));
+        g_hVisitedBrush9 = CreateSolidBrush(RGB(250, 200, 180)); 
+
+        g_hEmptyBrush = CreateSolidBrush(RGB(255, 255, 255));
 
         //정답인 노드 덧칠
         g_hAstarAnswerListBrush = CreateSolidBrush(RGB(200, 200, 0));
+
+        RecreateFont(hWnd);
 
         //----------------------------------------------------
         //메모리DC 생성 코드
@@ -734,30 +739,67 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
              //g_GRID_HEIGHT /= 2;
          }
 
-         if (g_iGridSize < GRID_SIZE)   g_iGridSize = GRID_SIZE;   // 최소 크기 제한
+         if (g_iGridSize < GRID_SIZE / 2)   g_iGridSize = GRID_SIZE/2;   // 최소 크기 제한
          if (g_iGridSize > 128) g_iGridSize = 128; // 최대 크기 제한
 
          //InvalidateRect(hWnd, NULL, TRUE);
          //int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+         RecreateFont(hWnd);
          RecreateMemDC(hWnd);
          InvalidateRect(hWnd, NULL, TRUE);
      }
      break;
      case WM_KEYDOWN:
+        {
+         bool path = true;
          switch (wParam)
          {
+         case VK_SPACE:
+         {
+             path = false;
+             g_AStar.findPath();
+             g_bFindPath = true;
+             break;
+         }
          case VK_LEFT:  g_originX -= g_iGridSize; break;  // 화면 오른쪽으로 이동
          case VK_RIGHT: g_originX += g_iGridSize; break;  // 화면 왼쪽으로 이동
          case VK_UP:    g_originY -= g_iGridSize; break;  // 화면 아래로 이동
          case VK_DOWN:   g_originY += g_iGridSize; break;  // 화면 위로 이동
          }
-         InvalidateRect(hWnd, NULL, TRUE);
+         InvalidateRect(hWnd, NULL, path);
+        }
+        
          break;
     case WM_DESTROY:
         SelectObject(g_hMemDC, g_hMemDCBitmap_old);
         DeleteObject(g_hMemDCBitmap);
         //DeleteObject(g_hMemDC);
         DeleteDC(g_hMemDC);
+
+        DeleteObject(g_hGridPen);
+        DeleteObject(g_hPathLinePen);
+
+        DeleteObject(g_hTileBrush);
+        DeleteObject(g_hStartBrush);
+        DeleteObject(g_hGoalBrush);
+        DeleteObject(g_hNodeListBrush);
+
+        DeleteObject(g_hVisitedBrush);
+        DeleteObject(g_hVisitedBrush1);
+        DeleteObject(g_hVisitedBrush2);
+        DeleteObject(g_hVisitedBrush3);
+        DeleteObject(g_hVisitedBrush4);
+        DeleteObject(g_hVisitedBrush5);
+        DeleteObject(g_hVisitedBrush6);
+        DeleteObject(g_hVisitedBrush7);
+        DeleteObject(g_hVisitedBrush8);
+        DeleteObject(g_hVisitedBrush9);
+
+        DeleteObject(g_hEmptyBrush);
+        DeleteObject(g_hAstarAnswerListBrush);
+
+        DeleteObject(g_hDisplayFont);
+
         PostQuitMessage(0);
         break;
     default:

@@ -54,6 +54,7 @@ void JPS::makeInitList()
 
 void JPS::updateNode()
 {
+	bfirst = true;
 	_startGrid = _map->getStart();
 	_goalGrid = _map->getGoal();
 }
@@ -78,25 +79,27 @@ bool JPS::checkGridIsInMap(Grid pos)
 	return true;
 }
 
-bool JPS::findPath()
+bool JPS::findPathwithRender()
 {
-	//메모리 누수 테스트용
-	//Node* n = new Node[100];
-
-	makeInitList();
-
-	_map->InitMap();
-
-	//가장 처음 시작 노드를 시작지점으로 잡아준다.
-	//_closelist.push_back(_startNode);
-
-	_map->ChangeTile(_startGrid->y, _startGrid->x, nodelist);
-	int sH = findHbyGrid(_startGrid->y, _startGrid->x);
-	_map->setMapData(_startGrid->y, _startGrid->x, 0, sH, 0, nullptr);
-	insertListEightDirection();
-
-	while (!_openlist.empty())
+	if (bfirst)
 	{
+		g_rgb = 0;
+		makeInitList();
+
+		_map->InitMap();
+
+		//가장 처음 시작 노드를 시작지점으로 잡아준다.
+		//_closelist.push_back(_startNode);
+
+		_map->ChangeTile(_startGrid->y, _startGrid->x, nodelist);
+		int sH = findHbyGrid(_startGrid->y, _startGrid->x);
+		_map->setMapData(_startGrid->y, _startGrid->x, 0, sH, 0, nullptr,0);
+		insertListEightDirection();
+		bfirst = false;
+	}
+	else if (!_openlist.empty())
+	{
+		g_rgb++;
 		auto bestIt = _openlist.begin();
 		Grid* top = _map->getGrid((*bestIt)->y, (*bestIt)->x);
 
@@ -136,6 +139,88 @@ bool JPS::findPath()
 					//잡있다ㅣ 요놈
 				}
 			}
+			g_rgb = 0;
+			bfirst = true;
+			return true;
+		}
+		else
+		{
+			findNodeWithDirection(*bestIt);
+		}
+
+		//해제가 일어나야 하지 않나?
+		_openlist.erase(bestIt);
+		//delete* bestIt;
+		//(*bestIt) = nullptr;
+	}
+	else
+	{
+		g_rgb = 0;
+		bfirst = true;
+	}
+	return false;
+}
+
+bool JPS::findPath()
+{
+	//메모리 누수 테스트용
+	//Node* n = new Node[100];
+	g_rgb = 0;
+	makeInitList();
+
+	_map->InitMap();
+
+	//가장 처음 시작 노드를 시작지점으로 잡아준다.
+	//_closelist.push_back(_startNode);
+
+	_map->ChangeTile(_startGrid->y, _startGrid->x, nodelist);
+	int sH = findHbyGrid(_startGrid->y, _startGrid->x);
+	_map->setMapData(_startGrid->y, _startGrid->x, 0, sH, 0, nullptr,0);
+	insertListEightDirection();
+
+	while (!_openlist.empty())
+	{
+		g_rgb++;
+		auto bestIt = _openlist.begin();
+		Grid* top = _map->getGrid((*bestIt)->y, (*bestIt)->x);
+
+		if (top == nullptr)
+		{
+			cout << "w";
+			//잡있다ㅣ 요놈
+		}
+		//그리드 속성이 더 정확해보이는데?
+		//그리드의 부모로 찾아준다.
+		//그리고 리스트에서 뽑아낸 친구는 바로 제거하자.
+		if (top == _goalGrid)
+		{
+			//_openlist.erase(bestIt);
+			//Node copy = *top;
+			while (!(top == _startGrid))
+			{
+				if (top->gparent == nullptr)
+				{
+					cout << "w";
+					//잡있다ㅣ 요놈
+				}
+				if (top->gparent == _startGrid)
+				{
+
+				}
+				else
+				{
+					//top->parent->pos.type = shortest;
+					//_shortestRoutelist.push_back(top->parent);
+					_map->ChangeTile(top->gparent->y, top->gparent->x, shortest);
+				}
+				top = top->gparent;
+				if (top == nullptr)
+				{
+					cout << "w";
+					//잡있다ㅣ 요놈
+				}
+			}
+			g_rgb = 0;
 			return true;
 		}
 		else
@@ -291,7 +376,7 @@ bool JPS::ExploreDirection(Grid* g, int dx, int dy)
 		}
 
 		_map->ChangeTile(newY, newX, visited);
-		_map->setMapData(newY, newX, newG, newH, newF, g);
+		_map->setMapData(newY, newX, newG, newH, newF,g, g_rgb);
 
 		//대각선은 여기서 직선을 한번 더 탐사해야 함.
 		if (dIsDiagonal)
