@@ -99,7 +99,7 @@ public:
 	virtual void InitMap() = 0;
 
 	virtual float getGridFdata(int y, int x) = 0;
-	virtual void setMapData(int x, int y, float g, float h, float F, Grid* parent) = 0;
+	virtual void setMapData(int y, int x, float g, float h, float F, Grid* parent) = 0;
 	virtual Grid* getGrid(int y, int x) = 0;
 
 	virtual ~IMap() = default;
