@@ -28,7 +28,7 @@ void AStar::insertListEightDirection(Node* sn)
 	{
 		int nx = sn->pos.x + dx[i];
 		int ny = sn->pos.y + dy[i];
-		if (nx < 0 || ny < 0 || nx >= ASTAR_WIDTH || ny >= ASTAR_Length) continue;
+		if (nx < 0 || ny < 0 || nx >= _map->getwidth() || ny >= _map->getheight()) continue;
 		//여기서 장애물이 있는 지역은 못가게 해야하지 않을까?
 		//맵 인스턴스를 받아서 맵이 가진 장애물 체크 로직을 불러오게 하자.
 		if (_map->IsObstacle(ny, nx)) continue;

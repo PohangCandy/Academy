@@ -3,8 +3,8 @@
 #include <list>
 #include <set>
 #include "IMap.h"
-#define ASTAR_WIDTH 100
-#define ASTAR_Length 100
+//#define ASTAR_WIDTH 100
+//#define ASTAR_Length 100
 
 //int map[length][width];
 
@@ -56,7 +56,7 @@ public:
 	//방문해야 할 리스트
 //우선 순위 큐로 했더니 openlist에 이미 방문한 노드가 있을 경우 탐색을 할 수 없음.
 //1. 안정성을 위해 먼저 set으로 
-	std::set <Node*, CompareNode>_openlist;
+	std::multiset <Node*, CompareNode>_openlist;
 	std::list <Node*>_closelist;
 	std::list <Node*>_shortestRoutelist;
 

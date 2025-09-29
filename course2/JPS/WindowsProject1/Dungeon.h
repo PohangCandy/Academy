@@ -16,9 +16,23 @@ public:
 		InitMap();
 	}
 
-	ETileType CheckTile(int y, int x);
+	ETileType CheckTile(int y, int x)
+	{
+		if (y < 0 || x < 0 || y >= _height || x >= _width) return out;
 
-	void ChangeTile(int y, int x, ETileType v);
+		return map[y][x].type;
+	}
+
+	void ChangeTile(int y, int x, ETileType v)
+	{
+		if (v == none || v == obs)
+		{
+			map[y][x].h = 0;
+			map[y][x].g = 0;
+			map[y][x].f = 0;
+		}
+		map[y][x].type = v;
+	}
 
 	int getwidth() { return  _width; }
 	int getheight() { return  _height; }
@@ -64,12 +78,35 @@ public:
 
 	}
 
-	float getGridFdata(int y, int x);
-	Grid* getGrid(int y, int x);
-	void setMapData(int y, int x, float g, float h, float F, Grid* parent, int g_rgb);
+	float getGridFdata(int y, int x)
+	{
+		return map[y][x].f;
+	}
+
+	Grid* getGrid(int y, int x)
+	{
+		return &map[y][x];
+	}
+
+	void setMapData(int y, int x, float g, float h, float F, Grid* parent, int g_rgb)
+	{
+		map[y][x].x = x;
+		map[y][x].y = y;
+		map[y][x].h = h;
+		map[y][x].g = g;
+		map[y][x].f = F;
+		map[y][x].gparent = parent;
+		map[y][x].rgb = g_rgb;
+	}
 	//Grid GetGridWithPos(int y, int x);
 	int getRGB(int y, int x);
-	bool IsObstacle(int y, int x);
+	bool IsObstacle(int y, int x)
+	{
+		if (CheckTile(y, x) == obs || CheckTile(y, x) == out) return true;
+
+		else
+			return false;
+	}
 
 private:
 

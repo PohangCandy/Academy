@@ -299,9 +299,10 @@ void RBTree::RemoveData(stNODE** pCurNode, int d)
 		x = y->pRight; // y는 왼쪽 자식이 없으므로 x는 항상 y의 오른쪽 자식(Nil 포함)
 
 		// y가 z의 바로 아래 자식인 경우 (x의 부모는 y 그대로 유지, x의 부모 포인터만 정리)
-		if (y->pParent == z) {
-			// Nil 노드의 pParent는 이미 설정되어 있으나, 확실히 정리
-			if (x != &Nil) x->pParent = y;
+		if (y->pParent != z) {
+			RBTransplant(y, y->pRight); // y의 원래 자리를 x로 대체
+			y->pRight = z->pRight;
+			y->pRight->pParent = y;
 		}
 		else {
 			// y가 z의 오른쪽 아래 깊은 곳에 있을 경우: y를 x로 교체
@@ -315,6 +316,16 @@ void RBTree::RemoveData(stNODE** pCurNode, int d)
 		y->pLeft = z->pLeft;
 		y->pLeft->pParent = y;
 		y->Color = z->Color; // y는 z의 원래 색상을 물려받음
+
+
+		// RBTransplant(z, y)로 인해 x->pParent가 z의 부모를 물려받을 수 있으므로, y로 강제 지정.
+		if (x != &Nil && x->pParent != y) {
+			x->pParent = y;
+		}
+		else if (x == &Nil) {
+			// Nil 노드인 경우에도 Nil.pParent가 y를 가리키도록 해야 밸런싱이 시작됨.
+			Nil.pParent = y;
+		}
 	}
 
 	// 3. 메모리 해제
@@ -398,10 +409,10 @@ void RBTree::MakeBalacingAfterRemove(stNODE** pX)
 			else {
 				// Case 3: 형제 w의 왼쪽 자식이 BLACK인 경우 (Zig-Zag)
 				if (w->pLeft->Color == BLACK) {
-					ChangeColor(w->pRight, BLACK);
+					//ChangeColor(w->pRight, BLACK);
 					ChangeColor(w, RED);
 					makeLeftRotate(w);
-					w = parent->pLeft; // 새로운 형제 지정
+					w = parent->pLeft; // // 새로운 형제 지정
 				}
 				// Case 4: 형제 w의 왼쪽 자식이 RED인 경우 (Zig-Zig)
 				w->Color = parent->Color;
@@ -430,9 +441,8 @@ void RBTree::RBTransplant(stNODE* u, stNODE* v)
 	else {
 		u->pParent->pRight = v;
 	}
-	if (v != &Nil) {
-		v->pParent = u->pParent;
-	}
+	v->pParent = u->pParent;
+
 }
 
 stNODE* RBTree::TreeMinimum(stNODE* node)

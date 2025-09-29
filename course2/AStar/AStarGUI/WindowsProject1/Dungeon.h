@@ -10,9 +10,12 @@ public:
 	//가로,세로를 받아서 초기화
 	Dungeon(int y, int x) {
 
-		for (int i = 0; i < y; i++)
+		_width = x;
+		_height = y;
+
+		for (int i = 0; i < _height; i++)
 		{
-			for (int j = 0; j < x; j++)
+			for (int j = 0; j < _width; j++)
 			{
 				map[i][j] = 0;
 			}
@@ -23,7 +26,15 @@ public:
 
 	void ChangeTile(int y, int x, int v);
 
+	int getwidth() { return  _width; }
+	int getheight() { return  _height; }
+
 private:
+
+	int _width = 0;
+
+	int _height = 0;
+
 	int map[DUNGEON_LENGTH][DUNGEON_WIDTH] = {0,};
 
 	bool IsObstacle(int y, int x);
