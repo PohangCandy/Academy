@@ -121,7 +121,7 @@ void RenderAStarList(HDC hdc)
 
     for (auto node : g_AStar._openlist)
     {
-        if (node->pos.x != -1)
+        if (node->pos.y < GRID_HEIGHT)
         {
             SelectObject(hdc, g_hAstarListBrush);
             Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,
@@ -131,7 +131,7 @@ void RenderAStarList(HDC hdc)
 
     for (auto node : g_AStar._closelist)
     {
-        if (node->pos.x != -1)
+        if (node->pos.y < GRID_HEIGHT)
         {
             SelectObject(hdc, g_hAstarListBrush);
             Rectangle(hdc, node->pos.x * g_iGridSize, node->pos.y * g_iGridSize,

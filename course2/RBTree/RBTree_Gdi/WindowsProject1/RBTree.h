@@ -22,9 +22,9 @@ class RBTree {
 public:
 	RBTree() {
 		Nil.Color = BLACK;
-		Nil.pParent = NULL;
-		Nil.pLeft = NULL;
-		Nil.pRight = NULL;
+		Nil.pParent = &Nil;
+		Nil.pLeft = &Nil;
+		Nil.pRight = &Nil;
 
 		root = &Nil;
 	}
