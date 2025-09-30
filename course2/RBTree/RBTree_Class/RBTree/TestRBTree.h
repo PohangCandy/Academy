@@ -55,6 +55,9 @@ public:
 
 	void printfVData(std::vector<int> v);
 
+	void makeRandomCase();
+	const std::vector<int>& getVData() const { return v_data; } // 데이터 목록 반환
+	size_t getVDataSize() const { return v_data.size(); }      // 데이터 크기 반환
 
 private:
 	//삽입 삭제 테스트 하려면 리스트가 나을것으로 보임.

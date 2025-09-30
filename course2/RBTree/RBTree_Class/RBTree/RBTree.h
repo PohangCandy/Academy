@@ -20,16 +20,15 @@ struct stNODE
 
 class RBTree {
 public:
-	RBTree() {
+	RBTree() :root(&Nil), iSize(0) {
 		Nil.Color = BLACK;
-		Nil.pParent = NULL;
-		Nil.pLeft = NULL;
-		Nil.pRight = NULL;
-
-		root = &Nil;
+		Nil.pParent = &Nil;
+		Nil.pLeft = &Nil;
+		Nil.pRight = &Nil;
 	}
+
 	~RBTree() {
-		destroyTree(&root);
+		clear();
 	}
 
 	void Insert(int data) {
@@ -38,14 +37,32 @@ public:
 
 	void Remove(int data) {
 		RemoveData(&root, data);
+		makeRootandNilBecomeBlack();
 	}
 
 	void InOrder(std::vector<int>& vout) {
 		inorderTraversal(vout, root);
 	}
 
-private:
+	stNODE* getRoot(){ return root; }
+	stNODE* getNill(){ return &Nil; }
+
 	stNODE* root;
+
+	bool isRBTreeValid();
+
+	size_t getSize() const { return iSize; } // 현재 트리의 노드 개수를 반환
+
+	void clear();
+
+private:
+
+	void destroyTree(stNODE** curNode);
+
+	size_t iSize;
+
+	bool checkBSTProperty(stNODE* node, int minVal, int maxVal);
+	int checkBlackHeight(stNODE* node);
 
 	stNODE Nil;	// 끝 리프노드. 무조건 블랙 / 데이터 무 / NULL 의 같은 용도.
 
@@ -63,9 +80,11 @@ private:
 
 	void MakeBalacingAfterRemove(stNODE** curNode);
 
-	void inorderTraversal(std::vector<int>& vout, stNODE* curNode);
+	void RBTransplant(stNODE* u, stNODE* v);
 
-	void destroyTree(stNODE** curNode);
+	stNODE* TreeMinimum(stNODE* node);
+
+	void inorderTraversal(std::vector<int>& vout, stNODE* curNode);
 
 	void makeRootandNilBecomeBlack();
 };

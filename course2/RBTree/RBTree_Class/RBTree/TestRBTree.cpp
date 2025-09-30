@@ -94,20 +94,6 @@ void TestTree::makePerfectBinaryTree()
 	}
 }
 
-void TestTree::makeListWithRand(int s, vector<int>& v)
-{
-	v.clear();
-	while (s > 0)
-	{
-		int randnum = rand() % 100;
-		if (find(v.begin(), v.end(), randnum) == v.end())
-		{
-			v.push_back(randnum);
-			s--;
-		}
-	}
-}
-
 void TestTree::InsertFullData(RBTree* rbt)
 {
 	for (auto& a : v_data)
@@ -164,5 +150,68 @@ void TestTree::printfVData(vector<int> v)
 	for (auto& a : v)
 	{
 		cout << a << " ";
+	}
+}
+
+// TestRBTree.cpp
+
+void TestTree::makeRandomCase()
+{
+	// 1. 데이터 크기 랜덤 설정 (예: 50~150개)
+	_size = 50 + (rand() % 101); // 50부터 150까지 랜덤 크기
+
+	// 2. 어떤 유형의 데이터를 만들지 랜덤으로 선택
+	int caseType = rand() % 3; // 0: UnBalancing, 1: Perfect, 2: Rand
+
+	// v_data를 초기화합니다.
+	v_data.clear();
+
+	// makeListWithRand의 중복 방지 연산 과부하를 막기 위해 범위 늘림
+	// makeListWithRand(int s, vector<int>& v) 함수를 수정해야 함.
+
+	switch (caseType)
+	{
+	case 0:
+	{
+		cout << "--- Case 0: UnBalancing Test (" << _size << " nodes) ---\n";
+		makeUnBalancing(); // UnBalancing 케이스는 내부적으로 makeListWithRand 호출
+		break;
+	}
+	case 1:
+	{
+		// PerfectBinaryTree는 자체적으로 size를 2^n - 1로 재설정하므로,
+		// makePerfectBinaryTree를 호출하기 전에 _size는 무시됨
+		cout << "--- Case 1: Perfect Binary Tree Test (2^n-1 nodes) ---\n";
+		makePerfectBinaryTree();
+		// 실제 삽입할 노드의 개수를 _size에 다시 저장
+		_size = v_data.size();
+		break;
+	}
+	case 2:
+	default:
+	{
+		cout << "--- Case 2: Pure Random Test (" << _size << " nodes) ---\n";
+		// 3. 랜덤 데이터 생성 및 삽입 순서로 사용
+		makeListWithRand(_size, v_data);
+		break;
+	}
+	}
+}
+
+void TestTree::makeListWithRand(int s, vector<int>& v)
+{
+	v.clear();
+	// 0부터 10000 범위의 난수를 사용하여 중복 발생 확률을 낮춤
+	const int MAX_RAND = 10000;
+	while (s > 0)
+	{
+		int randnum = rand() % MAX_RAND;
+		// find 대신 std::set을 사용하여 중복 확인 효율을 높일 수 있지만, 
+		// 현재는 주어진 코드를 최소한으로 수정합니다.
+		if (find(v.begin(), v.end(), randnum) == v.end())
+		{
+			v.push_back(randnum);
+			s--;
+		}
 	}
 }
