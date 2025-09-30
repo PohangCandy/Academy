@@ -1,6 +1,11 @@
 ﻿ //WindowsProject1.cpp : 애플리케이션에 대한 진입점을 정의합니다.
 
 
+//누수 확인
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+
 #include "framework.h"
 #include "WindowsProject1.h"
 #include "windowsx.h"
@@ -20,9 +25,9 @@
 int g_iGridSize = GRID_SIZE;
 
 // 시각화 드로잉 상수 (g_iGridSize는 노드 크기 결정에만 사용)
-const int NODE_RADIUS = 30; // 고정된 노드 반지름 (또는 g_iGridSize/2)
-const int V_SPACE = 100;     // 수직 간격
-const int H_SPACE_INITIAL = 1000; // 루트 레벨의 초기 수평 간격 (트리의 너비 결정)
+const int NODE_RADIUS = 20; // 고정된 노드 반지름 (또는 g_iGridSize/2)
+const int V_SPACE = 60;     // 수직 간격
+const int H_SPACE_INITIAL = 500; // 루트 레벨의 초기 수평 간격 (트리의 너비 결정)
 
 RBTree g_rbt;
 
@@ -56,7 +61,7 @@ void RecreateFont(HWND hWnd)
 {
     if (g_hDisplayFont) DeleteObject(g_hDisplayFont);
 
-    int fontHeight = -20;
+    int fontHeight = -14;
     g_hDisplayFont = CreateFont(
         fontHeight, 0, 0, 0, 0, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -252,6 +257,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_ LPWSTR    lpCmdLine,
     _In_ int       nCmdShow)
 {
+    // 1. 메모리 누수 감지 플래그 설정 (동일)
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+
+    // 2. 수정: 모든 보고서 모드를 디버그 출력으로 강제 설정
+
+    // ERROR와 ASSERT는 디버그 창으로 바로 보냅니다.
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_DEBUG);
+
+    // 경고(WARN) 메시지(여기에 누수 보고서가 포함됨)도 디버그 창으로 보냅니다.
+    _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
+
+    _CrtSetBreakAlloc(224); // 여기에 누수 보고서의 번호(224)를 넣어줍니다.
 
     //안씀, 쓰는척
     //UNREFERENCED_PARAMETER(hPrevInstance);
@@ -285,6 +303,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             DispatchMessage(&msg);
         }
     }
+    g_rbt.clear();
+    _CrtDumpMemoryLeaks(); // 이 함수는 누수 감지 플래그가 설정되어 있다면 바로 출력합니다.
 
     return (int)msg.wParam;
 }
@@ -503,12 +523,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
      case WM_KEYDOWN:
         {
          bool path = true;
+
          switch (wParam)
          {
          case VK_SPACE:
          {
              path = false;
-
+             g_rbt.clear();
              break;
          }
          case VK_LEFT:  g_originX -= g_iGridSize; break;  // 화면 오른쪽으로 이동

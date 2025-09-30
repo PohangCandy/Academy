@@ -4,7 +4,6 @@ using namespace std;
 
 void RBTree::InsertData(stNODE** curNode, int d, stNODE* parent)
 {
-
 	//현재 위치가 비어있다면 대입
 	if (*curNode == &Nil)
 	{
@@ -16,6 +15,7 @@ void RBTree::InsertData(stNODE** curNode, int d, stNODE* parent)
 		(*curNode)->Color = RED;
 		//데이터 삽입에 성공하면 삽입 후 
 		// 삽입된 노드를 중심으로 밸런싱이 일어난다.
+		this->iSize++;
 		MakeBalacingAfterInsert(curNode);
 		//밸런싱 후 루트노드와 닐 노드는 항상 Black으로 만들어줘야 함.
 		makeRootandNilBecomeBlack();
@@ -298,35 +298,41 @@ void RBTree::RemoveData(stNODE** pCurNode, int d)
 		y_original_color = y->Color;
 		x = y->pRight; // y는 왼쪽 자식이 없으므로 x는 항상 y의 오른쪽 자식(Nil 포함)
 
-		// y가 z의 바로 아래 자식인 경우 (x의 부모는 y 그대로 유지, x의 부모 포인터만 정리)
-		if (y->pParent != z) {
-			RBTransplant(y, y->pRight); // y의 원래 자리를 x로 대체
-			y->pRight = z->pRight;
-			y->pRight->pParent = y;
-		}
-		else {
-			// y가 z의 오른쪽 아래 깊은 곳에 있을 경우: y를 x로 교체
+		// y의 원래 부모 저장 (y가 z의 바로 아래 자식인지 확인)
+		stNODE* y_parent = y->pParent;
+
+		// 1. y가 z의 바로 아래 자식이 아닐 경우에만 y의 원래 자리를 x로 교체 (RBTransplant)
+		if (y_parent != z) {
 			RBTransplant(y, y->pRight);
 			y->pRight = z->pRight;
 			y->pRight->pParent = y;
 		}
+		// y가 z의 바로 아래 자식일 때는 y의 자리를 x로 교체하는 Transplant를 수행하지 않음.
 
-		// z를 y로 교체 (y가 z의 자리를 차지)
+		// 2. z를 y로 교체 (y가 z의 자리를 차지)
 		RBTransplant(z, y);
 		y->pLeft = z->pLeft;
 		y->pLeft->pParent = y;
-		y->Color = z->Color; // y는 z의 원래 색상을 물려받음
+		y->Color = z->Color;
 
+		// 3. x의 부모 포인터 정리
+		// y가 z의 바로 아래 자식일 때 (y_parent == z), x는 y의 자식으로 남아있으므로 x의 부모는 y가 되어야 함.
+		// y가 z의 깊은 곳에 있을 때 (y_parent != z), x의 부모는 y의 원래 부모(y_parent)가 되어야 함.
 
-		// RBTransplant(z, y)로 인해 x->pParent가 z의 부모를 물려받을 수 있으므로, y로 강제 지정.
-		if (x != &Nil && x->pParent != y) {
-			x->pParent = y;
+		// y_parent != z 일 때, RBTransplant(y, y->pRight)에서 x->pParent는 이미 y_parent로 설정됨.
+		// y_parent == z 일 때, x의 부모는 y가 되어야 합니다.
+		if (y_parent == z && x != &Nil) {
+			x->pParent = y; // y가 z의 자리를 차지했으므로 x의 부모를 y로 명확하게 설정
 		}
 		else if (x == &Nil) {
-			// Nil 노드인 경우에도 Nil.pParent가 y를 가리키도록 해야 밸런싱이 시작됨.
-			Nil.pParent = y;
+			// x가 Nil 노드일 때, Nil.pParent는 y의 원래 부모를 가리켜야 합니다. 
+			// y_parent != z 일 때는 y_parent를, y_parent == z 일 때는 y를 가리켜야 합니다.
+			// RBTransplant(z, y) 후 Nil.pParent가 잘못되었을 수 있으므로 이 블록은 필요합니다.
+			Nil.pParent = (y_parent == z) ? y : y_parent;
 		}
 	}
+
+	this->iSize--;
 
 	// 3. 메모리 해제
 	delete z;
@@ -375,7 +381,7 @@ void RBTree::MakeBalacingAfterRemove(stNODE** pX)
 			else {
 				// Case 3: 형제 w의 오른쪽 자식이 BLACK인 경우 (Zig-Zag)
 				if (w->pRight->Color == BLACK) {
-					ChangeColor(w->pLeft, BLACK);
+					//ChangeColor(w->pLeft, BLACK);
 					ChangeColor(w, RED);
 					makeRightRotate(w);
 					w = parent->pRight; // 새로운 형제 지정
@@ -471,6 +477,118 @@ void RBTree::destroyTree(stNODE** curNode)
 	destroyTree(&(*curNode)->pRight);
 	delete* curNode;
 	*curNode = nullptr;
+}
+
+// 1. 메인 검증 함수 (public)
+bool RBTree::isRBTreeValid()
+{
+	// 규칙 1: 모든 노드는 Red 또는 Black이다. (stNODE 구조체에서 이미 보장)
+
+	// 규칙 2: Root 노드는 Black이어야 한다.
+	if (root != &Nil && root->Color != BLACK) {
+		std::cout << "Validation Failed: Rule 2 (Root must be Black)\n";
+		return false;
+	}
+
+	// 규칙 3: Nil 노드는 Black이어야 한다. (Nil은 이미 BLACK으로 초기화됨을 가정)
+	if (Nil.Color != BLACK) {
+		std::cout << "Validation Failed: Rule 3 (Nil must be Black)\n";
+		return false;
+	}
+
+	// 규칙 4: Red 노드의 자식은 모두 Black이어야 한다. (재귀 함수에서 체크)
+	// 규칙 5: 모든 경로의 Black Node 개수는 동일해야 한다. (checkBlackHeight에서 체크)
+
+	// 규칙 0: BST 속성을 만족해야 한다.
+	if (!checkBSTProperty(root, INT_MIN, INT_MAX)) {
+		std::cout << "Validation Failed: Rule 0 (Must satisfy BST property)\n";
+		return false;
+	}
+
+	// 규칙 5와 4 검사 시작
+	int blackHeight = checkBlackHeight(root);
+	if (blackHeight == -1) {
+		// Black Height이 일관되지 않거나, Rule 4 (RR 위반)가 발생했을 경우
+		return false;
+	}
+
+	// 모든 검증 통과
+	return true;
+}
+
+void RBTree::clear()
+{
+	// 1. 재귀적으로 모든 노드의 메모리 해제
+	// 이 호출이 끝나면 root는 nullptr이 됩니다.
+	destroyTree(&root);
+
+	// 2. 핵심: RBTree의 특징에 맞게 root를 Nil 노드로 재설정
+	root = &Nil;
+
+	// 3. iSize 초기화
+	this->iSize = 0;
+}
+
+// 2. 이진 탐색 트리 속성 검증 함수 (private)
+bool RBTree::checkBSTProperty(stNODE* node, int minVal, int maxVal)
+{
+	if (node == &Nil) {
+		return true;
+	}
+
+	// 현재 노드의 값이 범위 내에 있는지 확인
+	if (node->iData <= minVal || node->iData >= maxVal) {
+		std::cout << "Validation Failed: BST Order Violated at " << node->iData << "\n";
+		return false;
+	}
+
+	// 왼쪽 서브트리는 maxVal보다 작아야 함
+	if (!checkBSTProperty(node->pLeft, minVal, node->iData)) {
+		return false;
+	}
+
+	// 오른쪽 서브트리는 minVal보다 커야 함
+	if (!checkBSTProperty(node->pRight, node->iData, maxVal)) {
+		return false;
+	}
+
+	return true;
+}
+
+// 3. 블랙 깊이 및 Red-Red 규칙 검증 함수 (private)
+// 반환값: 해당 노드까지의 Black Height. 불일치 또는 규칙 위반 시 -1 반환.
+int RBTree::checkBlackHeight(stNODE* node)
+{
+	if (node == &Nil) {
+		return 1; // Nil 노드는 Black이므로 Black Height은 1
+	}
+
+	// 규칙 4: Red 노드의 자식은 모두 Black이어야 한다 (RR 규칙 검사)
+	if (node->Color == RED) {
+		if (node->pLeft->Color == RED || node->pRight->Color == RED) {
+			std::cout << "Validation Failed: Rule 4 (Red node has Red child) at " << node->iData << "\n";
+			return -1;
+		}
+	}
+
+	// 재귀적으로 왼쪽과 오른쪽 자식의 Black Height 계산
+	int leftBH = checkBlackHeight(node->pLeft);
+	int rightBH = checkBlackHeight(node->pRight);
+
+	// 규칙 5: 왼쪽/오른쪽 서브트리의 Black Height이 일치해야 함
+	if (leftBH == -1 || rightBH == -1) {
+		return -1; // 이미 하위 트리에서 오류 발생
+	}
+
+	if (leftBH != rightBH) {
+		std::cout << "Validation Failed: Rule 5 (Black Height mismatch) at " << node->iData
+			<< ". Left BH: " << leftBH << ", Right BH: " << rightBH << "\n";
+		return -1;
+	}
+
+	// 현재 노드가 Black이면 Height에 1을 더함
+	// 현재 노드가 Red이면 Height을 그대로 반환
+	return leftBH + (node->Color == BLACK ? 1 : 0);
 }
 
 void RBTree::makeRootandNilBecomeBlack()
