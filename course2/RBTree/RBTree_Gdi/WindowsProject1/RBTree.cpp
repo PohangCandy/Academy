@@ -4,6 +4,9 @@ using namespace std;
 
 void RBTree::InsertData(stNODE** curNode, int d, stNODE* parent)
 {
+
+	if (d < 0 || d >= 10000) return;
+
 	//현재 위치가 비어있다면 대입
 	if (*curNode == &Nil)
 	{
@@ -320,7 +323,7 @@ void RBTree::RemoveData(stNODE** pCurNode, int d)
 		// y가 z의 깊은 곳에 있을 때 (y_parent != z), x의 부모는 y의 원래 부모(y_parent)가 되어야 함.
 
 		// y_parent != z 일 때, RBTransplant(y, y->pRight)에서 x->pParent는 이미 y_parent로 설정됨.
-		// y_parent == z 일 때, x의 부모는 y가 되어야 합니다.
+		// y_parent == z 일 때, x의 부모는 y가 되어야 함.
 		if (y_parent == z && x != &Nil) {
 			x->pParent = y; // y가 z의 자리를 차지했으므로 x의 부모를 y로 명확하게 설정
 		}

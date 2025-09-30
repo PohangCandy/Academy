@@ -138,7 +138,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="JPS.cpp" />
-    <ClCompile Include="Dungeon.cpp" />
     <ClCompile Include="WindowsProject1.cpp" />
   </ItemGroup>
   <ItemGroup>
