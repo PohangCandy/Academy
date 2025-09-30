@@ -496,28 +496,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
      break;
      case WM_MOUSEWHEEL:
      {
-         int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-
-         if (zDelta > 0) {
-             g_iGridSize = (int)(g_iGridSize * 2.0f);  // 확대
-             //g_GRID_WIDTH *= 2;
-             //g_GRID_HEIGHT *= 2;
-         } 
-         else
-         {
-             g_iGridSize = (int)(g_iGridSize * 0.5f);  // 축소
-             //g_GRID_WIDTH /= 2;
-             //g_GRID_HEIGHT /= 2;
-         }
-
-         if (g_iGridSize < GRID_SIZE / 2)   g_iGridSize = GRID_SIZE/2;   // 최소 크기 제한
-         if (g_iGridSize > 128) g_iGridSize = 128; // 최대 크기 제한
-
-         //InvalidateRect(hWnd, NULL, TRUE);
          //int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-         RecreateFont(hWnd);
-         RecreateMemDC(hWnd);
-         InvalidateRect(hWnd, NULL, TRUE);
+
+         //if (zDelta > 0) {
+         //    g_iGridSize = (int)(g_iGridSize * 2.0f);  // 확대
+         //    //g_GRID_WIDTH *= 2;
+         //    //g_GRID_HEIGHT *= 2;
+         //} 
+         //else
+         //{
+         //    g_iGridSize = (int)(g_iGridSize * 0.5f);  // 축소
+         //    //g_GRID_WIDTH /= 2;
+         //    //g_GRID_HEIGHT /= 2;
+         //}
+
+         //if (g_iGridSize < GRID_SIZE / 2)   g_iGridSize = GRID_SIZE/2;   // 최소 크기 제한
+         //if (g_iGridSize > 128) g_iGridSize = 128; // 최대 크기 제한
+
+         ////InvalidateRect(hWnd, NULL, TRUE);
+         ////int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+         //RecreateFont(hWnd);
+         //RecreateMemDC(hWnd);
+         //InvalidateRect(hWnd, NULL, TRUE);
      }
      break;
      case WM_KEYDOWN:

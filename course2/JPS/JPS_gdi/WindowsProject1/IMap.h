@@ -5,7 +5,7 @@
 enum ETileType {
 	none = 0,//빈칸 nothing
 	start,//스타트 지점 start
-	end,//끝 지점 end
+	goal,//끝 지점 end
 	obs,//장애물 obstacle
 	nodelist,//JPS로 만들어진 노드 nodelist
 	visited,//JPS로 탐색한 타일 visited

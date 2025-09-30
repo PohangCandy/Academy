@@ -38,11 +38,11 @@
 //	map[y][x].gparent = parent;
 //	map[y][x].rgb = g_rgb;
 //}
-
-int Dungeon::getRGB(int y, int x)
-{
-	return map[y][x].rgb;
-}
+//
+//int Dungeon::getRGB(int y, int x)
+//{
+//	return map[y][x].rgb;
+//}
 
 
 //bool Dungeon::IsObstacle(int y, int x)

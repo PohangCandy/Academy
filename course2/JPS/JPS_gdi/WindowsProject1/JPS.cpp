@@ -2,21 +2,6 @@
 #include <iostream>
 using namespace std;
 
-//일단 제일 처음 좌표에서 도착지까지 H는 계산되야 함.
-//뉴클리드 계산
-//float JPS::findGbyNode(Node* s, Node* d)
-//{
-//	//대각선으로 이동한 경우
-//	if (abs(s->pos.x - d->pos.x) + abs(s->pos.y - d->pos.y) == 2) return s->G + 1.5;
-//	//직선으로 이동한 경우
-//	else return s->G + 1;
-//}
-
-//float JPS::findF(Node* n)
-//{
-//	return n->H + n->G;
-//}
-
 //도착지가 맴버로 저장되어있으므로 출발지만 갱신하면서 재귀해주면 될 것으로 보임.
 //탐색한 경로를 리스트에 담으면서 f가 가장 적은 곳을 먼저 탐색하도록 만든다.
 void JPS::insertListEightDirection()
@@ -33,23 +18,7 @@ void JPS::insertListEightDirection()
 
 void JPS::makeInitList()
 {
-	//for (auto n : _openlist) delete n;
-	
-	//for (auto n : _closelist)
-	//{
-	//	if (n == _startNode) continue;
-	//	delete n;
-	//}
-
-	//for (auto n : _shortestRoutelist)
-	//{
-	//	if (n == _startNode) continue;
-	//	if (n == _goalNode) continue;
-	//}
-
 	_openlist.clear();
-	//_closelist.clear();
-	//_shortestRoutelist.clear();
 }
 
 void JPS::updateNode()
@@ -58,16 +27,6 @@ void JPS::updateNode()
 	_startGrid = _map->getStart();
 	_goalGrid = _map->getGoal();
 }
-
-//bool JPS::checkNodeIsInMap(Node* n)
-//{
-//	if (n->pos.x < 0 || n->pos.y < 0 || n->pos.x >= _map->getwidth() || n->pos.y >= _map->getheight())
-//	{
-//		return false;
-//	}
-//
-//	return true;
-//}
 
 bool JPS::checkGridIsInMap(Grid pos)
 {
@@ -148,10 +107,7 @@ bool JPS::findPathwithRender()
 			findNodeWithDirection(*bestIt);
 		}
 
-		//해제가 일어나야 하지 않나?
 		_openlist.erase(bestIt);
-		//delete* bestIt;
-		//(*bestIt) = nullptr;
 	}
 	else
 	{
@@ -209,8 +165,6 @@ bool JPS::findPath()
 				}
 				else
 				{
-					//top->parent->pos.type = shortest;
-					//_shortestRoutelist.push_back(top->parent);
 					_map->ChangeTile(top->gparent->y, top->gparent->x, shortest);
 				}
 				top = top->gparent;
@@ -230,8 +184,6 @@ bool JPS::findPath()
 
 		//해제가 일어나야 하지 않나?
 		_openlist.erase(bestIt);
-		//delete* bestIt;
-		//(*bestIt) = nullptr;
 	}
 	return false;
 }
@@ -318,13 +270,6 @@ bool JPS::ExploreDirection(Grid* g, int dx, int dy)
 {
 	bool findNode = false;
 
-	//Node* temp = new Node;
-	//temp->pos = node->pos;
-	//temp->G = node->G;
-	//temp->H = node->H;
-	//temp->parent = node;
-	/*temp->pos.gparent = &node->pos;*/
-
 	int newX = g->x;
 	int newY = g->y;
 	float newH = g->h;
@@ -344,7 +289,7 @@ bool JPS::ExploreDirection(Grid* g, int dx, int dy)
 
 		if (dIsDiagonal)
 		{
-			newG += 1.5;
+			newG += 1.5f;
 		}
 		else
 		{
@@ -373,6 +318,11 @@ bool JPS::ExploreDirection(Grid* g, int dx, int dy)
 			if( newF > curG->f ) break;
 			//새로운 F값이 같거나 더 적은 경우 갱신
 			//같은 값인 F값을 갱신시키도록 허락하는게 맞을까?
+						//리스트에 남아있다면 지워준다.
+			if (_map->CheckTile(newY, newX) == nodelist)
+			{
+				_openlist.erase(curG);
+			}
 		}
 
 		_map->ChangeTile(newY, newX, visited);
@@ -452,13 +402,6 @@ void JPS::setDirectionToTravel(Grid* g, EDirection d)
 {
 	//해당 노드가 탐사 가능한 노드인지 탐색하는 작업을 이 함수에서 하겠다.
 
-
-	//Node* temp = new Node;
-	//temp->pos  = n->pos;
-	//temp->G = n->G;
-	//temp->H = n->H;
-	//temp->parent = n;
-
 	switch (d)
 	{
 	case LL:
@@ -504,9 +447,6 @@ void JPS::setDirectionToTravel(Grid* g, EDirection d)
 	default:
 		break;
 	}
-
-	//delete temp;
-	//temp = nullptr;
 }
 
 //리스트에 있는 노드 중 F값이 가장 작은 노드의 부모 노드 반대 방향으로 탐색 
@@ -655,7 +595,11 @@ void JPS::findNodeWithDirection(Grid* g)
 }
 
 //일단 제일 처음 좌표에서 도착지까지 H는 계산되야 함.
-float JPS::findHbyGrid(int y, int x)
+float JPS::findHbyGrid(int y1, int x1)
 {
-	return abs(x - _goalGrid->x) + abs(y - _goalGrid->y);
+	int dx = abs(x1 - _goalGrid->x);
+	int dy = abs(y1 - _goalGrid->y);
+	int minv = std::min(dx, dy);
+	int maxv = std::max(dx, dy);
+	return (float)(minv * 1.5 + (maxv - minv));
 }
