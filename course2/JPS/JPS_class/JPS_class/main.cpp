@@ -1,8 +1,8 @@
 #include <iostream>
 #include <cstdlib> 
 #include <ctime>   
-#include <queue>   // BFS를 위한 큐
-#include <cmath>   // std::abs를 위한 math 헤더 (C++에서는 <cmath>)
+#include <queue>   
+#include <cmath>   
 #include "JPS.h"   
 #include "Dungeon.h" 
 using namespace std;
@@ -20,21 +20,18 @@ struct GridComparer {
     }
 };
 
-// ... (파일 상단 및 GridComparer 구조체 정의) ...
 
 float ComputeBFS(Dungeon& dungeon)
 {
     dungeon.InitMap();
 
     // G Cost를 무한대로 초기화 (Dijkstra의 필수 단계)
-    // InitMap()이 이 작업을 처리하지 않는다고 가정하고 여기서 수행합니다.
     const float MAX_G_VALUE = 1000000.0f;
     for (int y = 0; y < dungeon.getheight(); ++y) {
         for (int x = 0; x < dungeon.getwidth(); ++x) {
             Grid* grid = dungeon.getGrid(y, x);
             grid->g = MAX_G_VALUE; // G Cost를 무한대로 설정
             grid->gparent = nullptr; // 부모 포인터 초기화
-            // dungeon.ChangeTile(y, x, ...); // 타일 상태 변경은 제거 (G Cost만 사용)
         }
     }
     // --------------------------------------------------------------------
@@ -50,7 +47,6 @@ float ComputeBFS(Dungeon& dungeon)
     g_start->g = 0.0f; // 시작 지점만 G=0
     open_list.push(g_start);
 
-    // dungeon.ChangeTile(g_start->y, g_start->x, visited); // 방문 상태 사용 불필요 (제거)
 
     int dy[] = { -1, -1, -1, 0, 0, 1, 1, 1 };
     int dx[] = { -1, 0, 1, -1, 1, -1, 0, 1 };
@@ -99,7 +95,6 @@ float ComputeBFS(Dungeon& dungeon)
 //----------------------------------------------------
 void RunPathfindingTest(Dungeon& dungeon, JPS& astar, const string& test_name)
 {
-    // JPS는 InitMap()을 내부에서 호출할 수 있으므로, 경로 흔적을 남기지 않도록 주의합니다.
     dungeon.InitMap();
 
     bool success = false;
@@ -199,7 +194,7 @@ void RunStressTests(Dungeon& dungeon, JPS& astar)
         try
         {
             // 2. BFS 실행 (JPS 비교 기준값)
-            // BFS는 JPS와 무관하게 맵을 초기화하고 독립적으로 최단 경로를 찾습니다.
+            // BFS는 JPS와 무관하게 맵을 초기화하고 독립적으로 최단 경로 보장
             bfs_cost = ComputeBFS(dungeon);
             bfs_success = (bfs_cost > 0.0f);
         }
@@ -279,40 +274,15 @@ void RunStressTests(Dungeon& dungeon, JPS& astar)
 //----------------------------------------------------
 void RunAllTests()
 {
-    // rand() 시드를 고정하여 매번 동일한 무작위 맵이 생성되도록 합니다.
-    // (선택 사항: JPS의 내부 동작에 난수가 포함되지 않았다면 시드 고정은 필요 없습니다.)
+    // rand() 시드를 고정하여 매번 동일한 무작위 맵이 생성되도록 함.
     srand(static_cast<unsigned int>(time(0)));
 
     Dungeon dungeon(TEST_GRID_HEIGHT, TEST_GRID_WIDTH);
     JPS astar(&dungeon);
 
-    // 1. 대규모 스트레스 테스트 실행
+    // 대규모 스트레스 테스트 실행
     RunStressTests(dungeon, astar);
 
-    // 1. 시나리오 기반 테스트는 주석 처리하거나 생략합니다.
-    // ... (Case 1 ~ Case 6 실행 코드는 주석 처리) ...
-
-    // 2. 불일치 발생 맵을 고정 생성합니다.
-    //const float DEBUG_RATIO = 0.154714f;
-
-    //cout << "\n==============================================" << endl;
-    //cout << "   불일치 디버깅 테스트 시작 (Ratio: " << DEBUG_RATIO << ")" << endl;
-    //cout << "==============================================" << endl;
-
-    //// 무작위 시드를 다시 초기화하고 특정 맵 비율을 적용합니다.
-    //// (GenerateRandomMap은 내부에서 rand()를 사용하므로, 맵 생성이 무작위 시드에 종속됩니다. 
-    //// 만약 항상 동일한 맵을 원한다면, 메인 함수의 srand(time(0))을 특정 숫자로 고정해야 합니다.)
-
-    //dungeon.GenerateRandomMap(DEBUG_RATIO);
-
-    //// BFS 결과로 최단 경로 비용을 얻습니다.
-    //float bfs_cost = ComputeBFS(dungeon);
-    //cout << "   > 기준 BFS 최단 비용: " << bfs_cost << endl;
-
-    //// JPS를 실행하고 결과를 비교합니다.
-    //RunPathfindingTest(dungeon, astar, "디버깅 대상 JPS 실행");
-
-    // 이 시점에서 RunPathfindingTest 내부에 JPS가 찾은 경로와 BFS 경로 비교 로직을 추가해야 합니다.
 }
 
 
