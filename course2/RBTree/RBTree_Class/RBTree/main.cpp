@@ -23,8 +23,7 @@ int main()
     for (int i = 1; i <= NUM_TESTS; ++i)
     {
         RBTree rbt;
-        // TestTree는 내부에서 size를 랜덤으로 설정합니다.
-        // 초기 size는 크게 의미 없지만, 생성자에 10을 전달합니다.
+
         TestTree tt(10);
 
         // 랜덤 케이스 생성 (Unbalancing, Perfect, Random 중 하나)
@@ -32,9 +31,7 @@ int main()
 
         cout << "[" << i << "/" << NUM_TESTS << "] "
             << "삽입 테스트 진행... (데이터 수: " << tt.getVDataSize() << ")\n";
-        // getVDataSize() 함수가 TestTree에 없으므로, 필요하면 추가해야 합니다.
-        // 임시로 TestTree::v_data 멤버 변수가 public이나 get 함수가 있다고 가정합니다. 
-        // 없으면 tt.makeRandomCase() 출력에서 데이터 수를 확인해야 합니다.
+
 
    // 데이터 삽입
         tt.InsertFullData(&rbt);
