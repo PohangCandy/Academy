@@ -1,6 +1,15 @@
 #pragma once
 #include <vector>
 
+// 시각화 드로잉 상수 (g_iGridSize는 노드 크기 결정에만 사용)
+extern const int NODE_RADIUS; // 고정된 노드 반지름 (또는 g_iGridSize/2)
+//const int H_SPACE_INITIAL = 1000; // 루트 레벨의 초기 수평 간격 (트리의 너비 결정)
+
+//새로 추가: 노드 중심 간 최소 수평 간격
+extern const int H_NODE_DISTANCE; // 노드 반지름의 4배 (겹침 방지)
+//새로 추가: 다음 노드의 X 좌표를 추적하는 변수
+extern int g_nextNodeX;
+
 enum NODE_COLOR
 {
 	BLACK = 0,
@@ -56,6 +65,10 @@ public:
 	size_t getSize() const { return iSize; } // 현재 트리의 노드 개수를 반환
 
 	void clear();
+
+	// RBTree.h (클래스 선언에 추가)
+	void calculateXCoordinates();
+	void calculateXRecursive(stNODE* curNode); // 재귀 도우미 함수
 
 private:
 

@@ -14,8 +14,8 @@
 
 #define MAX_LOADSTRING 100
 #define GRID_SIZE 64
-#define GRID_WIDTH 100
-#define GRID_HEIGHT 100
+#define GRID_WIDTH 150
+#define GRID_HEIGHT 50
 
 //#define IDD_INPUTDIALOG                 1000
 //#define IDC_INPUT_EDIT                  1001
@@ -26,9 +26,14 @@
 int g_iGridSize = GRID_SIZE;
 
 // 시각화 드로잉 상수 (g_iGridSize는 노드 크기 결정에만 사용)
-const int NODE_RADIUS = 20; // 고정된 노드 반지름 (또는 g_iGridSize/2)
-const int V_SPACE = 60;     // 수직 간격
-const int H_SPACE_INITIAL = 1000; // 루트 레벨의 초기 수평 간격 (트리의 너비 결정)
+const int NODE_RADIUS = 20; // 상수 정의
+const int V_SPACE = 60;
+
+// 새로 추가: 노드 중심 간 최소 수평 간격
+const int H_NODE_DISTANCE = NODE_RADIUS * 4; // 상수 정의
+
+// g_nextNodeX의 정의를 이곳에 단 한 번만 위치시킵니다.
+int g_nextNodeX = 0;
 
 RBTree g_rbt;
 
@@ -58,9 +63,9 @@ int g_originY = 0;
 
 INT_PTR CALLBACK InputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-// B. 서브트리 너비 계산 방식에 필요한 상수
-const int H_NODE_DISTANCE = NODE_RADIUS * 3; // 노드 간 최소 수평 간격 (픽셀)
-int g_nextNodeX = 0; // 중위 순회 시 다음 노드가 배치될 X 좌표
+//// B. 서브트리 너비 계산 방식에 필요한 상수
+//const int H_NODE_DISTANCE = NODE_RADIUS * 3; // 노드 간 최소 수평 간격 (픽셀)
+//int g_nextNodeX = 0; // 중위 순회 시 다음 노드가 배치될 X 좌표
 
 TestTree tt(10);
 
@@ -79,23 +84,16 @@ void RecreateFont(HWND hWnd)
 // WindowsProject1.cpp에 추가
 
 // 재귀적으로 노드를 그리고 위치를 결정하는 함수
-void DrawNodeRecursive(HDC hdc, stNODE* curNode, int x, int y, int xOffset)
+void DrawNodeRecursive(HDC hdc, stNODE* curNode, int y)
 {
-    // Nil 노드 검사: g_rbt.getNill()을 사용하여 Nil 노드인지 확인
     if (curNode == nullptr || curNode == g_rbt.getNill())
         return;
 
-    // --- 1. 간선 그리기 ---
+    // 현재 노드의 X 좌표는 미리 계산된 값을 사용
+    int x = curNode->calculatedX;
     int childY = y + V_SPACE;
-    // XOffset 계산 수정: 다음 레벨의 간격을 2/3로 줄입니다. (더 느리게 좁아짐)
-  // 또한, 노드 반지름보다 작아지지 않도록 최소값을 보장합니다.
-    int nextXOffset = xOffset / 3;
 
-    // 최소 X 간격(노드 반지름의 3배)을 보장하여 겹침을 방지
-    const int MIN_H_SPACE = NODE_RADIUS * 3;
-    if (nextXOffset < MIN_H_SPACE) {
-        nextXOffset = MIN_H_SPACE;
-    }
+    // --- 1. 간선 그리기 ---
 
     HPEN hPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 100)); // 간선 펜
     HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
@@ -103,21 +101,23 @@ void DrawNodeRecursive(HDC hdc, stNODE* curNode, int x, int y, int xOffset)
     // 왼쪽 자식 간선
     if (curNode->pLeft != g_rbt.getNill())
     {
-        int leftChildX = x - nextXOffset;
+        // 자식 노드의 X 좌표도 미리 계산된 값을 사용
+        int leftChildX = curNode->pLeft->calculatedX;
         MoveToEx(hdc, x, y + NODE_RADIUS, NULL);
         LineTo(hdc, leftChildX, childY - NODE_RADIUS);
-        // 재귀 호출 (먼저 자식을 호출하여 배경에 선이 그려지도록 합니다)
-        DrawNodeRecursive(hdc, curNode->pLeft, leftChildX, childY, nextXOffset);
+        // 재귀 호출 시 xOffset 제거
+        DrawNodeRecursive(hdc, curNode->pLeft, childY);
     }
 
     // 오른쪽 자식 간선
     if (curNode->pRight != g_rbt.getNill())
     {
-        int rightChildX = x + nextXOffset;
+        // 자식 노드의 X 좌표도 미리 계산된 값을 사용
+        int rightChildX = curNode->pRight->calculatedX;
         MoveToEx(hdc, x, y + NODE_RADIUS, NULL);
         LineTo(hdc, rightChildX, childY - NODE_RADIUS);
-        // 재귀 호출
-        DrawNodeRecursive(hdc, curNode->pRight, rightChildX, childY, nextXOffset);
+        // 재귀 호출 시 xOffset 제거
+        DrawNodeRecursive(hdc, curNode->pRight, childY);
     }
 
     SelectObject(hdc, hOldPen);
@@ -161,13 +161,14 @@ void DrawRBTree(HDC hdc, RBTree* tree)
     // 루트 노드가 Nil 노드가 아니면 트리를 그립니다.
     if (root != tree->getNill())
     {
-        // 맵의 중앙을 루트 노드의 X 시작점으로 설정
-        const int worldW = GRID_WIDTH * g_iGridSize;
-        int mapCenterX = worldW / 2;
-        int startY = 100;     // 루트 노드의 Y 좌표
+        // 1. X 좌표 계산 함수 호출! (가장 중요)
+        tree->calculateXCoordinates();
 
-        // 재귀 드로잉 시작
-        DrawNodeRecursive(hdc, root, mapCenterX, startY, H_SPACE_INITIAL);
+        int startY = 100;      // 루트 노드의 Y 좌표
+
+        // 2. 재귀 드로잉 시작 (X 좌표 인자 제거)
+        // DrawNodeRecursive(hdc, root, mapCenterX, startY, H_SPACE_INITIAL); // <-- 기존
+        DrawNodeRecursive(hdc, root, startY);
     }
 }
 
@@ -546,10 +547,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
              tt.InsertFullData(&g_rbt);
              break;
          }
-         case VK_LEFT:  g_originX -= g_iGridSize; break;  // 화면 오른쪽으로 이동
-         case VK_RIGHT: g_originX += g_iGridSize; break;  // 화면 왼쪽으로 이동
-         case VK_UP:    g_originY -= g_iGridSize; break;  // 화면 아래로 이동
-         case VK_DOWN:   g_originY += g_iGridSize; break;  // 화면 위로 이동
+         case VK_LEFT:
+         {
+             g_originX = max(0, g_originX - g_iGridSize);
+             break;  // 화면 오른쪽으로 이동
+         }
+         case VK_RIGHT:
+         {
+             g_originX += g_iGridSize;
+             break;  // 화면 왼쪽으로 이동
+         }
+         case VK_UP:
+         {
+             g_originY = max(0, g_originY - g_iGridSize);
+             break;  // 화면 아래로 이동
+         }
+         case VK_DOWN: 
+         {
+             g_originY += g_iGridSize; 
+             break;  // 화면 위로 이동
+         }   
          }
          InvalidateRect(hWnd, NULL, path);
         }
