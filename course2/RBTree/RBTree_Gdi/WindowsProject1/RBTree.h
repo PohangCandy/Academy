@@ -13,6 +13,8 @@ struct stNODE
 	stNODE* pLeft;
 	stNODE* pRight;
 
+	int calculatedX;
+
 	NODE_COLOR Color;
 
 	int iData;   // Key , Value

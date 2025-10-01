@@ -25,6 +25,10 @@ public:
 	{
 		_size = size;
 	}
+	~TestTree()
+	{
+		v_data.clear();
+	}
 
 	//한쪽으로 쏠린 형태의 데이터
 	void makeUnBalancing();

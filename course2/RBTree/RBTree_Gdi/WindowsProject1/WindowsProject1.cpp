@@ -58,6 +58,12 @@ int g_originY = 0;
 
 INT_PTR CALLBACK InputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+// B. 서브트리 너비 계산 방식에 필요한 상수
+const int H_NODE_DISTANCE = NODE_RADIUS * 3; // 노드 간 최소 수평 간격 (픽셀)
+int g_nextNodeX = 0; // 중위 순회 시 다음 노드가 배치될 X 좌표
+
+TestTree tt(10);
+
 void RecreateFont(HWND hWnd)
 {
     if (g_hDisplayFont) DeleteObject(g_hDisplayFont);
@@ -270,8 +276,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // 경고(WARN) 메시지(여기에 누수 보고서가 포함됨)도 디버그 창으로 보냅니다.
     _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
 
-    _CrtSetBreakAlloc(224); // 여기에 누수 보고서의 번호(224)를 넣어줍니다.
-
     //안씀, 쓰는척
     //UNREFERENCED_PARAMETER(hPrevInstance);
     //UNREFERENCED_PARAMETER(lpCmdLine);
@@ -304,7 +308,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             DispatchMessage(&msg);
         }
     }
-    g_rbt.clear();
+
+    //g_rbt.clear();
+    //tt.~TestTree();
     _CrtDumpMemoryLeaks(); // 이 함수는 누수 감지 플래그가 설정되어 있다면 바로 출력합니다.
 
     return (int)msg.wParam;
@@ -535,10 +541,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
          }
          case VK_SPACE:
          {
-             g_rbt.clear();
-             TestTree tt(10);
+             g_rbt.clear(); 
              tt.makeRandomCase();
              tt.InsertFullData(&g_rbt);
+             break;
          }
          case VK_LEFT:  g_originX -= g_iGridSize; break;  // 화면 오른쪽으로 이동
          case VK_RIGHT: g_originX += g_iGridSize; break;  // 화면 왼쪽으로 이동
