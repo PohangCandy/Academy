@@ -2,6 +2,14 @@
 #include <iostream>
 using namespace std;
 
+//extern const int H_NODE_DISTANCE; // 선언: 메모리 할당 안 함.
+//extern int g_nextNodeX;
+//extern const int NODE_RADIUS;
+
+
+
+
+
 void RBTree::InsertData(stNODE** curNode, int d, stNODE* parent)
 {
 
@@ -530,6 +538,31 @@ void RBTree::clear()
 
 	// 3. iSize 초기화
 	this->iSize = 0;
+}
+
+void RBTree::calculateXRecursive(stNODE* curNode)
+{
+	if (curNode == &Nil)
+		return;
+
+	// 1. 왼쪽 서브트리
+	calculateXRecursive(curNode->pLeft);
+
+	// 2. 현재 노드의 X 좌표 설정 (중위 순회)
+	curNode->calculatedX = g_nextNodeX;
+
+	// 다음 노드의 시작 위치를 최소 간격만큼 이동
+	g_nextNodeX += H_NODE_DISTANCE; // H_NODE_DISTANCE는 NODE_RADIUS * 4 등 적절한 값
+
+	// 3. 오른쪽 서브트리
+	calculateXRecursive(curNode->pRight);
+}
+
+void RBTree::calculateXCoordinates()
+{
+	// 전역 추적 변수 초기화 (맵 왼쪽 여백 고려)
+	g_nextNodeX = 50 + NODE_RADIUS;
+	calculateXRecursive(root);
 }
 
 // 2. 이진 탐색 트리 속성 검증 함수 (private)
