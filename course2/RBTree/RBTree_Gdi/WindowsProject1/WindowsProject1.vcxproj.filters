@@ -30,12 +30,18 @@
     <ClInclude Include="RBTree.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="TestRBTree.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="WindowsProject1.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="RBTree.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="TestRBTree.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
