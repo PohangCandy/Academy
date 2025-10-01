@@ -10,6 +10,7 @@
 #include "WindowsProject1.h"
 #include "windowsx.h"
 #include "RBTree.h"
+#include "TestRBTree.h"
 
 #define MAX_LOADSTRING 100
 #define GRID_SIZE 64
@@ -27,7 +28,7 @@ int g_iGridSize = GRID_SIZE;
 // 시각화 드로잉 상수 (g_iGridSize는 노드 크기 결정에만 사용)
 const int NODE_RADIUS = 20; // 고정된 노드 반지름 (또는 g_iGridSize/2)
 const int V_SPACE = 60;     // 수직 간격
-const int H_SPACE_INITIAL = 500; // 루트 레벨의 초기 수평 간격 (트리의 너비 결정)
+const int H_SPACE_INITIAL = 1000; // 루트 레벨의 초기 수평 간격 (트리의 너비 결정)
 
 RBTree g_rbt;
 
@@ -82,7 +83,7 @@ void DrawNodeRecursive(HDC hdc, stNODE* curNode, int x, int y, int xOffset)
     int childY = y + V_SPACE;
     // XOffset 계산 수정: 다음 레벨의 간격을 2/3로 줄입니다. (더 느리게 좁아짐)
   // 또한, 노드 반지름보다 작아지지 않도록 최소값을 보장합니다.
-    int nextXOffset = xOffset / 2;
+    int nextXOffset = xOffset / 3;
 
     // 최소 X 간격(노드 반지름의 3배)을 보장하여 겹침을 방지
     const int MIN_H_SPACE = NODE_RADIUS * 3;
@@ -526,11 +527,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
          switch (wParam)
          {
-         case VK_SPACE:
+         case 'R':
          {
              path = false;
              g_rbt.clear();
              break;
+         }
+         case VK_SPACE:
+         {
+             g_rbt.clear();
+             TestTree tt(10);
+             tt.makeRandomCase();
+             tt.InsertFullData(&g_rbt);
          }
          case VK_LEFT:  g_originX -= g_iGridSize; break;  // 화면 오른쪽으로 이동
          case VK_RIGHT: g_originX += g_iGridSize; break;  // 화면 왼쪽으로 이동
