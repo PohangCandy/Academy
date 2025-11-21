@@ -30,10 +30,6 @@
 //	}
 //};
 
-
-
-
-
 struct PROFILE_SAMPLE {
 	//프로파일 사용여부
 	long lFlag = 0;
