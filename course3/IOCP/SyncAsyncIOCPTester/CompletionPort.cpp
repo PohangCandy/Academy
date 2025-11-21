@@ -206,6 +206,9 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 		SOCKET client_sock;
 		SOCKETINFO* ptr;
 
+		//------------------------------------------
+		// 프로파일 시간 측정
+		//------------------------------------------
 		ProfileBegin(f2);
 		retval = GetQueuedCompletionStatus(hcp, &cbTransferrsd, (PULONG_PTR)&client_sock, (LPOVERLAPPED*)&ptr, INFINITE);
 		ProfileEnd(f2);
