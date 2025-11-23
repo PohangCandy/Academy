@@ -90,6 +90,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <Optimization>Disabled</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -128,9 +130,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CRingBuffer.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="TestUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CRingBuffer.h" />
+    <ClInclude Include="TestUtils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

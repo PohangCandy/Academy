@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{c054ccd0-8401-41cd-987f-4150ce5394ef}</ProjectGuid>
-    <RootNamespace>MultiThreadRingBuffer</RootNamespace>
+    <ProjectGuid>{9de4a094-28af-4ad0-b30c-04e2dc5d0ccf}</ProjectGuid>
+    <RootNamespace>ProfilerWithMultiThread</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -127,13 +127,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="CRingBuffer.cpp" />
-    <ClCompile Include="EnqueDequewithEachThreadTest.cpp" />
-    <ClCompile Include="TestUtils.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="MultiThreadProfiler.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CRingBuffer.h" />
-    <ClInclude Include="TestUtils.h" />
+    <ClInclude Include="MultiThreadProfiler.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

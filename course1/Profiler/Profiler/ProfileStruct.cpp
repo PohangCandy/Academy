@@ -1,10 +1,15 @@
-#include "Profile.h"
+#include "ProfileStruct.h"
 #include <iostream>
 
-////굳이 static으로 숨길 필요있을까?
-PROFILE_SAMPLE arP[PROFILE_NUM];
+//------------------------------------------------------
+// 각 프로파일러를 저장해둘 배열
+//------------------------------------------------------
+static PROFILE_SAMPLE arP[PROFILE_NUM];
 
+//------------------------------------------------------
+//프로파일 이름으로 존재하는 프로파일 검색
 //이미 있을 경우 해당 프로파일 정보 갱신
+//------------------------------------------------------
 PROFILE_SAMPLE* findExistProfile(WCHAR* szName)
 {
 	//이미 있을 경우 해당 프로파일 정보 갱신
@@ -48,15 +53,20 @@ void initPRoFile(PROFILE_SAMPLE* pf, WCHAR* szName)
 	}
 	for (int i = 0; i < PROFILE_SAMPLE_MIN;i++)
 	{
-		pf->iMin[i] = 100000000000;
+		pf->iMin[i] = 100000000000LL;
 	}
 }
 
 //ProFile 시간 측정 시작
 void BeginTimeCount(PROFILE_SAMPLE* pf)
 {
-	QueryPerformanceCounter(&(pf->lStartTime));
-	pf->iCall++;
+	if (!QueryPerformanceCounter(&pf->lStartTime))
+	{
+		bool fuck = true;
+	}
+
+	InterlockedIncrement((long*)&(pf->iCall));
+	//pf->iCall++;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -66,7 +76,7 @@ void BeginTimeCount(PROFILE_SAMPLE* pf)
 // Return: 없음.
 /////////////////////////////////////////////////////////////////////////////
 void ProfileBegin(WCHAR* szName)
-{	
+{
 	PROFILE_SAMPLE* newP = findExistProfile(szName);
 	if (newP == nullptr)
 	{
@@ -96,26 +106,36 @@ void EndTimeCount(PROFILE_SAMPLE* pf)
 
 	QueryPerformanceCounter(&end);
 	QueryPerformanceFrequency(&Freq);
-	long long Result = end.QuadPart - (pf->lStartTime).QuadPart;
+	long long Result = end.QuadPart - pf->lStartTime.QuadPart;
 
 	long long nanoResult = Result * 1000000000LL / Freq.QuadPart;
+
+	//InterlockedExchangeAdd64(&(pf->iTotalTime), nanoResult);
 	(pf->iTotalTime) += nanoResult;
 
-//todo
-//측정한 시간을 최소 테이블과 최대 테이블에 비교해서 넣는다.
+
+	//측정한 시간을 최소 테이블과 최대 테이블에 비교해서 넣는다.
+	long long copy_nanoResult = nanoResult;
 	for (int i = 0; i < PROFILE_SAMPLE_MAX; i++)
 	{
-		if (pf->iMax[i] < nanoResult)
+		long long temp = pf->iMax[i];
+
+		if (pf->iMax[i] < copy_nanoResult)
 		{
-			pf->iMax[i] = nanoResult;
+			pf->iMax[i] = copy_nanoResult;
+			copy_nanoResult = temp;
 		}
 	}
 
+	copy_nanoResult = nanoResult;
 	for (int i = 0; i < PROFILE_SAMPLE_MIN; i++)
 	{
-		if (pf->iMin[i] > nanoResult)
+		long long temp = pf->iMin[i];
+
+		if (pf->iMin[i] > copy_nanoResult)
 		{
-			pf->iMin[i] = nanoResult;
+			pf->iMin[i] = copy_nanoResult;
+			copy_nanoResult = temp;
 		}
 	}
 }
@@ -132,6 +152,28 @@ void ProfileEnd(WCHAR* szName)
 	EndTimeCount(pf);
 }
 
+
+//--------------------------------------------------------------
+// average도 너무 큰 최댓값이랑 최솟값을 제외한 후 구하자
+//--------------------------------------------------------------
+long long calculateAverage(PROFILE_SAMPLE* pf)
+{
+	long long totaltime = pf->iTotalTime;
+
+	int numofExcept = 9;
+
+	for (int i = 0; i < numofExcept; i++)
+	{
+		totaltime -= pf->iMax[i];
+		totaltime -= pf->iMin[i];
+	}
+
+	long long icall = pf->iCall;
+	icall -= numofExcept;
+
+	return totaltime / icall;
+}
+
 //--------------------------------------------------------------------
 //--------------------------------------------------------------------
 void PrintProFile()
@@ -140,17 +182,20 @@ void PrintProFile()
 	printf("           Name  |     Average  |        Min   |        Max   |      Call |\n");
 	printf("-------------------------------------------------------------------------------\n");
 
-	for(int i = 0; i < PROFILE_NUM;i++)
+	for (int i = 0; i < PROFILE_NUM;i++)
 	{
 		PROFILE_SAMPLE* pf = &arP[i];
 		if (pf->lFlag)
 		{
-			long long average = (pf->iTotalTime) / (pf->iCall);
-			wprintf(L"           %s  |     %lld  |        %lld   |        %lld   |      %d |\n", pf->sxName, average, pf->iMin[0], pf->iMax[0], pf->iCall);
+			//long long average = (pf->iTotalTime) / (pf->iCall);
+			long long average = calculateAverage(pf);
+			wprintf(L"           %s  |     %lld  |        %lld   |        %lld   |      %d |\n", pf->sxName, average, pf->iMin[9], pf->iMax[9], pf->iCall);
 			wprintf(L"-------------------------------------------------------------------------------\n");
 		}
 	}
 }
+
+
 
 /////////////////////////////////////////////////////////////////////////////
 // Profiling 된 데이타를 Text 파일로 출력한다.
@@ -175,10 +220,10 @@ void ProfileDataOutText(const WCHAR* szFileName)
 			long long average = (pf->iTotalTime) / (pf->iCall);
 			swprintf(buffer, 256, L"           %s  |     %lld  |        %lld   |        %lld   |      %d |\n"
 				L"-------------------------------------------------------------------------------\n",
-				pf->sxName, average, pf->iMin[0], pf->iMax[0], pf->iCall);
+				pf->sxName, average, pf->iMin[9], pf->iMax[9], pf->iCall);
 
 			size_t ls = wcslen(s);
-			memcpy(&s[ls], buffer, (wcslen(buffer) + 1)*sizeof(WCHAR));
+			memcpy(&s[ls], buffer, (wcslen(buffer) + 1) * sizeof(WCHAR));
 			//wprintf(L"%s\n", s);
 		}
 	}
@@ -208,6 +253,7 @@ void ProfileReset(void)
 		if (arP[i].lFlag)
 		{
 			arP[i].lFlag = 0;
+			arP[i].iTotalTime = 0;
 		}
 	}
 }

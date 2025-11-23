@@ -15,21 +15,18 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CRingBuffer.cpp">
+    <ClCompile Include="소스1.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="EnqueDequewithEachThreadTest.cpp">
+    <ClCompile Include="소스.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="TestUtils.cpp">
+    <ClCompile Include="CTest.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CRingBuffer.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="TestUtils.h">
+    <ClInclude Include="CTest.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
