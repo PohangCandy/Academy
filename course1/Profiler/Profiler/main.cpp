@@ -1,5 +1,5 @@
 #include <iostream>
-#include "Profile.h"
+#include "ProfileStruct.h"
 
 void Test();
 

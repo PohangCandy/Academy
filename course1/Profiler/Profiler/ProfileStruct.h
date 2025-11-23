@@ -15,22 +15,6 @@
 #define PROFILE_SAMPLE_MIN 2
 #define PROFILE_SAMPLE_MAX 2
 
-//class Profile
-//{
-//	const char* _tag;
-//public:
-//	Profile(const char* tag)
-//	{
-//		//Begin(tag);
-//		_tag = tag;
-//	}
-//	~Profile()
-//	{
-//		//End(_tag);
-//	}
-//};
-
-
 struct PROFILE_SAMPLE {
 	//프로파일 사용여부
 	long lFlag = 0;
