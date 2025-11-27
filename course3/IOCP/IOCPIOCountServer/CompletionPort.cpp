@@ -8,7 +8,8 @@
 // 
 // 방법 : 
 // 1. Overlapped 구조체를 확장시켜, 완료된 작업에 대한 정보 전달하기(Recv인지 Send인지)
-// 2. 송수신마다 IOCount를 적절히 증감시켜, IOCount가 0되는 세션 삭제시키기
+// 2. new로 동적할당한 세션을 맵 형태로 저장.
+// 3. 송수신마다 IOCount를 적절히 증감시켜, IOCount가 0되는 세션 삭제시키기
 // 
 // 결론 :
 // 
@@ -19,22 +20,47 @@
 #include <WinSock2.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <map>
 #include "errlog.h"
+#include "CRingBuffer.h"
 
 #define SERVERPORT 9000
 #define BUFSIZE 512
 
+
+
+//-------------------------------
+// 비동기 입출력 함수 종류
+//-------------------------------
+enum EIOCP_OPERATION
+{
+	ERecv,
+	ESend
+};
+
+
+//-----------------------------------
+// 완료된 비동기 함수를 나타내는 확장된 Overlapped
+//-----------------------------------
+struct IOCP_CONTEXT {
+	OVERLAPPED overlapped;
+	EIOCP_OPERATION op;
+};
+
 //소켓 정보 저장을 위한 구조체
 struct SOCKETINFO
 {
-	OVERLAPPED overlapped;
+	IOCP_CONTEXT overlapped;
 	SOCKET sock;
-	char buf[BUFSIZE + 1];
-	int recvbytes;
-	int sendbytes;
-	//멤버로 굳이 넣지 않아도 됨
-	WSABUF wsabuf;
+	CRingBuffer recvBuf{BUFSIZE + 1};
+	CRingBuffer sendBuf{BUFSIZE + 1};
 };
+
+//--------------------------------
+// 세션과 세션 ID를 저장하기 위한 맵 
+//--------------------------------
+std::map<long long, SOCKETINFO*> mSession;
+long long SessionID;
 
 //작업자 스레드 함수
 DWORD WINAPI WorkerThread(LPVOID arg);
@@ -98,21 +124,26 @@ int main(int argc, char* argv[])
 		}
 		printf("[TCP 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 
-		//소켓과 입출력 완료 포트 연결
-		CreateIoCompletionPort((HANDLE)client_sock, hcp, client_sock, 0);
-
 		//소켓 정보 구조체 할당
 		SOCKETINFO* ptr = new SOCKETINFO;
 		if (ptr == NULL) break;
 		ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
+		ptr->overlapped.op = ERecv;
 		ptr->sock = client_sock;
-		ptr->recvbytes = ptr->sendbytes = 0;
-		ptr->wsabuf.buf = ptr->buf;
-		ptr->wsabuf.len = BUFSIZE;
+		ptr->recvBuf.ClearBuffer();
+		WSABUF wsabuf;
+		wsabuf.buf = ptr->recvBuf.GetFrontBufferPtr();
+		wsabuf.len = BUFSIZE;
+
+		//세션을 맵에 저장
+		//mSession[SessionID++] = ptr;
+
+		//소켓과 입출력 완료 포트 연결
+		CreateIoCompletionPort((HANDLE)client_sock, hcp, (ULONG_PTR)ptr, 0);
 
 		//비동기 입출력 시작
 		flags = 0;
-		retval = WSARecv(client_sock, &ptr->wsabuf, 1, &recvbytes, &flags, &ptr->overlapped, NULL);
+		retval = WSARecv(client_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->overlapped, NULL);
 		if (retval == SOCKET_ERROR)
 		{
 			if (WSAGetLastError() != ERROR_IO_PENDING) {
@@ -135,10 +166,11 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 
 	while (1) {
 		//비동기 입출력 완료 기다리기
-		DWORD cbTransferrsd;
+		DWORD cbTransferred;
 		SOCKET client_sock;
 		SOCKETINFO* ptr;
-		retval = GetQueuedCompletionStatus(hcp, &cbTransferrsd, (PULONG_PTR)&client_sock, (LPOVERLAPPED*)&ptr, INFINITE);
+		IOCP_CONTEXT* lpOverlapped;
+		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
 
 		//클라이언트 정보 얻기
 		SOCKADDR_IN clientaddr;
@@ -146,62 +178,86 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 		getpeername(ptr->sock, (SOCKADDR*)&clientaddr, &addrlen);
 
 		//비동기 입출력 결과 확인
-		if (retval == 0 || cbTransferrsd == 0)
+		if (cbTransferred == 0)
 		{
-			if (retval == 0)
-			{
-				DWORD temp1, temp2;
-				WSAGetOverlappedResult(ptr->sock, &ptr->overlapped, &temp1, false, &temp2);
-				err_display("WSAGetOverlappedResult()");
-			}
 			closesocket(ptr->sock);
 			printf("[TCP 서버] 클라이언트 종료 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 			delete ptr;
 			continue;
 		}
-
-		//데이터 전송량 갱신
-		if (ptr->recvbytes == 0)
+		else if (retval == 0)
 		{
-			ptr->recvbytes = cbTransferrsd;
-			ptr->sendbytes = 0;
-			//받은 데이터 출력
-			ptr->buf[ptr->recvbytes] = '\0';
-			printf("[TCP/%s : %d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), ptr->buf);
-		}
-		else
-		{
-			ptr->sendbytes += cbTransferrsd;
+			DWORD temp1, temp2;
+			WSAGetOverlappedResult(ptr->sock, (LPWSAOVERLAPPED)&ptr->overlapped, &temp1, false, &temp2);
+			err_display("WSAGetOverlappedResult()");
 		}
 
-		if (ptr->recvbytes > ptr->sendbytes) {
-			//데이터 보내기
+		//--------------------------------
+		// Recv완료 후 처리
+		//--------------------------------
+		if (lpOverlapped->op == ERecv)
+		{
+			//Recv 버퍼에 있는 내용 읽어서, send링버퍼에 담기
+			char buf[BUFSIZE + 1];
+			ptr->recvBuf.Dequeue(buf, cbTransferred);
+			buf[cbTransferred] = '\0';
+
+			int buflen = strlen(buf);
+			ptr->sendBuf.Enqueue(buf, buflen);
+			printf("[TCP/%s : %d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), buf);
+
+
+			//Send 링버퍼에 있는 있는 내용 전부 Send
 			ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
-			ptr->wsabuf.buf = ptr->buf + ptr->sendbytes;
-			ptr->wsabuf.len = ptr->recvbytes - ptr->sendbytes;
-
-			DWORD sendbytes;
-			retval = WSASend(ptr->sock, &ptr->wsabuf, 1, &sendbytes, 0, &ptr->overlapped, NULL);
-			if (retval == SOCKET_ERROR)
+			ptr->overlapped.op = ESend;
+			
+			int sendlen = ptr->sendBuf.GetUseSize();
+			if (sendlen > ptr->sendBuf.DirectDequeueSize())
 			{
-				if (WSAGetLastError() != WSA_IO_PENDING)
-				{
-					err_display("WSASend()");
-				}
-				continue;
-			}
-		}
-		else {
-			ptr->recvbytes = 0;
+				WSABUF wsabuf[2];
+				wsabuf[0].buf = ptr->sendBuf.GetFrontBufferPtr();
+				wsabuf[0].len = ptr->sendBuf.DirectDequeueSize();
+				int front = ptr->sendBuf.GetBufferSize() - ptr->sendBuf.GetFreeSize() - ptr->sendBuf.DirectDequeueSize();
+				wsabuf[1].buf = ptr->sendBuf.GetRearBufferPtr() - front;
+				wsabuf[1].len = front;
 
-			//데이터 받기
+				retval = WSASend(ptr->sock, wsabuf, 2, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)&ptr->overlapped, NULL);
+				if (retval == SOCKET_ERROR)
+				{
+					if (WSAGetLastError() != WSA_IO_PENDING)
+					{
+						err_display("WSASend()");
+					}
+					continue;
+				}
+			}
+			else
+			{
+				WSABUF wsabuf;
+				wsabuf.buf = ptr->sendBuf.GetFrontBufferPtr();
+				wsabuf.len = ptr->sendBuf.DirectDequeueSize();
+
+				retval = WSASend(ptr->sock, &wsabuf, 1, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)&ptr->overlapped, NULL);
+				if (retval == SOCKET_ERROR)
+				{
+					if (WSAGetLastError() != WSA_IO_PENDING)
+					{
+						err_display("WSASend()");
+					}
+					continue;
+				}
+			}
+			
+			//Send 한 후 다시 Recv 등록하기
 			ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
-			ptr->wsabuf.buf = ptr->buf;
-			ptr->wsabuf.len = BUFSIZE;
+			ptr->overlapped.op = ERecv;
+			WSABUF wsabuf;
+			wsabuf.buf = ptr->recvBuf.GetFrontBufferPtr();
+			wsabuf.len = ptr->recvBuf.GetFreeSize();
 
 			DWORD recvbytes;
 			DWORD flags = 0;
-			retval = WSARecv(ptr->sock, &ptr->wsabuf, 1, &recvbytes, &flags, &ptr->overlapped, NULL);
+			retval = WSARecv(ptr->sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->overlapped, NULL);
 			if (retval == SOCKET_ERROR)
 			{
 				if (WSAGetLastError() != WSA_IO_PENDING) {
@@ -209,6 +265,16 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 				}
 				continue;
 			}
+
+		}
+		//--------------------------------
+		// Send완료 후 처리
+		//--------------------------------
+		else if(lpOverlapped->op == ESend)
+		{
+			//SendRingBuffer 정리
+			//Send에 성공한 크기만큼 송신 버퍼에서 movefront
+			ptr->sendBuf.MoveFront(cbTransferred);
 		}
 	}
 

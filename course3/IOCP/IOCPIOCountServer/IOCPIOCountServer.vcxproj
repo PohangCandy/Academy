@@ -128,9 +128,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CompletionPort.cpp" />
+    <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="errlog.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="errlog.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

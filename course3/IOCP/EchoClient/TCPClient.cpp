@@ -11,7 +11,7 @@
 //#define SERVERIP "192.168.20.32"
 #define SERVERPORT 9000
 //#define BUFSIZE (1024 * 1024)
-#define BUFSIZE (1024)
+#define BUFSIZE (512)
 
 //데이터 통신에 사용할 변수
 char buf[BUFSIZE + 1];

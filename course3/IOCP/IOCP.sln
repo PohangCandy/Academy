@@ -9,8 +9,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IOCPIOCountServer", "IOCPIO
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SeparateNetLibWithContent", "SeparateNetLibWithContent\SeparateNetLibWithContent.vcxproj", "{49072E53-DD86-4D6A-B3C1-29DB6D25D871}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SyncAsyncIOCPTester", "SyncAsyncIOCPTester\SyncAsyncIOCPTester.vcxproj", "{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -43,14 +41,6 @@ Global
 		{49072E53-DD86-4D6A-B3C1-29DB6D25D871}.Release|x64.Build.0 = Release|x64
 		{49072E53-DD86-4D6A-B3C1-29DB6D25D871}.Release|x86.ActiveCfg = Release|Win32
 		{49072E53-DD86-4D6A-B3C1-29DB6D25D871}.Release|x86.Build.0 = Release|Win32
-		{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}.Debug|x64.ActiveCfg = Debug|x64
-		{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}.Debug|x64.Build.0 = Debug|x64
-		{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}.Debug|x86.ActiveCfg = Debug|Win32
-		{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}.Debug|x86.Build.0 = Debug|Win32
-		{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}.Release|x64.ActiveCfg = Release|x64
-		{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}.Release|x64.Build.0 = Release|x64
-		{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}.Release|x86.ActiveCfg = Release|Win32
-		{E93D0897-4FDF-43A1-B7EC-CF3C3E1A8A99}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
