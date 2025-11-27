@@ -42,8 +42,6 @@ struct SOCKETINFO
 	char buf[BUFSIZE + 1];
 	int recvbytes;
 	int sendbytes;
-	//멤버로 굳이 넣지 않아도 됨
-	WSABUF wsabuf;
 };
 
 //작업자 스레드 함수
@@ -163,12 +161,13 @@ int main(int argc, char* argv[])
 		ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
 		ptr->sock = client_sock;
 		ptr->recvbytes = ptr->sendbytes = 0;
-		ptr->wsabuf.buf = ptr->buf;
-		ptr->wsabuf.len = BUFSIZE;
+		WSABUF wsabuf;
+		wsabuf.buf = ptr->buf;
+		wsabuf.len = BUFSIZE;
 
 		//비동기 입출력 시작
 		flags = 0;
-		retval = WSARecv(client_sock, &ptr->wsabuf, 1, &recvbytes, &flags, &ptr->overlapped, NULL);
+		retval = WSARecv(client_sock, &wsabuf, 1, &recvbytes, &flags, &ptr->overlapped, NULL);
 		if (retval == SOCKET_ERROR)
 		{
 			if (WSAGetLastError() != ERROR_IO_PENDING) {
@@ -259,13 +258,14 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 		if (ptr->recvbytes > ptr->sendbytes) {
 			//데이터 보내기
 			ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
-			ptr->wsabuf.buf = ptr->buf + ptr->sendbytes;
-			ptr->wsabuf.len = ptr->recvbytes - ptr->sendbytes;
+			WSABUF wsabuf;
+			wsabuf.buf = ptr->buf + ptr->sendbytes;
+			wsabuf.len = ptr->recvbytes - ptr->sendbytes;
 
 			DWORD sendbytes;
 
 			ProfileBegin(f1);
-			retval = WSASend(ptr->sock, &ptr->wsabuf, 1, &sendbytes, 0, &ptr->overlapped, NULL);
+			retval = WSASend(ptr->sock, &wsabuf, 1, &sendbytes, 0, &ptr->overlapped, NULL);
 			ProfileEnd(f1);
 
 			InterlockedAdd((LONG*)&TotalSend, 1);
@@ -289,12 +289,13 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 
 			//데이터 받기
 			ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
-			ptr->wsabuf.buf = ptr->buf;
-			ptr->wsabuf.len = BUFSIZE;
+			WSABUF wsabuf;
+			wsabuf.buf = ptr->buf;
+			wsabuf.len = BUFSIZE;
 
 			DWORD recvbytes;
 			DWORD flags = 0;
-			retval = WSARecv(ptr->sock, &ptr->wsabuf, 1, &recvbytes, &flags, &ptr->overlapped, NULL);
+			retval = WSARecv(ptr->sock, &wsabuf, 1, &recvbytes, &flags, &ptr->overlapped, NULL);
 			InterlockedAdd((LONG*)&TotalRecv, 1);
 			if (retval == SOCKET_ERROR)
 			{
