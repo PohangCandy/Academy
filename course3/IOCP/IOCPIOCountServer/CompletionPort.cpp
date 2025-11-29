@@ -43,17 +43,26 @@ enum EIOCP_OPERATION
 // 완료된 비동기 함수를 나타내는 확장된 Overlapped
 //-----------------------------------
 struct IOCP_CONTEXT {
-	OVERLAPPED overlapped;
+	OVERLAPPED overlapped = {};
 	EIOCP_OPERATION op;
+
+	IOCP_CONTEXT(EIOCP_OPERATION operation)
+		:op{operation}
+	{
+
+	}
+
 };
 
 //소켓 정보 저장을 위한 구조체
 struct SOCKETINFO
 {
-	IOCP_CONTEXT overlapped;
-	SOCKET sock;
+	IOCP_CONTEXT sendOverlapped{ESend};
+	IOCP_CONTEXT recvOverlapped{ERecv};
+	SOCKET sock = INVALID_SOCKET;
 	CRingBuffer recvBuf{BUFSIZE + 1};
 	CRingBuffer sendBuf{BUFSIZE + 1};
+	bool IsSending = false;
 };
 
 //--------------------------------
@@ -127,13 +136,13 @@ int main(int argc, char* argv[])
 		//소켓 정보 구조체 할당
 		SOCKETINFO* ptr = new SOCKETINFO;
 		if (ptr == NULL) break;
-		ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
-		ptr->overlapped.op = ERecv;
+		ZeroMemory(&ptr->recvOverlapped, sizeof(ptr->recvOverlapped));
+		ptr->recvOverlapped.op = ERecv;
 		ptr->sock = client_sock;
 		ptr->recvBuf.ClearBuffer();
 		WSABUF wsabuf;
 		wsabuf.buf = ptr->recvBuf.GetFrontBufferPtr();
-		wsabuf.len = BUFSIZE;
+		wsabuf.len = ptr->recvBuf.GetFreeSize();
 
 		//세션을 맵에 저장
 		//mSession[SessionID++] = ptr;
@@ -143,7 +152,7 @@ int main(int argc, char* argv[])
 
 		//비동기 입출력 시작
 		flags = 0;
-		retval = WSARecv(client_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->overlapped, NULL);
+		retval = WSARecv(client_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->recvOverlapped, NULL);
 		if (retval == SOCKET_ERROR)
 		{
 			if (WSAGetLastError() != ERROR_IO_PENDING) {
@@ -188,76 +197,101 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 		else if (retval == 0)
 		{
 			DWORD temp1, temp2;
-			WSAGetOverlappedResult(ptr->sock, (LPWSAOVERLAPPED)&ptr->overlapped, &temp1, false, &temp2);
+			WSAGetOverlappedResult(ptr->sock, (LPWSAOVERLAPPED)&lpOverlapped, &temp1, false, &temp2);
 			err_display("WSAGetOverlappedResult()");
 		}
 
 		//--------------------------------
 		// Recv완료 후 처리
+		// 1. 링버퍼에 들어온 크기만큼 Rear의 위치 옮기기 -> 링버퍼가 덮어씌워지는 일이 없도록 주의해야 함.
+		// 2. Echo이므로 메시지를 읽은 후, 다시 Send, 이후 다시 Recv상태로 전환 
 		//--------------------------------
 		if (lpOverlapped->op == ERecv)
 		{
+			if (!ptr->recvBuf.MoveRear(cbTransferred))
+			{
+				//수신 링버퍼가 가득차서 더이상 데이터를 받을 수 없는 상황
+				printf("[SendRingbuf] : I'm Alread Full\n");
+			}
+
 			//Recv 버퍼에 있는 내용 읽어서, send링버퍼에 담기
 			char buf[BUFSIZE + 1];
-			ptr->recvBuf.Dequeue(buf, cbTransferred);
+			if (cbTransferred != ptr->recvBuf.Dequeue(buf, cbTransferred))
+			{
+				//수신 링버퍼에 읽을 수 있는 길이만큼 담기지 않았음.
+				//100%human error
+				printf("human error occur while recv\n");
+			}
+			
 			buf[cbTransferred] = '\0';
 
 			int buflen = strlen(buf);
-			ptr->sendBuf.Enqueue(buf, buflen);
-			printf("[TCP/%s : %d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), buf);
-
-
-			//Send 링버퍼에 있는 있는 내용 전부 Send
-			ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
-			ptr->overlapped.op = ESend;
-			
-			int sendlen = ptr->sendBuf.GetUseSize();
-			if (sendlen > ptr->sendBuf.DirectDequeueSize())
+			if (buflen != ptr->sendBuf.Enqueue(buf, buflen))
 			{
-				WSABUF wsabuf[2];
-				wsabuf[0].buf = ptr->sendBuf.GetFrontBufferPtr();
-				wsabuf[0].len = ptr->sendBuf.DirectDequeueSize();
-				int front = ptr->sendBuf.GetBufferSize() - ptr->sendBuf.GetFreeSize() - ptr->sendBuf.DirectDequeueSize();
-				wsabuf[1].buf = ptr->sendBuf.GetRearBufferPtr() - front;
-				wsabuf[1].len = front;
-
-				retval = WSASend(ptr->sock, wsabuf, 2, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)&ptr->overlapped, NULL);
-				if (retval == SOCKET_ERROR)
-				{
-					if (WSAGetLastError() != WSA_IO_PENDING)
-					{
-						err_display("WSASend()");
-					}
-					continue;
-				}
+				printf("송신 링버퍼가 꽉 참.\n");
+				//클라 강제 종료 절차.
 			}
-			else
-			{
-				WSABUF wsabuf;
-				wsabuf.buf = ptr->sendBuf.GetFrontBufferPtr();
-				wsabuf.len = ptr->sendBuf.DirectDequeueSize();
+			else {
+				printf("[TCP/%s : %d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), buf); //이부분에서 줄바꿈이 씹힘.
+			}
 
-				retval = WSASend(ptr->sock, &wsabuf, 1, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)&ptr->overlapped, NULL);
-				if (retval == SOCKET_ERROR)
+
+			//Send 중이 아니라면
+			//Send 링버퍼에 있는 있는 내용 전부 Send
+			if (ptr->IsSending == false)
+			{
+				ptr->IsSending = true;
+				ZeroMemory(&ptr->sendOverlapped, sizeof(ptr->sendOverlapped));
+				ptr->sendOverlapped.op = ESend;
+
+				int sendlen = ptr->sendBuf.GetUseSize();
+				if (sendlen > ptr->sendBuf.DirectDequeueSize())
 				{
-					if (WSAGetLastError() != WSA_IO_PENDING)
+					WSABUF wsabuf[2];
+					wsabuf[0].buf = ptr->sendBuf.GetFrontBufferPtr();
+					wsabuf[0].len = ptr->sendBuf.DirectDequeueSize();
+					int frontSize = ptr->sendBuf.GetBufferSize() - ptr->sendBuf.GetFreeSize() - ptr->sendBuf.DirectDequeueSize();
+					wsabuf[1].buf = ptr->sendBuf.GetRearBufferPtr() - frontSize;
+					wsabuf[1].len = frontSize;
+
+					retval = WSASend(ptr->sock, wsabuf, 2, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)&ptr->sendOverlapped, NULL);
+					if (retval == SOCKET_ERROR)
 					{
-						err_display("WSASend()");
+						if (WSAGetLastError() != WSA_IO_PENDING)
+						{
+							err_display("WSASend()");
+						}
+						continue;
 					}
-					continue;
+				}
+				else
+				{
+					WSABUF wsabuf;
+					wsabuf.buf = ptr->sendBuf.GetFrontBufferPtr();
+					wsabuf.len = ptr->sendBuf.DirectDequeueSize();
+
+					retval = WSASend(ptr->sock, &wsabuf, 1, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)&ptr->sendOverlapped, NULL);
+					if (retval == SOCKET_ERROR)
+					{
+						if (WSAGetLastError() != WSA_IO_PENDING)
+						{
+							err_display("WSASend()");
+						}
+						continue;
+					}
 				}
 			}
 			
 			//Send 한 후 다시 Recv 등록하기
-			ZeroMemory(&ptr->overlapped, sizeof(ptr->overlapped));
-			ptr->overlapped.op = ERecv;
+			ZeroMemory(&ptr->recvOverlapped, sizeof(ptr->recvOverlapped));
+			ptr->recvOverlapped.op = ERecv;
 			WSABUF wsabuf;
 			wsabuf.buf = ptr->recvBuf.GetFrontBufferPtr();
 			wsabuf.len = ptr->recvBuf.GetFreeSize();
 
 			DWORD recvbytes;
 			DWORD flags = 0;
-			retval = WSARecv(ptr->sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->overlapped, NULL);
+			retval = WSARecv(ptr->sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->recvOverlapped, NULL);
 			if (retval == SOCKET_ERROR)
 			{
 				if (WSAGetLastError() != WSA_IO_PENDING) {
@@ -275,6 +309,7 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 			//SendRingBuffer 정리
 			//Send에 성공한 크기만큼 송신 버퍼에서 movefront
 			ptr->sendBuf.MoveFront(cbTransferred);
+			ptr->IsSending = false;
 		}
 	}
 
