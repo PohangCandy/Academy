@@ -13,6 +13,13 @@ CRingBuffer::CRingBuffer(int iBufferSize)
 {
 }
 
+CRingBuffer::~CRingBuffer() {
+    if (m_pBuffer != nullptr) {
+        delete[] m_pBuffer; // 할당된 메모리 해제
+        m_pBuffer = nullptr;
+    }
+}
+
 void CRingBuffer::Resize(int size)
 {
     delete[] m_pBuffer;
