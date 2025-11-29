@@ -83,7 +83,7 @@ int main()
 		//	break;
 		//buf[0] = (sendNum % 10) + '0';
 		//buf[1] = '\0';
-		memset(buf, 1, BUFSIZE);
+		memset(buf, 'a', BUFSIZE);
 		buf[BUFSIZE] = '\0';
 
 		//데이터 보내기

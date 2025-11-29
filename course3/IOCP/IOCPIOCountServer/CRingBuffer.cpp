@@ -224,9 +224,13 @@ int CRingBuffer::MoveRear(int iSize)
     if (m_iBufferSize == 0)
         return 0;
 
+    //---------------------------
+    // Rear를 옮기려고 하는데 해당 크기만큼 옮길 수 없는 경우
+    // Rear 변화없이 0리턴
+    //---------------------------
     int freeSize = GetFreeSize();
     if (iSize > freeSize)
-        iSize = freeSize;
+        return 0;
 
     m_iRear = (m_iRear + iSize) % m_iBufferSize;
     m_bIsFull = (m_iRear == m_iFront);
@@ -239,9 +243,13 @@ int CRingBuffer::MoveFront(int iSize)
     if (m_iBufferSize == 0)
         return 0;
 
+ //---------------------------
+// Front를 옮기려고 하는데 해당 크기만큼 옮길 수 없는 경우
+// Front 변화없이 0리턴
+//---------------------------
     int useSize = GetUseSize();
     if (iSize > useSize)
-        iSize = useSize;
+        return 0;
 
     m_iFront = (m_iFront + iSize) % m_iBufferSize;
     m_bIsFull = false;
