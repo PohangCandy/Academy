@@ -40,6 +40,8 @@ public:
 	CRingBuffer(void);
 	CRingBuffer(int iBufferSize);
 
+	~CRingBuffer();
+
 	void	Resize(int size);
 
 	int GetBufferSize(void);

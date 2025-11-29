@@ -7,9 +7,9 @@
 #include <stdio.h>
 #include "errlog.h"
 
-#define SERVERIP "127.0.0.1"
+#define SERVERIP ("127.0.0.1")
 //#define SERVERIP "192.168.20.32"
-#define SERVERPORT 9000
+#define SERVERPORT (6000)
 //#define BUFSIZE (1024 * 1024)
 #define BUFSIZE (512)
 
