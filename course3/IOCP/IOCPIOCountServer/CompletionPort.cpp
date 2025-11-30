@@ -27,7 +27,7 @@
 #include "CRingBuffer.h"
 
 #define SERVERPORT (6000)
-#define BUFSIZE (512)
+#define BUFSIZE (1000)
 
 int d_recv = 0;
 int d_send = 0;
@@ -167,6 +167,7 @@ int main(int argc, char* argv[])
 		ptr->recvOverlapped.op = ERecv;
 		ptr->sock = client_sock;
 		ptr->recvBuf.ClearBuffer();
+		ptr->sendBuf.ClearBuffer();
 		WSABUF wsabuf;
 		wsabuf.buf = ptr->recvBuf.GetFrontBufferPtr();
 		wsabuf.len = ptr->recvBuf.GetFreeSize();
@@ -298,7 +299,7 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 
 			//Send 중이 아니라면
 			//Send 링버퍼에 있는 있는 내용 전부 Send
-			if (InterlockedExchange(&ptr->IsSending, 1) == 0)
+			if (InterlockedCompareExchange(&ptr->IsSending, 1,0) == 0)
 			{
 				printf("송신 진행 중 아님, 송신 루트 탐.\n");
 				ZeroMemory(&ptr->sendOverlapped, sizeof(ptr->sendOverlapped));
@@ -371,33 +372,65 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 			printf("다시 recv 대기하기\n");
 			ZeroMemory(&ptr->recvOverlapped, sizeof(ptr->recvOverlapped));
 			ptr->recvOverlapped.op = ERecv;
-			WSABUF wsabuf;
-			wsabuf.buf = ptr->recvBuf.GetFrontBufferPtr();
-			wsabuf.len = ptr->recvBuf.GetFreeSize();
 
-			DWORD recvbytes;
-			DWORD flags = 0;
-			InterlockedIncrement((long*)&ptr->IOCount);
-			InterlockedIncrement((long*)&i_recv);
-			retval = WSARecv(ptr->sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->recvOverlapped, NULL);
-			if (retval == SOCKET_ERROR)
+			//Direct로 넣을 수 있냐 없냐에 따라 여러 버퍼로 나눠서 받아야 함.
+			int recvlen = ptr->recvBuf.GetFreeSize();
+			if (recvlen > ptr->recvBuf.DirectEnqueueSize())
 			{
-				if (WSAGetLastError() != WSA_IO_PENDING) {
-					err_display("WSARecv()");
+				WSABUF wsabuf[2];
+				wsabuf[0].buf = ptr->recvBuf.GetRearBufferPtr();
+				wsabuf[0].len = ptr->recvBuf.DirectEnqueueSize();
+				int frontSize = ptr->recvBuf.GetFreeSize() - ptr->recvBuf.DirectEnqueueSize();
+				wsabuf[1].buf = ptr->recvBuf.GetFrontBufferPtr() - frontSize;
+				wsabuf[1].len = frontSize;
+				DWORD recvbytes;
+				DWORD flags = 0;
+				InterlockedIncrement((long*)&ptr->IOCount);
+				InterlockedIncrement((long*)&i_recv);
+				retval = WSARecv(ptr->sock, wsabuf, 2, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->recvOverlapped, NULL);
+
+				if (retval == SOCKET_ERROR)
+				{
+					if (WSAGetLastError() != WSA_IO_PENDING)
+					{
+						err_display("WSARecv()");
+					}
 					InterlockedDecrement((long*)&d_recv);
 					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
 					{
 						ReleaseSession(clientaddr, ptr);
 					}
+					continue;
 				}
 
-				InterlockedDecrement((long*)&d_recv);
-				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+			}
+			else
+			{
+				WSABUF wsabuf;
+				wsabuf.buf = ptr->recvBuf.GetRearBufferPtr();
+				wsabuf.len = ptr->recvBuf.DirectEnqueueSize();
+				DWORD recvbytes;
+				DWORD flags = 0;
+				InterlockedIncrement((long*)&ptr->IOCount);
+				InterlockedIncrement((long*)&i_recv);
+				retval = WSARecv(ptr->sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->recvOverlapped, NULL);
+
+				if (retval == SOCKET_ERROR)
 				{
-					ReleaseSession(clientaddr, ptr);
+					if (WSAGetLastError() != WSA_IO_PENDING)
+					{
+						err_display("WSARecv()");
+					}
+					//-------------------------------------------------
+					// 이럴땐 어떻게 하는게 정상일까
+					//-------------------------------------------------
+					InterlockedDecrement((long*)&d_recv);
+					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+					{
+						ReleaseSession(clientaddr, ptr);
+					}
+					continue;
 				}
-
-				continue;
 			}
 
 			InterlockedDecrement((long*)&d_recv);
@@ -416,7 +449,7 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 
 			//이때 송신 링버퍼에 데이터가 있다면 다시 Send를 실행해준다.
 			//Send 링버퍼에 있는 있는 내용 전부 Send
-			if (ptr->sendBuf.GetUseSize() != 0 && InterlockedExchange(&ptr->IsSending, 1) == 1)
+			if (ptr->sendBuf.GetUseSize() != 0 && InterlockedCompareExchange(&ptr->IsSending, 1,1) == 1)
 			{
 				printf("송신 완료 했는데 송신 링버퍼에 잔여물 남은 경우.\n");
 				ZeroMemory(&ptr->sendOverlapped, sizeof(ptr->sendOverlapped));
@@ -482,7 +515,7 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 			}
 
 			//SendRingBuffer 정리
-			if (InterlockedExchange(&ptr->IsSending, 0) == 0)
+			if (InterlockedCompareExchange(&ptr->IsSending, 0,1) == 0)
 			{
 				printf("Send 중첩 발생\n");
 			}
