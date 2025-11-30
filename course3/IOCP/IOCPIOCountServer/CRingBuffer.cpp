@@ -210,9 +210,9 @@ int CRingBuffer::DirectEnqueueSize(void)
         return 0;
 
     if (m_iRear >= m_iFront)
-        return m_iBufferSize - m_iRear - (m_iFront == 0 ? 0 : 1);
+        return m_iBufferSize - m_iRear;
     else
-        return m_iFront - m_iRear - 1;
+        return m_iFront - m_iRear;
 }
 
 int CRingBuffer::DirectDequeueSize(void)
