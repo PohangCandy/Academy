@@ -37,7 +37,7 @@ const int MSG_SIZE = 6;
 struct Msg {
     int len = 0;
     //memcpy 목적 주소가 되려면 string이 아닌 char*이어야 함.
-    char paylaod[MSG_SIZE];
+    char payload[MSG_SIZE];
 };
 
 
@@ -70,7 +70,8 @@ Msg makeRandMsg()
     string enqueueData = GetRandomString(len);
 
     m.len = len;
-    strcpy_s(m.paylaod, MSG_SIZE, enqueueData.c_str());
+    m.payload = enqueueData;
+    //strcpy_s(m.payload, MSG_SIZE, enqueueData.c_str());
     return m;
 }
 
@@ -141,7 +142,7 @@ void ConsumerThread()
             {
                 //이미 읽은 헤더는 제외하고 읽자.
                 g_buffer.MoveFront(sizeof(recvMsg.len));
-                int dequeued_size = g_buffer.Dequeue((char*)&recvMsg.paylaod, recvMsg.len);
+                int dequeued_size = g_buffer.Dequeue((char*)&recvMsg.payload, recvMsg.len);
 
                 if (dequeued_size == recvMsg.len)
                 {
@@ -197,7 +198,7 @@ int main()
             int msglength = g_EnqueData[i].len;
             for (int j = 0; j < msglength; j++)
             {
-                if (*(g_EnqueData[i].paylaod + j) != *(g_DequeData[i].paylaod + j))
+                if (*(g_EnqueData[i].payload + j) != *(g_DequeData[i].payload + j))
                 {
                     bWrong = true;
                     break;
@@ -220,11 +221,11 @@ int main()
             string dS;
             for (int i = 0; i < g_EnqueData[i].len ; i++)
             {
-                eS += *(g_EnqueData[i].paylaod + i);
+                eS += *(g_EnqueData[i].payload + i);
             }
             for (int i = 0; i < g_DequeData[i].len; i++)
             {
-                dS += *(g_DequeData[i].paylaod + i);
+                dS += *(g_DequeData[i].payload + i);
             }
 
             cout << "Enqueue측 데이터 : " << eS << " Dnqueue측 데이터 : " << dS << "\n";

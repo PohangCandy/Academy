@@ -18,12 +18,18 @@
     <ClInclude Include="errlog.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="TestUtils.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="TCPClient.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="errlog.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="TestUtils.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
