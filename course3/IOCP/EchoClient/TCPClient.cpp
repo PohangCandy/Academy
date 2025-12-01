@@ -6,15 +6,40 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "errlog.h"
+#include "TestUtils.h"
 
 #define SERVERIP ("127.0.0.1")
 //#define SERVERIP "192.168.20.32"
 #define SERVERPORT (6000)
 //#define BUFSIZE (1024 * 1024)
 #define BUFSIZE (1000)
+#define MSG_SIZE (8)
 
 //데이터 통신에 사용할 변수
 char buf[BUFSIZE + 1];
+
+//dequeue 할 길이를 알아야하므로 메시지 길이가 앞에 헤더 작성 필요.
+struct Msg {
+	short len = 0;
+	//memcpy 목적 주소가 되려면 string이 아닌 char*이어야 함.
+	char payload[MSG_SIZE];
+};
+
+//----------------------------------------------------------------------------
+// 메시지 랜덤 생성 함수
+//----------------------------------------------------------------------------
+Msg makeRandMsg()
+{
+	Msg m;
+
+	int len = GetRandomNumber(1, MSG_SIZE - sizeof(int));
+	string enqueueData = GetRandomString(len);
+
+	m.len = len;
+	m.payload = enqueueData;
+	//strcpy_s(m.payload, MSG_SIZE, enqueueData.c_str());
+	return m;
+}
 
 
 //사용자 정의 데이터 수신 함수
