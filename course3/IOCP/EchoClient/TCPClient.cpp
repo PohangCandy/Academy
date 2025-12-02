@@ -28,18 +28,18 @@ struct Msg {
 //----------------------------------------------------------------------------
 // 메시지 랜덤 생성 함수
 //----------------------------------------------------------------------------
-Msg makeRandMsg()
-{
-	Msg m;
-
-	int len = GetRandomNumber(1, MSG_SIZE - sizeof(int));
-	string enqueueData = GetRandomString(len);
-
-	m.len = len;
-	m.payload = enqueueData;
-	//strcpy_s(m.payload, MSG_SIZE, enqueueData.c_str());
-	return m;
-}
+//Msg makeRandMsg()
+//{
+//	Msg m;
+//
+//	int len = GetRandomNumber(1, MSG_SIZE - sizeof(int));
+//	string enqueueData = GetRandomString(len);
+//
+//	m.len = len;
+//	m.payload = enqueueData;
+//	//strcpy_s(m.payload, MSG_SIZE, enqueueData.c_str());
+//	return m;
+//}
 
 
 //사용자 정의 데이터 수신 함수
