@@ -3,9 +3,11 @@
 #include <cstring>   // memcpy
 #include <algorithm> // std::min
 
+
 CRingBuffer::CRingBuffer(void)
     : m_pBuffer(nullptr), m_iBufferSize(0), m_iFront(0), m_iRear(0), m_bIsFull(false)
 {
+    InitializeCriticalSection(&m_csRingbuffer);
 }
 
 CRingBuffer::CRingBuffer(int iBufferSize)
@@ -18,6 +20,7 @@ CRingBuffer::~CRingBuffer() {
         delete[] m_pBuffer; // 할당된 메모리 해제
         m_pBuffer = nullptr;
     }
+    DeleteCriticalSection(&m_csRingbuffer);
 }
 
 void CRingBuffer::Resize(int size)
@@ -261,6 +264,7 @@ int CRingBuffer::MoveFront(int iSize)
     m_iFront = (m_iFront + iSize) % m_iBufferSize;
     m_bIsFull = false;
 
+
     return iSize;
 }
 
@@ -276,4 +280,14 @@ char* CRingBuffer::GetRearBufferPtr(void)
     if (m_iBufferSize == 0)
         return nullptr;
     return m_pBuffer + m_iRear;
+}
+
+void CRingBuffer::GetLockBuffer()
+{
+    EnterCriticalSection(&m_csRingbuffer);
+}
+
+void CRingBuffer::UnLockBuffer()
+{
+    LeaveCriticalSection(&m_csRingbuffer);
 }
