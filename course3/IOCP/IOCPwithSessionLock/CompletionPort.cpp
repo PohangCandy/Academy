@@ -6,7 +6,7 @@
 // IOCount를 없애고 세션 락으로 대체해서 정상작동하도록 만든다.
 // 
 // 방법 : 
-// 1. 컨테츠 스레드를 네트워크 스레드에서 분리한다.
+// 1. 컨텐츠 스레드를 네트워크 스레드에서 분리한다.
 // 1. Session 진입을 CriticalSection을 이용해 다른 스레드의 진입을 막는다.
 // 2. SessionMap으로 Session의 키와 Session을 관리한다. 이렇게 되면 맵도 구조체 안에 선언해서 락을 걸어야 하나?
 // 
@@ -511,7 +511,6 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 	IOCPHandle* iocpHandle = (IOCPHandle*)arg;
 	HANDLE hcp = iocpHandle->netHcp;
 
-	cSessionMap* sessionMap = cSessionMap::GetSessionMap();
 
 	while (1) {
 		//비동기 입출력 완료 기다리기
@@ -702,17 +701,19 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 				continue;
 			}
 		}
+		//현재는 사용하지 않는다.
+		// 나중에 SendPacket이나 GetPacket에서 링버퍼에 직접 접근하게 만들경우 사용해본다. 
 		//컨텐츠 스레드로부터 완료 통지를 받은 경우
-		else if (lpOverlapped->op == EContents)
-		{
-			//송신 링버퍼에 남은 데이터를 Send
-			if (!WsaSendSession(clientaddr, ptr))
-			{
-				//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
-				continue;
-			}
+		//else if (lpOverlapped->op == EContents)
+		//{
+		//	//송신 링버퍼에 남은 데이터를 Send
+		//	if (!WsaSendSession(clientaddr, ptr))
+		//	{
+		//		//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
+		//		continue;
+		//	}
 
-		}
+		//}
 		else if(lpOverlapped->op == ESend)
 		{
 			//락 풀기전에 Send한 크기만큼 송신 버퍼에서 movefront
