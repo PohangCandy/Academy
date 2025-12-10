@@ -1,17 +1,29 @@
 //---------------------------------------------------------------------------------------------
 // 프로젝트명: 
-// 한 세션에 하나의 스레드만 접근을 허락하는 IOCP 서버
+// 컨텐츠와 네트워크를 완전히 분리한 IOCP 서버
 // 
 // 목적:
-// IOCount를 없애고 세션 락으로 대체해서 정상작동하도록 만든다.
+// 다양한 컨텐츠에 활용될 수 있는 네트워크 라이브러리를 설계한다. 
 // 
 // 방법 : 
-// 1. 컨텐츠 스레드를 네트워크 스레드에서 분리한다.
-// 1. Session 진입을 CriticalSection을 이용해 다른 스레드의 진입을 막는다.
-// 2. SessionMap으로 Session의 키와 Session을 관리한다. 이렇게 되면 맵도 구조체 안에 선언해서 락을 걸어야 하나?
+// 컨텐츠 스레드를 네트워크 스레드를 분리하고,
+// 컨텐츠에서 알 수 있는 네트워크 정보를 세션 ID로 제한한다.
+// 락을 통해 컨텐츠 스레드와 네트워크 스레드의 공유 자원을 동기화 시킨다.
 // 
 // 결론 :
+// 1. Send가 중첩으로 발생되지 않기 위한 추가 장치가 마련되어야 했음.
+//   -> 송신 링버퍼 락
 // 
+// 2. 끊어질 세션에 대해 IO가 추가적으로 진행되지 않도록 해야 함.
+//  -> IOCount 0(closesocket) -> 1(wsasend) -> 0(send 완료)되면 ReleaseSession을 2번 발생시킴.
+// 이를 방지하기 위해 send 증가시킨 결과가 1이라면 send 하지 않도록 만듬.
+// 
+// 3. 세션 별로 메시지 큐 할당
+// -> 전역에 있는 메시지 큐에 넣는 순서가 바뀌었을때, 잘못된 세션에게 메시지를 보낼 수도 있음.
+// 
+// 추후 예정 :
+// 1. 각종 성능 테스트 비교
+// 2.  IOCount에 걸린 락 없애고 정상작동 되도록 만들기
 //---------------------------------------------------------------------------------------------
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -54,7 +66,7 @@ enum EIOCP_OPERATION
 {
 	ERecv,
 	ESend,
-	EContents,
+	//EContents,
 };
 
 
@@ -152,12 +164,14 @@ public:
 	int IOCount = 0;
 	IOCP_CONTEXT sendOverlapped{ ESend };
 	IOCP_CONTEXT recvOverlapped{ ERecv };
-	IOCP_CONTEXT contentsOverlapped{ EContents };
+	//IOCP_CONTEXT contentsOverlapped{ EContents };
 };
 
 
 
-
+//------------------------------------------
+// 모든 IOCP의 핸들 정보를 가지고 있는 전역 싱글톤 객체
+//------------------------------------------
 class IOCPHandle
 {
 public:
@@ -290,10 +304,10 @@ cSessionMap* cSessionMap::sessionMapInstance = nullptr;
 
 
 //작업자 스레드 함수
-DWORD WINAPI WorkerThread(LPVOID arg);
+unsigned int __stdcall WorkerThread(LPVOID arg);
 
 //컨텐츠 스레드 함수
-DWORD WINAPI ContentsThread(LPVOID arg);
+unsigned int __stdcall ContentsThread(LPVOID arg);
 
 //-----------------------------------------
 // 세션 종료
@@ -315,6 +329,8 @@ bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
 
 //---------------------------------------------
 // 컨텐츠 수신
+// 컨텐츠에게 세션에 대한 정보를 감추기 위해 전역 함수로 선언
+// 세션의 메시지 큐에서 처리할 메시지를 꺼내어 컨텐츠에 전달한다.
 //---------------------------------------------
 int GetPacket(long long sessionId, char* msg, int len)
 {
@@ -339,7 +355,8 @@ int SendPacket(long long sessionId, char* msg, int len)
 {
 	SOCKETINFO* ptr;
 	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
-	IOCPHandle* pIOCPHandle = IOCPHandle::GetIOCPHandleInstance();
+	//PQCS로 워커 스레드를 깨우기 위해서 사용
+	//IOCPHandle* pIOCPHandle = IOCPHandle::GetIOCPHandleInstance();
 	pSessionMap->GetSessionptr(sessionId, ptr);
 	if (ptr == nullptr)
 	{
@@ -397,11 +414,22 @@ int main(int argc, char* argv[])
 
 	//(cpu 개수 * 2)개의 네트워크 작업자 스레드 생성
 	HANDLE hThread;
+	unsigned int uiThreadID; 
+
 	for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
-		//for (int i = 0; i < 1; i++)
+	//for (int i = 0; i < 1; i++)
 	{
-		hThread = CreateThread(NULL, 0, WorkerThread, pIOCPHandle, 0, NULL);
+		hThread = (HANDLE)_beginthreadex(
+			NULL,           // Security attributes (NULL = 디폴트)
+			0,              // Stack size (0 = 디폴트)
+			WorkerThread,   // Thread function
+			pIOCPHandle,    // Argument list to be passed to thread function
+			0,              // Initial state (0 = 즉시 실행)
+			&uiThreadID     // Pointer to thread ID
+		);
+
 		if (hThread == NULL) return 1;
+
 		CloseHandle(hThread);
 	}
 
@@ -409,7 +437,7 @@ int main(int argc, char* argv[])
 	//for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
 	for (int i = 0; i < 1; i++)
 	{
-		hThread = CreateThread(NULL, 0, ContentsThread, pIOCPHandle, 0, NULL);
+		hThread = (HANDLE)_beginthreadex(NULL, 0, ContentsThread, pIOCPHandle, 0, &uiThreadID);
 		if (hThread == NULL) return 1;
 		CloseHandle(hThread);
 	}
@@ -505,7 +533,7 @@ int main(int argc, char* argv[])
 
 
 //작업자 스레드 함수
-DWORD __stdcall WorkerThread(LPVOID arg)
+unsigned int __stdcall WorkerThread(LPVOID arg)
 {
 	int retval;
 	IOCPHandle* iocpHandle = (IOCPHandle*)arg;
@@ -718,9 +746,9 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 		{
 			//락 풀기전에 Send한 크기만큼 송신 버퍼에서 movefront
 			//ptr->sendBuf.GetLockBuffer();
-			ptr->GetSessionLock();
+			//ptr->GetSessionLock();
 			ptr->sendBuf.MoveFront(cbTransferred);
-			ptr->UnLockSession();
+			//ptr->UnLockSession();
 			//ptr->sendBuf.UnLockBuffer();
 			//송신 완료, 송신 플래그 해제
 			if (InterlockedCompareExchange(&ptr->IsSending, 0, 1) == 0)
@@ -744,7 +772,7 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 			InterlockedDecrement((long*)&d_send);
 			if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
 			{
-					ReleaseSession(clientaddr, ptr);
+				ReleaseSession(clientaddr, ptr);
 				continue;
 			}
 		}
@@ -762,7 +790,7 @@ DWORD __stdcall WorkerThread(LPVOID arg)
 }
 
 
-DWORD __stdcall ContentsThread(LPVOID arg)
+unsigned int __stdcall ContentsThread(LPVOID arg)
 {
 	int retval;
 	IOCPHandle* iocpHandle = (IOCPHandle*)arg;
