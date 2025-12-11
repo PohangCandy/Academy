@@ -1,0 +1,703 @@
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#pragma comment(lib, "ws2_32")
+
+#include "CLanServer.h"
+#include <process.h>
+#include "CIOCPHandle.h"
+#include "cSessionMap.h"
+#include "Session.h"
+#include "CRingBuffer.h"
+#include "OVERLAPPED_CONTEXT.h"
+#include "MessageQueue.h"
+#include "errlog.h"
+
+#define SERVERPORT (6000)
+#define BUFSIZE (1024 * 1024)
+#define MSG_SIZE (8)
+
+//------------------------------------
+//메시지 프로토콜
+// 헤더 2Byte (길이)
+// 데이터 8Byte(에코)
+//------------------------------------
+struct Msg {
+	short header = 0;
+	char payload[MSG_SIZE] = {};
+};
+
+//작업자 스레드 함수
+unsigned int __stdcall WorkerThread(LPVOID arg);
+
+//------------------------------------------
+// 세션 수신
+// 세션 수신 링버퍼 상태 확인 후 WSAbuf에 등록, 해당 소켓에 대해 WSARecv 호출
+//------------------------------------------
+bool WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
+
+//------------------------------------------
+// 세션 송신
+// 세션 송신 링버퍼 상태 확인 후 WSAbuf에 등록, 해당 소켓에 대해 WSASend 호출
+//------------------------------------------
+bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
+
+//-----------------------------------------
+// 세션 종료
+// IO가 끝난 세션에 대해 완전히 삭제
+//-----------------------------------------
+void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
+
+bool CLanServer::Start()
+{
+		// ----------------------------------------------------
+		// 1. 누수 감지 플래그 및 보고서 모드 설정
+		// ----------------------------------------------------
+		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+
+		// 오류/어설션/경고 보고서를 디버그 출력 창으로 보냄
+		_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
+		_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_DEBUG);
+		_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
+		// ----------------------------------------------------
+
+		int retval;
+
+		//윈속 초기화
+		WSADATA wsa;
+		if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
+
+		//네트워크, 컨텐츠 스레드 입출력 완료 포트 생성
+		IOCPHandle* pIOCPHandle = IOCPHandle::GetIOCPHandleInstance();
+		pIOCPHandle->netHcp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+		if (pIOCPHandle->netHcp == NULL) return false;
+		pIOCPHandle->contentHcp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+		if (pIOCPHandle->contentHcp == NULL) return false;
+
+		//CPU 개수 확인
+		SYSTEM_INFO si;
+		GetSystemInfo(&si);
+
+		//(cpu 개수 * 2)개의 네트워크 작업자 스레드 생성
+		HANDLE hThread;
+		unsigned int uiThreadID;
+
+		for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
+			//for (int i = 0; i < 1; i++)
+		{
+			hThread = (HANDLE)_beginthreadex(
+				NULL,           // Security attributes (NULL = 디폴트)
+				0,              // Stack size (0 = 디폴트)
+				WorkerThread,   // Thread function
+				pIOCPHandle,    // Argument list to be passed to thread function
+				0,              // Initial state (0 = 즉시 실행)
+				&uiThreadID     // Pointer to thread ID
+			);
+
+			if (hThread == NULL) return false;
+
+			CloseHandle(hThread);
+		}
+
+		//socket()
+		SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+		if (listen_sock == INVALID_SOCKET) err_quit("socket()");
+
+		//bind()
+		SOCKADDR_IN serveraddr;
+		ZeroMemory(&serveraddr, sizeof(serveraddr));
+		serveraddr.sin_family = AF_INET;
+		serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+		serveraddr.sin_port = htons(SERVERPORT);
+		retval = bind(listen_sock, (SOCKADDR*)&serveraddr, sizeof(serveraddr));
+		if (retval == SOCKET_ERROR) err_quit("bind()");
+
+		//listen()
+		retval = listen(listen_sock, SOMAXCONN);
+		if (retval == SOCKET_ERROR) err_quit("listen()");
+
+		//데이터 통신에 사용할 변수
+		SOCKET client_sock;
+		SOCKADDR_IN clientaddr;
+		int addrlen;
+		DWORD recvbytes, flags;
+
+		cSessionMap* sessionMap = cSessionMap::GetSessionMap();
+
+
+		while (1)
+		{
+			//accept()
+			addrlen = sizeof(clientaddr);
+			client_sock = accept(listen_sock, (SOCKADDR*)&clientaddr, &addrlen);
+			if (client_sock == INVALID_SOCKET) {
+				err_display("accept()");
+				break;
+			}
+			printf("[TCP 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+			//소켓 정보 구조체 할당
+			SOCKETINFO* ptr = new SOCKETINFO;
+
+			if (ptr == NULL) break;
+			ZeroMemory(&ptr->recvOverlapped, sizeof(ptr->recvOverlapped));
+			ptr->recvOverlapped->op = ERecv;
+			ptr->sock = client_sock;
+			ptr->recvBuf->ClearBuffer();
+			ptr->sendBuf->ClearBuffer();
+			WSABUF wsabuf;
+			wsabuf.buf = ptr->recvBuf->GetFrontBufferPtr();
+			wsabuf.len = ptr->recvBuf->GetFreeSize();
+
+			//세션을 맵에 저장
+			long long id = sessionMap->GetSessionCount();
+			ptr->session_id = id;
+			sessionMap->AddSession(ptr);
+
+			//소켓과 입출력 완료 포트 연결
+			CreateIoCompletionPort((HANDLE)client_sock, pIOCPHandle->netHcp, (ULONG_PTR)ptr, 0);
+
+			//비동기 입출력 시작
+			flags = 0;
+			//IOCount를 증가시켰는데 1이라면, 정리중인 세션이므로
+			//더 이상 송수신 처리가 일어나지 않도록 한다.
+			InterlockedIncrement((long*)&ptr->IOCount);
+			retval = WSARecv(client_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->recvOverlapped, NULL);
+			if (retval == SOCKET_ERROR)
+			{
+				if (WSAGetLastError() != ERROR_IO_PENDING) {
+					err_display("WSARECV()");
+
+					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+					{
+						ReleaseSession(clientaddr, ptr);
+						continue;
+					}
+				}
+			}
+		}
+
+
+
+		//윈속 종료
+		WSACleanup();
+		return true;
+}
+
+void CLanServer::Stop()
+{
+}
+
+int CLanServer::GetSessionCount()
+{
+    return 0;
+}
+
+bool CLanServer::Disconnect(SessionID s)
+{
+    return false;
+}
+
+bool CLanServer::SendPacket(SessionID s, CPacket* cp)
+{
+    return false;
+}
+
+int CLanServer::getAcceptTPS()
+{
+    return 0;
+}
+
+int CLanServer::getRecvMessageTPS()
+{
+    return 0;
+}
+
+int CLanServer::getSendMessageTPS()
+{
+    return 0;
+}
+
+//작업자 스레드 함수
+unsigned int __stdcall WorkerThread(LPVOID arg)
+{
+	int retval;
+	IOCPHandle* iocpHandle = (IOCPHandle*)arg;
+	HANDLE hcp = iocpHandle->netHcp;
+
+
+	while (1) {
+		//비동기 입출력 완료 기다리기
+		DWORD cbTransferred;
+		SOCKET client_sock;
+		SOCKETINFO* ptr;
+		OVERLAPPED_CONTEXT* lpOverlapped;
+		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
+
+		//삭제된 세션에 대한 완료 통지가 온다면 무시하도록 한다.
+		if (ptr == nullptr) continue;
+
+		//클라이언트 정보 얻기
+		SOCKADDR_IN clientaddr;
+		int addrlen = sizeof(clientaddr);
+		getpeername(ptr->sock, (SOCKADDR*)&clientaddr, &addrlen);
+
+		//비동기 입출력 결과 확인
+		if (cbTransferred == 0)
+		{
+			//클라가 종료신호 FIN보냄.
+			printf("[Network] 클라이언트 종료 신호 수신: IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+			int decrease = InterlockedDecrement((long*)&ptr->IOCount);
+			if (decrease == 0)
+			{
+				//세션에 대해 락을 얻는다  = 현재 sendpacket을 진행 중인지 확인
+				//IsSending 확인 = send 중인지 확인, send 중이라면 이미 IO가 하나 커졌을때니깐, 0인지만 확인하면 되지 않을까?
+				//락 얻고, 0인지 비교한 후 들어와서 락 푼다면?
+				ReleaseSession(clientaddr, ptr);
+			}
+			else if (decrease < 0)
+			{
+				while (1)
+				{
+					printf("뭐야 이거\n");
+				}
+			}
+			else
+			{
+				printf("[Network] 아직 IO 덜 끝남.\n");
+			}
+
+			continue;
+		}
+		else if (retval == 0)
+		{
+			DWORD lpcbTransfer, temp2;
+			bool isIOSuccess = WSAGetOverlappedResult(ptr->sock, (LPWSAOVERLAPPED)&lpOverlapped, &lpcbTransfer, false, &temp2);
+			if (isIOSuccess && lpcbTransfer > 0)
+			{
+				//GQCS 실패
+				printf("[Network] ");
+				err_display("WSAGetOverlappedResult()");
+				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				{
+					ReleaseSession(clientaddr, ptr);
+					continue;
+				}
+			}
+			else
+			{
+				//IO 실패
+				printf("[Network] IO 실패\n");
+				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				{
+
+					ReleaseSession(clientaddr, ptr);
+
+					continue;
+				}
+
+			}
+
+			continue;
+		}
+
+		if (lpOverlapped->op == ERecv)
+		{
+			//printf("[Network] 클라이언트 수신, 포트번호 = %d\n", ntohs(clientaddr.sin_port));
+
+
+			if (ptr->recvBuf->MoveRear(cbTransferred) != 0)
+			{
+				//Recv 버퍼에 있는 내용 읽어서, send링버퍼에 담기
+				Msg recvMsg;
+
+				//이제 메시지 길이 단위로 읽어서 컨텐츠 스레드에 넘겨야 한다.
+				//그래야 메시지 순서가 보장됨.
+				//수신 링버퍼에 있는 데이터 중 헤더 길이만큼 있는 메시지는 모두 읽어서 처리
+				//------------------------------------------------------
+				// 1. 링 버퍼에서 Dequeue
+				// 먼저 메시지 길이만큼 읽을 후, 해당 메시지 길이를 Dequeue
+				//------------------------------------------------------
+				while (1)
+				{
+					short Header_size = ptr->recvBuf->Peek((char*)&recvMsg.header, sizeof(recvMsg.header));
+					if (Header_size == sizeof(recvMsg.header) && recvMsg.header != 0)
+					{
+						if (ptr->recvBuf->GetUseSize() >= recvMsg.header + sizeof(recvMsg.header))
+						{
+							//이미 읽은 헤더는 제외하고 읽게 만들자.
+							ptr->recvBuf->MoveFront(sizeof(recvMsg.header));
+
+							int dequeued_size = ptr->recvBuf->Dequeue((char*)&recvMsg.payload, recvMsg.header);
+							if (dequeued_size != recvMsg.header)
+							{
+								while (1)
+								{
+									printf("[Network] 링버퍼 Dequeue 오류: 요청 %d, 실제 %d\n", recvMsg.header, dequeued_size);
+								}
+							}
+
+							//메시지 버퍼에 추출한 메시지를 넣기.
+							int ret = ptr->messageQueue->enqMsgbuf((char*)&recvMsg.payload, recvMsg.header);
+
+							if (ret == 0)
+							{
+								while (1)
+								{
+									printf("[Network] 메시지 버퍼 꽉 찼음\n");
+								}
+							}
+							else if (ret != recvMsg.header)
+							{
+								while (1)
+								{
+									printf("[Network] 메시지 버퍼 Enqueue 오류: 요청 %d, 실제 %d\n", recvMsg.header, ret);
+								}
+							}
+
+							//여기서 PQCS 요청으로 컨텐츠 스레드에게 읽을 만큼 전달
+							//이제 받은 메시지를 그대로 컨텐츠 스레드로 넘겨주는 것으로 네트워크 스레드의 할 일은 끝
+							if (!PostQueuedCompletionStatus(iocpHandle->contentHcp, recvMsg.header, ptr->session_id, (LPWSAOVERLAPPED)lpOverlapped))
+							{
+								while (1)
+								{
+									printf("[Network] 컨텐츠 IOCP에 PQCS실패!\n");
+									//---------이때 뭐하지?
+									//---------1. 메시지 재전송
+									//---------2. 그냥 뻑 내고 죽기
+								}
+							}
+							else
+							{
+								//printf("[Network] PQCS호출 포트번호 = %d\n", ntohs(clientaddr.sin_port));
+							}
+							//남은 메시지 Dequeue는 컨텐츠 스레드가 할거임.
+						}
+						else
+						{
+							//수신 링버퍼가 가득차서 더이상 데이터를 받을 수 없는 상황
+							//printf("[Network] payload가 아직 다 안 들어왔음\n");
+							break;
+						}
+					}
+					else
+					{
+						//printf("[Network] 헤더가 아직 다 안 들어왔음\n");
+						break;
+					}
+				}
+
+			}
+			else
+			{
+				//수신 링버퍼가 가득차서 더이상 데이터를 받을 수 없는 상황
+				//printf("[Network] 수신 링버퍼 꽉 찼음.\n");
+			}
+
+
+
+			//현재 스레드를 다시 Recv 등록하기
+			//printf("[Network] 다시 recv 대기하기, 포트번호 = %d\n", ntohs(clientaddr.sin_port));
+			if (!WsaRecvSession(clientaddr, ptr))
+			{
+				//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
+				continue;
+			}
+
+			//GQCS Recv 완료통지에 대한 IO 감소
+			if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+			{
+				ReleaseSession(clientaddr, ptr);
+				continue;
+			}
+		}
+		//현재는 사용하지 않는다.
+		// 나중에 SendPacket이나 GetPacket에서 링버퍼에 직접 접근하게 만들경우 사용해본다. 
+		//컨텐츠 스레드로부터 완료 통지를 받은 경우
+		//else if (lpOverlapped->op == EContents)
+		//{
+		//	//송신 링버퍼에 남은 데이터를 Send
+		//	if (!WsaSendSession(clientaddr, ptr))
+		//	{
+		//		//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
+		//		continue;
+		//	}
+
+		//}
+		else if (lpOverlapped->op == ESend)
+		{
+			//락 풀기전에 Send한 크기만큼 송신 버퍼에서 movefront
+			//ptr->sendBuf.GetLockBuffer();
+			//ptr->GetSessionLock();
+			ptr->sendBuf->MoveFront(cbTransferred);
+			//ptr->UnLockSession();
+			//ptr->sendBuf.UnLockBuffer();
+			//송신 완료, 송신 플래그 해제
+			if (InterlockedCompareExchange(&ptr->IsSending, 0, 1) == 0)
+			{
+				while (1)
+				{
+					printf("Send 중첩 발생, 포트번호 = %d\n", ntohs(clientaddr.sin_port));
+				}
+			}
+
+			ptr->GetSessionLock();
+			//송신 링버퍼에 남은 데이터를 Send
+			if (!WsaSendSession(clientaddr, ptr))
+			{
+				//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
+				continue;
+			}
+			ptr->UnLockSession();
+
+			//GQCS Send 완료통지에 대한 IO 감소
+			if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+			{
+				ReleaseSession(clientaddr, ptr);
+				continue;
+			}
+		}
+		else
+		{
+
+			while (1)
+			{
+				printf("[Network] : lpOverlapped 메시지 타입이 말도 안되는게 나옴.\n");
+			}
+		}
+	}
+
+	return 0;
+}
+
+void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+{
+	cSessionMap* psm = cSessionMap::GetSessionMap();
+
+
+	psm->deleteSession(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+
+	//InterlockedIncrement((long*)&g_deleteSockNum);
+	//if (InterlockedCompareExchange((long*)&g_deleteSockNum, g_acceptSockNum, g_acceptSockNum) == g_acceptSockNum)
+	//{
+	//	printf("[Network] Accept 횟수와 Delete횟수가 일치했음.");
+	//	_CrtDumpMemoryLeaks();
+	//}
+}
+
+bool WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+{
+	int retval;
+
+	ZeroMemory(&ptr->recvOverlapped, sizeof(ptr->recvOverlapped));
+	ptr->recvOverlapped->op = ERecv;
+
+	cSessionMap* sessionMap = cSessionMap::GetSessionMap();
+
+	//Direct로 넣을 수 있냐 없냐에 따라 여러 버퍼로 나눠서 받아야 함.
+	int recvlen = ptr->recvBuf->GetFreeSize();
+	if (recvlen > ptr->recvBuf->DirectEnqueueSize())
+	{
+		WSABUF wsabuf[2];
+		wsabuf[0].buf = ptr->recvBuf->GetRearBufferPtr();
+		wsabuf[0].len = ptr->recvBuf->DirectEnqueueSize();
+		int frontSize = ptr->recvBuf->GetFreeSize() - ptr->recvBuf->DirectEnqueueSize();
+		wsabuf[1].buf = ptr->recvBuf->GetFrontBufferPtr() - frontSize;
+		wsabuf[1].len = frontSize;
+		DWORD recvbytes;
+		DWORD flags = 0;
+		InterlockedIncrement((long*)&ptr->IOCount);
+		retval = WSARecv(ptr->sock, wsabuf, 2, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->recvOverlapped, NULL);
+
+		if (retval == SOCKET_ERROR)
+		{
+			if (WSAGetLastError() != WSA_IO_PENDING)
+			{
+				printf("[Network] ");
+				err_display("WSARecv()");
+				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				{
+					ReleaseSession(clientaddr, ptr);
+					return false;
+				}
+			}
+		}
+
+	}
+	else
+	{
+		WSABUF wsabuf;
+		wsabuf.buf = ptr->recvBuf->GetRearBufferPtr();
+		wsabuf.len = ptr->recvBuf->DirectEnqueueSize();
+		DWORD recvbytes;
+		DWORD flags = 0;
+		InterlockedIncrement((long*)&ptr->IOCount);
+		retval = WSARecv(ptr->sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)&ptr->recvOverlapped, NULL);
+
+		if (retval == SOCKET_ERROR)
+		{
+			if (WSAGetLastError() != WSA_IO_PENDING)
+			{
+				printf("[Network] ");
+				err_display("WSARecv()");
+				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				{
+					ReleaseSession(clientaddr, ptr);
+					return false;
+				}
+			}
+		}
+	}
+
+	return true;
+}
+
+bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+{
+
+	if (ptr == nullptr)
+	{
+		while (1)
+		{
+			printf("[Network] 송신 시도중인 세션이 이미 삭제된 세션\n");
+		}
+	}
+
+
+
+
+	int retval;
+	//Send 중이 아니라면
+	//Send 링버퍼에 있는 있는 내용 전부 Send
+
+	//세션에 락을 걸기 전에 올바른 송신 진행을 위해 작업한 내용이었는데
+	//세션에 락을 걸고 송신을 진행한다는게 보장된다면 없어도 되지 않나? 테스트 필요
+	if (InterlockedCompareExchange(&ptr->IsSending, 1, 0) == 0)
+	{
+		//이미 한발 앞서서 처리된 경우
+		//다시 해제 시켜준다.
+		//ptr->sendBuf.GetLockBuffer();
+		if (ptr->sendBuf->GetUseSize() == 0)
+		{
+
+			if (InterlockedCompareExchange(&ptr->IsSending, 0, 1) == 1)
+			{
+				//ptr->sendBuf.UnLockBuffer();
+				return true;
+			}
+			else
+			{
+				while (1)
+				{
+					printf("[Network] 그새 중첩이 발생했다고??\n");
+				}
+			}
+
+		}
+		ptr->sendBuf->UnLockBuffer();
+
+		//printf("[Network] 송신 진행 중 아님, 송신 루트 탐., 포트번호 = %d\n", ntohs(clientaddr.sin_port));
+		ZeroMemory(&ptr->sendOverlapped, sizeof(ptr->sendOverlapped));
+		ptr->sendOverlapped->op = ESend;
+
+		int sendlen = ptr->sendBuf->GetUseSize();
+		if (sendlen == 0)
+		{
+			while (1)
+			{
+				printf("[Network] 미친 지금 0짜리 보낼뻔\n");
+			}
+		}
+		if (sendlen > ptr->sendBuf->DirectDequeueSize())
+		{
+			WSABUF wsabuf[2];
+			wsabuf[0].buf = ptr->sendBuf->GetFrontBufferPtr();
+			wsabuf[0].len = ptr->sendBuf->DirectDequeueSize();
+			int frontSize = ptr->sendBuf->GetBufferSize() - ptr->sendBuf->GetFreeSize() - ptr->sendBuf->DirectDequeueSize();
+			wsabuf[1].buf = ptr->sendBuf->GetRearBufferPtr() - frontSize;
+			wsabuf[1].len = frontSize;
+
+
+			int increase = InterlockedIncrement((long*)&ptr->IOCount);
+			if (increase == 1)
+			{
+				printf("[Network] 누군가 정리 중인 것으로 보임. 송신 진행 불가. 포트번호 = %d\n", ntohs(clientaddr.sin_port));
+				ptr->UnLockSession();
+				//누군가가 정리중이라면 send를 진행시키지 않는다.
+				return false;
+				/*while (1)
+				{
+					printf("[Network] send완료 시 감소 전이므로 발생해선 안되며, sendPacket에서도 삭제되었음변 아예 송신 못함.\n");
+				}*/
+			}
+			else
+			{
+				//nterlockedIncrement((long*)&i_send);
+			}
+			//printf("[Network] 데이터 송신  포트번호 = %d\n", ntohs(clientaddr.sin_port));
+			retval = WSASend(ptr->sock, wsabuf, 2, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)&ptr->sendOverlapped, NULL);
+
+
+			if (retval == SOCKET_ERROR)
+			{
+				if (WSAGetLastError() != WSA_IO_PENDING)
+				{
+					printf("[Network] ");
+					err_display("WSASend()");
+					/*InterlockedDecrement((long*)&d_send);*/
+					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+					{
+						//InterlockedCompareExchange(&ptr->IsSending, 0, 1);
+						ReleaseSession(clientaddr, ptr);
+						return false;
+					}
+				}
+			}
+		}
+		else
+		{
+			WSABUF wsabuf;
+			wsabuf.buf = ptr->sendBuf->GetFrontBufferPtr();
+			wsabuf.len = ptr->sendBuf->DirectDequeueSize();
+
+			int increase = InterlockedIncrement((long*)&ptr->IOCount);
+			if (increase == 1)
+			{
+				printf("[Network] 누군가 정리 중인 것으로 보임. 송신 진행 불가. 포트번호 = %d\n", ntohs(clientaddr.sin_port));
+				ptr->UnLockSession();
+				return false;
+				/*while (1)
+				{
+					printf("[Network] send완료 시 감소 전이므로 발생해선 안되며, sendPacket에서도 삭제되었음변 아예 송신 못함.\n");
+				}*/
+			}
+			else
+			{
+				/*InterlockedIncrement((long*)&i_send);*/
+			}
+			//printf("[Network] 데이터 송신  포트번호 = %d\n", ntohs(clientaddr.sin_port));
+			retval = WSASend(ptr->sock, &wsabuf, 1, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)&ptr->sendOverlapped, NULL);
+
+
+			if (retval == SOCKET_ERROR)
+			{
+				if (WSAGetLastError() != WSA_IO_PENDING)
+				{
+					printf("[Network] ");
+					err_display("WSASend()");
+					//InterlockedDecrement((long*)&d_send);
+					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+					{
+						ReleaseSession(clientaddr, ptr);
+						return false;
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		//printf("[Network] 이미 송신 진행 중  포트번호 = %d\n", ntohs(clientaddr.sin_port));
+	}
+
+
+	return true;
+}
+

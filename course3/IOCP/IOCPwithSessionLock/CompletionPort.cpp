@@ -73,11 +73,11 @@ enum EIOCP_OPERATION
 //-----------------------------------
 // 완료된 비동기 함수를 나타내는 확장된 Overlapped
 //-----------------------------------
-struct IOCP_CONTEXT {
+struct OVERLAPPED_CONTEXT {
 	OVERLAPPED overlapped = {};
 	EIOCP_OPERATION op;
 
-	IOCP_CONTEXT(EIOCP_OPERATION operation)
+	OVERLAPPED_CONTEXT(EIOCP_OPERATION operation)
 		:op{ operation }
 	{
 
@@ -162,9 +162,9 @@ public:
 	long long session_id = 0;
 	LONG IsSending = 0;
 	int IOCount = 0;
-	IOCP_CONTEXT sendOverlapped{ ESend };
-	IOCP_CONTEXT recvOverlapped{ ERecv };
-	//IOCP_CONTEXT contentsOverlapped{ EContents };
+	OVERLAPPED_CONTEXT sendOverlapped{ ESend };
+	OVERLAPPED_CONTEXT recvOverlapped{ ERecv };
+	//OVERLAPPED_CONTEXT contentsOverlapped{ EContents };
 };
 
 
@@ -297,10 +297,6 @@ private:
 	CRITICAL_SECTION _sessionMap_cs;
 };
 cSessionMap* cSessionMap::sessionMapInstance = nullptr;
-
-//-------------------------------------------------------------
-// 
-//-------------------------------------------------------------
 
 
 //작업자 스레드 함수
@@ -545,7 +541,7 @@ unsigned int __stdcall WorkerThread(LPVOID arg)
 		DWORD cbTransferred;
 		SOCKET client_sock;
 		SOCKETINFO* ptr;
-		IOCP_CONTEXT* lpOverlapped;
+		OVERLAPPED_CONTEXT* lpOverlapped;
 		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
 
 		//삭제된 세션에 대한 완료 통지가 온다면 무시하도록 한다.
@@ -800,7 +796,7 @@ unsigned int __stdcall ContentsThread(LPVOID arg)
 		//비동기 입출력 완료 기다리기
 		DWORD cbTransferred;
 		long long SessionID;
-		IOCP_CONTEXT* lpOverlapped;
+		OVERLAPPED_CONTEXT* lpOverlapped;
 		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&SessionID, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
 
 		//비동기 입출력 결과 확인
@@ -981,6 +977,9 @@ bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 	int retval;
 	//Send 중이 아니라면
 	//Send 링버퍼에 있는 있는 내용 전부 Send
+	
+	//세션에 락을 걸기 전에 올바른 송신 진행을 위해 작업한 내용이었는데
+	//세션에 락을 걸고 송신을 진행한다는게 보장된다면 없어도 되지 않나? 테스트 필요
 	if (InterlockedCompareExchange(&ptr->IsSending, 1, 0) == 0)
 	{
 		//이미 한발 앞서서 처리된 경우

@@ -128,12 +128,26 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CIOCPHandle.h" />
     <ClInclude Include="CLanClient.h" />
     <ClInclude Include="CLanServer.h" />
     <ClInclude Include="CPacket.h" />
+    <ClInclude Include="CRingBuffer.h" />
+    <ClInclude Include="cSessionMap.h" />
+    <ClInclude Include="errlog.h" />
+    <ClInclude Include="MessageQueue.h" />
+    <ClInclude Include="OVERLAPPED_CONTEXT.h" />
+    <ClInclude Include="Session.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CLanServer.cpp" />
     <ClCompile Include="CPacket.cpp" />
+    <ClCompile Include="CRingBuffer.cpp" />
+    <ClCompile Include="CSessionMap.cpp" />
+    <ClCompile Include="errlog.cpp" />
+    <ClCompile Include="MessageQueue.cpp" />
+    <ClCompile Include="OVERLAPPED_CONTEXT.cpp" />
+    <ClCompile Include="Session.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
