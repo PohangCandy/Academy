@@ -1,6 +1,5 @@
 #pragma once
-
-typedef void* HANDLE;
+#include "stdafx.h"
 
 //------------------------------------------
 // 모든 IOCP의 핸들 정보를 가지고 있는 전역 싱글톤 객체

@@ -2,7 +2,6 @@
 #pragma comment(lib, "ws2_32")
 
 #include "CLanServer.h"
-#include <process.h>
 #include "CIOCPHandle.h"
 #include "cSessionMap.h"
 #include "Session.h"
@@ -10,6 +9,7 @@
 #include "OVERLAPPED_CONTEXT.h"
 #include "MessageQueue.h"
 #include "errlog.h"
+#include "CPacket.h"
 
 #define SERVERPORT (6000)
 #define BUFSIZE (1024 * 1024)
@@ -132,7 +132,24 @@ bool CLanServer::Start()
 				err_display("accept()");
 				break;
 			}
-			printf("[TCP 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+
+			//RST를 보내기위한 소켓 옵션
+			LINGER optval;
+			optval.l_onoff = 1;
+			optval.l_linger = 0;
+			retval = setsockopt(client_sock, SOL_SOCKET, SO_LINGER, (char*)&optval, sizeof(optval));
+			if (retval == SOCKET_ERROR) {
+				err_quit("setsockopt()");
+				break;
+			}
+
+			//지금 접곡한 클라이언트에 대한 차단
+			if (!OnConnectionRequest(inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port)))
+			{
+				closesocket(client_sock);
+			}
+
+			
 			//소켓 정보 구조체 할당
 			SOCKETINFO* ptr = new SOCKETINFO;
 
@@ -147,9 +164,13 @@ bool CLanServer::Start()
 			wsabuf.len = ptr->recvBuf->GetFreeSize();
 
 			//세션을 맵에 저장
+			InterlockedIncrement((long*)&_sessionCount);
 			long long id = sessionMap->GetSessionCount();
 			ptr->session_id = id;
 			sessionMap->AddSession(ptr);
+
+			printf("[TCP 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+			OnClientJoin(clientaddr, id);
 
 			//소켓과 입출력 완료 포트 연결
 			CreateIoCompletionPort((HANDLE)client_sock, pIOCPHandle->netHcp, (ULONG_PTR)ptr, 0);
@@ -187,32 +208,68 @@ void CLanServer::Stop()
 
 int CLanServer::GetSessionCount()
 {
-    return 0;
+    return _sessionCount;
 }
 
-bool CLanServer::Disconnect(SessionID s)
+bool CLanServer::Disconnect(SessionID sessionId)
 {
     return false;
 }
 
-bool CLanServer::SendPacket(SessionID s, CPacket* cp)
+bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
 {
+	SOCKETINFO* ptr;
+	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
+
+	pSessionMap->GetSessionptr(sessionId, ptr);
+	if (ptr == nullptr)
+	{
+		return false;
+	}
+	int ret = ptr->sendBuf->Enqueue(cp->GetBufferPtr(), cp->GetDataSize());
+	if (ret == 0)
+	{
+		while (1)
+		{
+			printf("[Network] 네트워크 송신 버퍼가 다 참\n");
+		}
+	}
+	else if (ret != cp->GetDataSize())
+	{
+		while (1)
+		{
+			printf("[Network]  송신 버퍼에 넣은 길이와 메시지 길이가 다름\n");
+		}
+	}
+	//여기에서 Session의 Send를 발생시켜야 Session이 삭제되지 않는다.
+	//클라이언트 정보 얻기
+	SOCKADDR_IN clientaddr;
+	int addrlen = sizeof(clientaddr);
+	getpeername(ptr->sock, (SOCKADDR*)&clientaddr, &addrlen);
+	//송신 링버퍼에 남은 데이터를 Send
+	if (!WsaSendSession(clientaddr, ptr))
+	{
+		//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
+		return false;
+	}
+	//PostQueuedCompletionStatus(pIOCPHandle->netHcp, len, (ULONG_PTR)ptr, (LPWSAOVERLAPPED)&ptr->contentsOverlapped);
+	ptr->UnLockSession();
     return false;
 }
 
 int CLanServer::getAcceptTPS()
 {
-    return 0;
+    return _acceptTPS;
 }
 
 int CLanServer::getRecvMessageTPS()
 {
-    return 0;
+    return _recvMessageTPS;
 }
 
 int CLanServer::getSendMessageTPS()
 {
-    return 0;
+    return _sendMessageTPS;
 }
 
 //작업자 스레드 함수
@@ -467,7 +524,7 @@ unsigned int __stdcall WorkerThread(LPVOID arg)
 	return 0;
 }
 
-void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 {
 	cSessionMap* psm = cSessionMap::GetSessionMap();
 
@@ -482,7 +539,7 @@ void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 	//}
 }
 
-bool WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 {
 	int retval;
 
@@ -549,7 +606,7 @@ bool WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 	return true;
 }
 
-bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 {
 
 	if (ptr == nullptr)

@@ -1,5 +1,6 @@
 //SOCKETINFO.h
 #pragma once
+#include "stdafx.h"
 
 class MessageQueue;
 class CRingBuffer;

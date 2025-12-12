@@ -1,8 +1,5 @@
 #include "cSessionMap.h"
-
-#include <Windows.h>
 #include "Session.h"
-#include<stdio.h>
 
 void cSessionMap::AddSession(SOCKETINFO* psession)
 {

@@ -1,7 +1,7 @@
 // CRingBuffer.cpp
 #include "CRingBuffer.h"
-#include <cstring>   // memcpy
-#include <algorithm> // std::min
+//#include <cstring>   // memcpy
+//#include <algorithm> // std::min
 
 
 CRingBuffer::CRingBuffer(void)

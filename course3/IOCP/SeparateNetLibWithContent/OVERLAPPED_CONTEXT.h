@@ -1,4 +1,5 @@
 #pragma once
+#include "stdafx.h"
 
 //-------------------------------
 // 비동기 입출력 함수 종류
@@ -16,7 +17,7 @@ enum EIOCP_OPERATION
 // 완료된 비동기 함수를 나타내는 확장된 Overlapped
 //-----------------------------------
 struct OVERLAPPED_CONTEXT {
-	_OVERLAPPED Overlapped = {};
+	OVERLAPPED Overlapped = {};
 	EIOCP_OPERATION op;
 
 	OVERLAPPED_CONTEXT();

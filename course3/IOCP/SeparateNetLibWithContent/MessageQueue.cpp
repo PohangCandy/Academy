@@ -1,11 +1,11 @@
-
 #include "MessageQueue.h"
-#include <Windows.h>
+
 #include "CRingBuffer.h"
 
 MessageQueue::MessageQueue()
 {
 	InitializeCriticalSection(&msg_cs);
+	MsgBuf = nullptr;
 }
 
 MessageQueue::MessageQueue(int bufSize)
