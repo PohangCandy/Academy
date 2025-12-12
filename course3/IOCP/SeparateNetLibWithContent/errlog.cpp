@@ -1,4 +1,5 @@
 #include "errlog.h"
+#include "stdafx.h"
 
 //소켓 생성, 종료하는 응용 프로그램
 void err_quit(const char* msg)

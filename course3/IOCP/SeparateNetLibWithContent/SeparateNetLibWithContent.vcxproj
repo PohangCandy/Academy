@@ -128,6 +128,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CEchoServer.h" />
     <ClInclude Include="CIOCPHandle.h" />
     <ClInclude Include="CLanClient.h" />
     <ClInclude Include="CLanServer.h" />
@@ -138,8 +139,10 @@
     <ClInclude Include="MessageQueue.h" />
     <ClInclude Include="OVERLAPPED_CONTEXT.h" />
     <ClInclude Include="Session.h" />
+    <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CEchoServer.cpp" />
     <ClCompile Include="CLanServer.cpp" />
     <ClCompile Include="CPacket.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />

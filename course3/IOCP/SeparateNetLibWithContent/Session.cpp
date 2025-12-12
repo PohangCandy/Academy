@@ -1,6 +1,5 @@
 #include "Session.h"
 
-#include <Windows.h>
 #include "CRingBuffer.h"
 #include "MessageQueue.h"
 #include "OVERLAPPED_CONTEXT.h"
