@@ -36,9 +36,26 @@ class CLanServer
 	bool Disconnect(SessionID sessionId); // SESSION_ID
 	bool SendPacket(SessionID sessionId, CPacket* cp); // SESSION_ID
 
-	void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
-	bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
+	//------------------------------------------
+	// 세션 수신
+	// 세션 수신 링버퍼 상태 확인 후 WSAbuf에 등록, 해당 소켓에 대해 WSARecv 호출
+	//------------------------------------------
 	bool WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
+
+	//------------------------------------------
+	// 세션 송신
+	// 세션 송신 링버퍼 상태 확인 후 WSAbuf에 등록, 해당 소켓에 대해 WSASend 호출
+	//------------------------------------------
+	bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
+
+	//-----------------------------------------
+	// 세션 종료
+	// IO가 끝난 세션에 대해 완전히 삭제
+	//-----------------------------------------
+	void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
+
+	//작업자 스레드 함수
+	unsigned int WorkerThread(LPVOID arg);
 
 	virtual bool OnConnectionRequest(std::string IP,int Port) = 0; 
 	//< accept 직후

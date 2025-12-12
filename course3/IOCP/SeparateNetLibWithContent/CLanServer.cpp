@@ -25,26 +25,7 @@ struct Msg {
 	char payload[MSG_SIZE] = {};
 };
 
-//작업자 스레드 함수
-unsigned int __stdcall WorkerThread(LPVOID arg);
 
-//------------------------------------------
-// 세션 수신
-// 세션 수신 링버퍼 상태 확인 후 WSAbuf에 등록, 해당 소켓에 대해 WSARecv 호출
-//------------------------------------------
-bool WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
-
-//------------------------------------------
-// 세션 송신
-// 세션 송신 링버퍼 상태 확인 후 WSAbuf에 등록, 해당 소켓에 대해 WSASend 호출
-//------------------------------------------
-bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
-
-//-----------------------------------------
-// 세션 종료
-// IO가 끝난 세션에 대해 완전히 삭제
-//-----------------------------------------
-void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
 
 bool CLanServer::Start()
 {
@@ -213,7 +194,19 @@ int CLanServer::GetSessionCount()
 
 bool CLanServer::Disconnect(SessionID sessionId)
 {
-    return false;
+	SOCKETINFO* ptr;
+	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
+
+	pSessionMap->GetSessionptr(sessionId, ptr);
+	if (ptr == nullptr)
+	{
+		return false;
+	}
+	if (shutdown(ptr->sock, SD_BOTH) != 0)
+	{
+		return false;
+	}
+    return true;
 }
 
 bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
@@ -273,7 +266,7 @@ int CLanServer::getSendMessageTPS()
 }
 
 //작업자 스레드 함수
-unsigned int __stdcall WorkerThread(LPVOID arg)
+unsigned int  CLanServer::WorkerThread(LPVOID arg)
 {
 	int retval;
 	IOCPHandle* iocpHandle = (IOCPHandle*)arg;

@@ -25,7 +25,7 @@ void CEchoServer::OnClientJoin(SOCKADDR_IN clientaddr, SessionID s)
 
 void CEchoServer::OnClientLeave(SessionID s)
 {
-
+    //캐릭터 삭제같은걸 넣으면 될 것 같은데 에코에선 딱히 할게 없는 것으로 보임.
 }
 
 void CEchoServer::OnRecv(SessionID s, CPacket* pPacket)
