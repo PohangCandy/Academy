@@ -19,6 +19,11 @@ public:
 
 	int deqMsgbuf(char* c, int len);
 
+	//-----------------------------------------------
+	// ÆÐÅ¶ 
+	//-----------------------------------------------
+	char* GetFrontBufPtr(void);
+
 private:
 	CRITICAL_SECTION msg_cs;
 	CRingBuffer* MsgBuf;

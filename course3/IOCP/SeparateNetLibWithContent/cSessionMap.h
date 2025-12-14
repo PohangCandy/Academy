@@ -10,21 +10,9 @@ class SOCKETINFO;
 class cSessionMap {
 public:
 
-	static cSessionMap* GetSessionMap()
-	{
-		if (sessionMapInstance == nullptr)
-		{
-			sessionMapInstance = new cSessionMap;
-			atexit(Destroy);
-		}
-		return sessionMapInstance;
-	}
+	static cSessionMap* GetSessionMap();
 
-	static void Destroy()
-	{
-		delete sessionMapInstance;
-		sessionMapInstance = nullptr;
-	}
+	static void Destroy();
 
 	void AddSession(SOCKETINFO* psession);
 
@@ -54,4 +42,3 @@ private:
 	long long _sessionCounter = 0;
 	CRITICAL_SECTION _sessionMap_cs;
 };
-cSessionMap* cSessionMap::sessionMapInstance = nullptr;

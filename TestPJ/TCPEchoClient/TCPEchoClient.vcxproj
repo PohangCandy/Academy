@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{49072e53-dd86-4d6a-b3c1-29db6d25d871}</ProjectGuid>
-    <RootNamespace>SeparateNetLibWithContent</RootNamespace>
+    <ProjectGuid>{bbe38462-3142-4736-9433-94af80fe8fe3}</ProjectGuid>
+    <RootNamespace>TCPEchoClient</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -90,7 +90,6 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <Optimization>Disabled</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -128,30 +127,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="CEchoServer.h" />
-    <ClInclude Include="CIOCPHandle.h" />
-    <ClInclude Include="CLanClient.h" />
-    <ClInclude Include="CLanServer.h" />
-    <ClInclude Include="CPacket.h" />
-    <ClInclude Include="CRingBuffer.h" />
-    <ClInclude Include="cSessionMap.h" />
-    <ClInclude Include="errlog.h" />
-    <ClInclude Include="MessageQueue.h" />
-    <ClInclude Include="OVERLAPPED_CONTEXT.h" />
-    <ClInclude Include="Session.h" />
-    <ClInclude Include="stdafx.h" />
+    <ClCompile Include="errlog.cpp" />
+    <ClCompile Include="TCPClient.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CEchoServer.cpp" />
-    <ClCompile Include="CLanServer.cpp" />
-    <ClCompile Include="CPacket.cpp" />
-    <ClCompile Include="CRingBuffer.cpp" />
-    <ClCompile Include="CSessionMap.cpp" />
-    <ClCompile Include="errlog.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="MessageQueue.cpp" />
-    <ClCompile Include="OVERLAPPED_CONTEXT.cpp" />
-    <ClCompile Include="Session.cpp" />
+    <ClInclude Include="errlog.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

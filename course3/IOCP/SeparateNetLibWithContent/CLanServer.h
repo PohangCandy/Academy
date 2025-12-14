@@ -25,9 +25,19 @@
 class CPacket;
 class SOCKETINFO;
 typedef long long SessionID;
+class CLanServer;
+class IOCPHandle;
+
+struct ServerAndHandle
+{
+	CLanServer* thisptr;
+	IOCPHandle* phandle;
+};
 
 class CLanServer
 {
+
+public:
 	//오픈 IP / 포트 / 워커스레드 수(생성수, 러닝수) / 나글옵션 / 최대접속자 수
 	bool Start(); 
 	void Stop();
@@ -55,7 +65,8 @@ class CLanServer
 	void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
 
 	//작업자 스레드 함수
-	unsigned int WorkerThread(LPVOID arg);
+	static unsigned int __stdcall WorkerThread(LPVOID arg);
+	
 
 	virtual bool OnConnectionRequest(std::string IP,int Port) = 0; 
 	//< accept 직후

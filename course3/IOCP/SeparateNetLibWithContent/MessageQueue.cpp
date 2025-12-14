@@ -36,3 +36,9 @@ int MessageQueue::deqMsgbuf(char* c, int len)
 	LeaveCriticalSection(&msg_cs);
 	return ret;
 }
+
+char* MessageQueue::GetFrontBufPtr(void)
+{
+
+	return nullptr;
+}

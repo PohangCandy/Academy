@@ -1,6 +1,25 @@
 #include "cSessionMap.h"
 #include "Session.h"
 
+cSessionMap* cSessionMap::sessionMapInstance = nullptr;
+
+cSessionMap* cSessionMap::GetSessionMap()
+{
+	if (sessionMapInstance == nullptr)
+	{
+		sessionMapInstance = new cSessionMap;
+		atexit(Destroy);
+	}
+	return sessionMapInstance;
+}
+
+void cSessionMap::Destroy()
+{
+	delete sessionMapInstance;
+	sessionMapInstance = nullptr;
+}
+
+
 void cSessionMap::AddSession(SOCKETINFO* psession)
 {
 	EnterCriticalSection(&_sessionMap_cs);
