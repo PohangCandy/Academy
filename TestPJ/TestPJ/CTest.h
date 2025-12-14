@@ -1,4 +1,7 @@
 #pragma once
+#include "stdafx.h"
+#include <iostream>
+
 class Test {
 public:
 	Test() {

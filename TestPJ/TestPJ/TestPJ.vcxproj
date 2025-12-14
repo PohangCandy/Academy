@@ -129,12 +129,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="소스.cpp" />
-    <ClCompile Include="CTest.cpp" />
-    <ClCompile Include="소스1.cpp" />
+    <ClCompile Include="MesureArray.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CTest.h" />
+    <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

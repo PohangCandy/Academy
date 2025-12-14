@@ -13,6 +13,7 @@ CRingBuffer::CRingBuffer(void)
 CRingBuffer::CRingBuffer(int iBufferSize)
     : m_pBuffer(new char[iBufferSize]), m_iBufferSize(iBufferSize), m_iFront(0), m_iRear(0), m_bIsFull(false)
 {
+    InitializeCriticalSection(&m_csRingbuffer);
 }
 
 CRingBuffer::~CRingBuffer() {

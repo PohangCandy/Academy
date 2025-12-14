@@ -11,8 +11,8 @@ SOCKETINFO::SOCKETINFO()
 	recvBuf = nullptr;
 	sendBuf = nullptr;
 	messageQueue = nullptr;
-	sendOverlapped = nullptr;
-	recvOverlapped = nullptr;
+	sendOverlapped = new OVERLAPPED_CONTEXT(ESend);
+	recvOverlapped = new OVERLAPPED_CONTEXT(ERecv);
 }
 
 SOCKETINFO::SOCKETINFO(int bufsize)
