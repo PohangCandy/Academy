@@ -516,14 +516,14 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 
 			//ptr->GetSessionLock();
 			//송신 링버퍼에 남은 데이터를 Send
-			ptr->sendBuf->GetLockBuffer();
+			//ptr->sendBuf->GetLockBuffer();
 			if (!pServer->WsaSendSession(clientaddr, ptr))
 			{
 				//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
-				ptr->sendBuf->UnLockBuffer();
+				//ptr->sendBuf->UnLockBuffer();
 				continue;
 			}
-			ptr->sendBuf->UnLockBuffer();
+			//ptr->sendBuf->UnLockBuffer();
 			//ptr->UnLockSession();
 
 			//GQCS Send 완료통지에 대한 IO 감소
@@ -677,7 +677,8 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 			wsabuf[0].buf = ptr->sendBuf->GetFrontBufferPtr();
 			wsabuf[0].len = ptr->sendBuf->DirectDequeueSize();
 			int frontSize = ptr->sendBuf->GetBufferSize() - ptr->sendBuf->GetFreeSize() - ptr->sendBuf->DirectDequeueSize();
-			wsabuf[1].buf = ptr->sendBuf->GetRearBufferPtr() - frontSize;
+			//wsabuf[1].buf = ptr->sendBuf->GetRearBufferPtr() - frontSize;
+			wsabuf[1].buf = ptr->sendBuf->GetBufPtr();
 			wsabuf[1].len = frontSize;
 
 
@@ -719,6 +720,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 		}
 		else
 		{
+
 			WSABUF wsabuf;
 			wsabuf.buf = ptr->sendBuf->GetFrontBufferPtr();
 			wsabuf.len = ptr->sendBuf->DirectDequeueSize();
