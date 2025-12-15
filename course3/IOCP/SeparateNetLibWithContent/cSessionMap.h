@@ -40,5 +40,5 @@ private:
 	//--------------------------------
 	SOCKETINFO* _sessionMap[1 << 24] = {};
 	long long _sessionCounter = 0;
-	CRITICAL_SECTION _sessionMap_cs;
+	//CRITICAL_SECTION _sessionMap_cs;
 };
