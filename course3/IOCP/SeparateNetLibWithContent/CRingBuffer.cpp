@@ -283,6 +283,11 @@ char* CRingBuffer::GetRearBufferPtr(void)
     return m_pBuffer + m_iRear;
 }
 
+char* CRingBuffer::GetBufPtr(void)
+{
+    return m_pBuffer;
+}
+
 void CRingBuffer::GetLockBuffer()
 {
     EnterCriticalSection(&m_csRingbuffer);
