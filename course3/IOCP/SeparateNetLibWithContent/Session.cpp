@@ -6,7 +6,7 @@
 
 SOCKETINFO::SOCKETINFO()
 {
-	InitializeCriticalSection(&session_cs);
+	//InitializeCriticalSection(&session_cs);
 	sock = INVALID_SOCKET;
 	recvBuf = nullptr;
 	sendBuf = nullptr;
@@ -17,7 +17,7 @@ SOCKETINFO::SOCKETINFO()
 
 SOCKETINFO::SOCKETINFO(int bufsize)
 {
-	InitializeCriticalSection(&session_cs);
+	//InitializeCriticalSection(&session_cs);
 	sock = INVALID_SOCKET;
 	recvBuf = new CRingBuffer(bufsize + 1);
 	sendBuf = new CRingBuffer(bufsize + 1);
@@ -28,7 +28,7 @@ SOCKETINFO::SOCKETINFO(int bufsize)
 
 SOCKETINFO::~SOCKETINFO()
 {
-	DeleteCriticalSection(&session_cs);
+	//DeleteCriticalSection(&session_cs);
 
 	delete recvBuf;
 	recvBuf = nullptr;
@@ -48,17 +48,17 @@ SOCKETINFO::~SOCKETINFO()
 
 void SOCKETINFO::GetSessionLock()
 {
-	EnterCriticalSection(&session_cs);
+	//EnterCriticalSection(&session_cs);
 }
 
 void SOCKETINFO::UnLockSession()
 {
-	LeaveCriticalSection(&session_cs);
+	//LeaveCriticalSection(&session_cs);
 }
 
 void SOCKETINFO::DecreaseIOCount()
 {
-	EnterCriticalSection(&session_cs);
+	//EnterCriticalSection(&session_cs);
 	InterlockedDecrement((long*)&IOCount);
-	LeaveCriticalSection(&session_cs);
+	//LeaveCriticalSection(&session_cs);
 }

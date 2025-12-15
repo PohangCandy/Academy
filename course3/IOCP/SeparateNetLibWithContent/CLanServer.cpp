@@ -259,7 +259,7 @@ bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
 		return false;
 	}
 	//PostQueuedCompletionStatus(pIOCPHandle->netHcp, len, (ULONG_PTR)ptr, (LPWSAOVERLAPPED)&ptr->contentsOverlapped);
-	ptr->UnLockSession();
+	//ptr->UnLockSession();
     return true;
 }
 
@@ -498,11 +498,13 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		else if (lpOverlapped->op == ESend)
 		{
 			//락 풀기전에 Send한 크기만큼 송신 버퍼에서 movefront
-			//ptr->sendBuf->GetLockBuffer();
-			ptr->GetSessionLock();
+			
+			//ptr->GetSessionLock();
+			ptr->sendBuf->GetLockBuffer();
 			ptr->sendBuf->MoveFront(cbTransferred);
-			ptr->UnLockSession();
-			//ptr->sendBuf->UnLockBuffer();
+			ptr->sendBuf->UnLockBuffer();
+			//ptr->UnLockSession();
+			
 			//송신 완료, 송신 플래그 해제
 			if (InterlockedCompareExchange(&ptr->IsSending, 0, 1) == 0)
 			{
@@ -512,14 +514,17 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 				}
 			}
 
-			ptr->GetSessionLock();
+			//ptr->GetSessionLock();
 			//송신 링버퍼에 남은 데이터를 Send
+			ptr->sendBuf->GetLockBuffer();
 			if (!pServer->WsaSendSession(clientaddr, ptr))
 			{
 				//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
+				ptr->sendBuf->UnLockBuffer();
 				continue;
 			}
-			ptr->UnLockSession();
+			ptr->sendBuf->UnLockBuffer();
+			//ptr->UnLockSession();
 
 			//GQCS Send 완료통지에 대한 IO 감소
 			if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
@@ -680,7 +685,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 			if (increase == 1)
 			{
 				printf("[Network] 누군가 정리 중인 것으로 보임. 송신 진행 불가. 포트번호 = %d\n", ntohs(clientaddr.sin_port));
-				ptr->UnLockSession();
+				//ptr->UnLockSession();
 				//누군가가 정리중이라면 send를 진행시키지 않는다.
 				return false;
 				/*while (1)
@@ -722,7 +727,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 			if (increase == 1)
 			{
 				printf("[Network] 누군가 정리 중인 것으로 보임. 송신 진행 불가. 포트번호 = %d\n", ntohs(clientaddr.sin_port));
-				ptr->UnLockSession();
+				//ptr->UnLockSession();
 				return false;
 				/*while (1)
 				{

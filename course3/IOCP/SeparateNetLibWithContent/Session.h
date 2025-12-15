@@ -21,7 +21,7 @@ public:
 	void DecreaseIOCount();
 
 
-	CRITICAL_SECTION session_cs;
+	//CRITICAL_SECTION session_cs;
 	SOCKET sock;
 	//지금은 그냥 객체 자체가 들어가있는데 포인터가 들어가는게 맞아보임.
 	//안그러면 세션 객체 크기가 너무 커짐. 딱히 문제는 없어보이는데 문제가 있을까?

@@ -17,6 +17,8 @@ MessageQueue::MessageQueue(int bufSize)
 MessageQueue::~MessageQueue()
 {
 	DeleteCriticalSection(&msg_cs);
+	delete MsgBuf;
+	MsgBuf = nullptr;
 }
 
 int MessageQueue::enqMsgbuf(char* c, int len)
