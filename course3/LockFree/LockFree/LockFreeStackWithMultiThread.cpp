@@ -92,6 +92,7 @@ int main()
 
 
 	for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
+	//for (int i = 0; i < 1; i++)
 	{
 		hThreads[i] = (HANDLE)_beginthreadex(
 			nullptr,
@@ -106,8 +107,10 @@ int main()
 	}
 
 	WaitForMultipleObjects((int)si.dwNumberOfProcessors * 2, hThreads, true, INFINITE);
+	//WaitForMultipleObjects(1, hThreads, true, INFINITE);
 
 	for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
+	//for (int i = 0; i < 1; i++)
 	{
 		CloseHandle(hThreads[i]);
 	}
