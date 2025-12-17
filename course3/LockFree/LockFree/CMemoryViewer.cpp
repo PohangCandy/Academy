@@ -23,7 +23,7 @@ void CMemoryViewer::copy(char* src1, int size1, char* src2, int size2)
 	}
 	else
 	{
-		memcpy(buf[recentMem], src1, size1);
+		memcpy(buf[recentMem], &src1, size1);
 	}
 	
 	if (src2 == nullptr)
@@ -32,7 +32,7 @@ void CMemoryViewer::copy(char* src1, int size1, char* src2, int size2)
 	}
 	else
 	{
-		memcpy(buf[recentMem] + size1, src2, size2);
+		memcpy(buf[recentMem] + size1, &src2, size2);
 	}
 
 	recentMem = !recentMem;

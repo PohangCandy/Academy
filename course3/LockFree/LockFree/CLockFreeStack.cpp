@@ -121,7 +121,7 @@ bool CLockFreeStack::empty()
 
 Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemoryViewer* pmv)
 {
-	pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
+	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
 	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
 	{
 		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
@@ -189,7 +189,7 @@ Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemory
 
 Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemoryViewer* pmv)
 {
-	pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
+	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
 	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
 	{
 		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
