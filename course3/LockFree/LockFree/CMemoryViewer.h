@@ -13,11 +13,16 @@
 
 #pragma once
 
+enum FuncName {
+	epush,
+	epop,
+};
+
 class CMemoryViewer {
 public:
 	CMemoryViewer();
 	~CMemoryViewer();
-	void copy(char* src1, int size1, char* src2, int size2);
+	void copy(char* src1, int size1, char* src2, int size2, FuncName f);
 private:
 	char* buf[2];
 	bool recentMem = 0;

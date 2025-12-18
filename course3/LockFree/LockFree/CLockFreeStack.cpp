@@ -66,8 +66,14 @@ void CLockFreeStack::pop(CMemoryViewer* pmv)
 
 		if (ptop != nullptr)
 		{
+		// 디커밋 문제 발생
 			newtop = ptop->nextNode;
 		}
+		//if (_pTop != nullptr)
+		//{
+		// Nullptr문제 발생
+		//	newtop = _pTop->nextNode;
+		//}
 		else
 		{
 			newtop = nullptr;
@@ -124,7 +130,7 @@ Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemory
 	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
 	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
 	{
-		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
+		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*),epush);
 		InterlockedIncrement((long*)&_size);
 		return ntop;
 	}
@@ -192,7 +198,7 @@ Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemoryV
 	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
 	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
 	{
-		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
+		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*), epop);
 		Node* pt = ntop;
 		if (ntop != nullptr)
 		{
