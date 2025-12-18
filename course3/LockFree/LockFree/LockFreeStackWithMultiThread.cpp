@@ -43,29 +43,29 @@ unsigned int __stdcall PushPopThread(LPVOID arg)
 
 	while (1)
 	{
-		//int pp = rand() % 2;
-		////printf("진행중\n");
-		//switch (pp)
-		//{
-		//case Epush:
-		//	for (int i = 0; i < 10000; i++)
-		//	{
-		//		g_myStack.push(makeRandNum());
-		//	}
-		//	break;
-		//case Epop:
-		//	for (int i = 0; i < 10000; i++)
-		//	{
-		//		g_myStack.pop();
-		//	}
-		//	break;
-		//default:
-		//	while (1)
-		//	{
-		//		printf("말도 안되는게 나옴\n");
-		//	}
-		//	break;
-		//}
+		int pp = rand() % 2;
+		//printf("진행중\n");
+		switch (pp)
+		{
+		case Epush:
+			for (int i = 0; i < 10000; i++)
+			{
+				g_myStack.push(makeRandNum(), pMv);
+			}
+			break;
+		case Epop:
+			for (int i = 0; i < 10000; i++)
+			{
+				g_myStack.pop(pMv);
+			}
+			break;
+		default:
+			while (1)
+			{
+				printf("말도 안되는게 나옴\n");
+			}
+			break;
+		}
 
 		for (int i = 0; i < 10000; i++)
 		{

@@ -15,7 +15,7 @@ CMemoryViewer::~CMemoryViewer()
 	delete[] buf[1];
 }
 
-void CMemoryViewer::copy(char* src1, int size1, char* src2, int size2)
+void CMemoryViewer::copy(char* src1, int size1, char* src2, int size2, FuncName f)
 {
 	if (src1 == nullptr)
 	{
@@ -34,6 +34,8 @@ void CMemoryViewer::copy(char* src1, int size1, char* src2, int size2)
 	{
 		memcpy(buf[recentMem] + size1, &src2, size2);
 	}
+
+	memcpy(buf[recentMem] + size1 + size2, &f, sizeof(FuncName));
 
 	recentMem = !recentMem;
 }
