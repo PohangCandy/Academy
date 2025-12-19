@@ -47,46 +47,57 @@ unsigned int __stdcall PushPopThread(LPVOID arg)
 	while (1)
 	{
 		printf("진행중\n");
-		bool push = false;
-		int cnt = POPPUSHCOUNT;
-		while (cnt--)
-		{
-			switch (push)
-			{
-			case 0:
-				g_myStack.push(makeRandNum(), pMv);
-				break;
-			case 1:
-				g_myStack.pop(pMv);
-				break;
-			default:
-				break;
-			}
-		}
-		push = !push;
-		//int pp = rand() % 2;
-		
-		//switch (pp)
+		//bool push = false;
+		//int cnt = POPPUSHCOUNT;
+		//while (cnt--)
 		//{
-		//case Epush:
-		//	for (int i = 0; i < 10000; i++)
+		//	switch (push)
 		//	{
-		//		g_myStack.push(makeRandNum(), pMv);
+		//	case 0:
+		//			for (int i = 0; i < 100; i++)
+		//			{
+		//				g_myStack.push(makeRandNum(), pMv);
+		//			}
+		//		break;
+		//	case 1:
+		//		for (int i = 0; i < 100; i++)
+		//		{
+		//			g_myStack.pop(pMv);
+		//		}
+		//		break;
+		//	default:
+		//			while (1)
+		//			{
+		//					printf("말도 안되는게 나옴\n");
+		//			}
+		//		break;
 		//	}
-		//	break;
-		//case Epop:
-		//	for (int i = 0; i < 10000; i++)
-		//	{
-		//		g_myStack.pop(pMv);
-		//	}
-		//	break;
-		//default:
-		//	while (1)
-		//	{
-		//		printf("말도 안되는게 나옴\n");
-		//	}
-		//	break;
 		//}
+		//push = !push;
+		// 
+		int pp = rand() % 2;
+		
+		switch (pp)
+		{
+		case Epush:
+			for (int i = 0; i < 1000; i++)
+			{
+				g_myStack.push(makeRandNum(), pMv);
+			}
+			break;
+		case Epop:
+			for (int i = 0; i < 1000; i++)
+			{
+				g_myStack.pop(pMv);
+			}
+			break;
+		default:
+			while (1)
+			{
+				printf("말도 안되는게 나옴\n");
+			}
+			break;
+		}
 
 		//for (int i = 0; i < 10000; i++)
 		//{

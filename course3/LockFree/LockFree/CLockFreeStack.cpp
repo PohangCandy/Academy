@@ -9,20 +9,21 @@ Node::Node(int i) : data(i), nextNode(nullptr)
 
 }
 
-//void CLockFreeStack::push(int i)
-//{
-//	//printf("push 진행중\n");
-//	Node* newTop = new Node(i);
-//	Node* ptop;
-//
-//	do{
-//		ptop = _pTop;
-//		newTop->nextNode = ptop;
-//	
-//	} while(pushCAS(_pTop, newTop, ptop) != ptop);
-//	
-//}
+void CLockFreeStack::push(int i)
+{
+	//printf("push 진행중\n");
+	Node* newTop = new Node(i);
+	Node* ptop;
 
+	do{
+		ptop = _pTop;
+		newTop->nextNode = ptop;
+	
+	} while(pushCAS(_pTop, newTop, ptop) != ptop);
+	
+}
+
+//ABA해결한 push
 void CLockFreeStack::push(int i,CMemoryViewer* pmv)
 {
 	//1.17비트의 cnt 값 가져오기
@@ -48,6 +49,22 @@ void CLockFreeStack::push(int i,CMemoryViewer* pmv)
 	} while (pushCAS(_pTop, newTop, ptop, pmv) != ptop);
 }
 
+//void CLockFreeStack::push(int i, CMemoryViewer* pmv)
+//{
+//
+//	//printf("push 진행중\n");
+//	Node* newTop = new Node(i);
+//	Node* ptop;
+//
+//
+//	do {
+//		ptop = _pTop;
+//		//4.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
+//		newTop->nextNode = ptop;
+//
+//	} while (pushCAS(_pTop, newTop, ptop, pmv) != ptop);
+//}
+
 //void CLockFreeStack::pop()
 //{
 //	//printf("pop 진행중\n");
@@ -69,6 +86,8 @@ void CLockFreeStack::push(int i,CMemoryViewer* pmv)
 //	} while (popCAS(_pTop, newtop, ptop) != ptop);
 //}
 
+
+//ABA해결한 pop
 void CLockFreeStack::pop(CMemoryViewer* pmv)
 {
 	//printf("pop 진행중\n");
@@ -99,8 +118,10 @@ void CLockFreeStack::pop(CMemoryViewer* pmv)
 	} while (popCAS(_pTop, newtop, ptop, pmv) != ptop);
 }
 
-//void CLockFreeStack::pop(int& popData)
+
+//void CLockFreeStack::pop(CMemoryViewer* pmv)
 //{
+//	//printf("pop 진행중\n");
 //	Node* ptop;
 //	Node* newtop;
 //
@@ -109,15 +130,41 @@ void CLockFreeStack::pop(CMemoryViewer* pmv)
 //
 //		if (ptop != nullptr)
 //		{
+//		// 디커밋 문제 발생
 //			newtop = ptop->nextNode;
 //		}
+//		//if (_pTop != nullptr)
+//		//{
+//		// Nullptr문제 발생
+//		//	newtop = _pTop->nextNode;
+//		//}
 //		else
 //		{
 //			newtop = nullptr;
 //		}
 //
-//	} while (popCAS(_pTop, newtop, ptop, popData) == ptop);
+//	} while (popCAS(_pTop, newtop, ptop, pmv) != ptop);
 //}
+
+void CLockFreeStack::pop(int& popData)
+{
+	Node* ptop;
+	Node* newtop;
+
+	do {
+		ptop = _pTop;
+
+		if (ptop != nullptr)
+		{
+			newtop = ptop->nextNode;
+		}
+		else
+		{
+			newtop = nullptr;
+		}
+
+	} while (popCAS(_pTop, newtop, ptop, popData) == ptop);
+}
 
 int CLockFreeStack::size()
 {
@@ -129,23 +176,23 @@ bool CLockFreeStack::empty()
 	return _size == 0;
 }
 
-//Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ptop)
-//{	
-//	if (ptop ==(Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ptop))
-//	{
-//		InterlockedIncrement((long*)&_size);
-//		return ptop;
-//	}
-//	else
-//	{
-//		return nullptr;
-//	}
-//}
+Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ptop)
+{	
+	if (ptop ==(Node*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ptop))
+	{
+		InterlockedIncrement((long*)&_size);
+		return ptop;
+	}
+	else
+	{
+		return nullptr;
+	}
+}
 
 Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemoryViewer* pmv)
 {
 	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ptop, sizeof(Node*));
-	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
+	if (ntop == (Node*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ntop))
 	{
 		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*),epush);
 		InterlockedIncrement((long*)&_size);
@@ -157,34 +204,34 @@ Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemory
 	}
 }
 
-//Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, int& popData)
-//{
-//	if (ptop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ptop))
-//	{
-//		if (nNewNode != ptop->nextNode)
-//		{
-//			printf("ABA문제가 발생했다!\n");
-//		}
-//
-//		Node* pt = ptop;
-//		if (ptop != nullptr)
-//		{
-//			popData = pt->data;
-//			delete ptop;
-//			ptop = nullptr;
-//			InterlockedDecrement((long*)&_size);
-//		}
-//		else
-//		{
-//			popData = -1;
-//		}
-//		return pt;
-//	}
-//	else
-//	{
-//		return nullptr;
-//	}
-//}
+Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, int& popData)
+{
+	if (ptop == (Node*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ptop))
+	{
+		if (nNewNode != ptop->nextNode)
+		{
+			printf("ABA문제가 발생했다!\n");
+		}
+
+		Node* pt = ptop;
+		if (ptop != nullptr)
+		{
+			popData = pt->data;
+			delete ptop;
+			ptop = nullptr;
+			InterlockedDecrement((long*)&_size);
+		}
+		else
+		{
+			popData = -1;
+		}
+		return pt;
+	}
+	else
+	{
+		return nullptr;
+	}
+}
 
 //Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop)
 //{
@@ -210,10 +257,11 @@ Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemory
 //	}
 //}
 
+//ABA 해결버전
 Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, CMemoryViewer* pmv)
 {
 	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ptop, sizeof(Node*));
-	if (ptop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ptop))
+	if (ptop == (Node*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ptop))
 	{
 
 
@@ -243,3 +291,30 @@ Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, CMemoryV
 	}
 }
 
+//Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, CMemoryViewer* pmv)
+//{
+//	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ptop, sizeof(Node*));
+//	if (ptop == (Node*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ptop))
+//	{
+//
+//		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ptop, sizeof(Node*), epop);
+//		Node* pt = ptop;
+//
+//		if (ptop != nullptr)
+//		{
+//			if (nNewNode != ptop->nextNode)
+//			{
+//				printf("ABA문제가 발생했다!\n");
+//			}
+//
+//			delete ptop;
+//			ptop = nullptr;
+//			InterlockedDecrement((long*)&_size);
+//		}
+//		return pt;
+//	}
+//	else
+//	{
+//		return nullptr;
+//	}
+//}
