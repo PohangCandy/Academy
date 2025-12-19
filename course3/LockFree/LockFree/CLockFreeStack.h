@@ -27,16 +27,16 @@ public:
 
 class CLockFreeStack {
 public:
-	//void push(int i);
+	void push(int i);
 	void push(int i,CMemoryViewer* pmv);
 	//void pop();
 	void pop(CMemoryViewer* pmv);
-	//void pop(int& popData);
+	void pop(int& popData);
 	int size();
 	bool empty();
-	//Node* pushCAS(Node*& dest, Node*& exchange, Node*& compare);
+	Node* pushCAS(Node*& dest, Node*& exchange, Node*& compare);
 	Node* pushCAS(Node*& dest, Node*& exchange, Node*& compare, CMemoryViewer* pmv);
-	//Node* popCAS(Node*& dest, Node*& exchange, Node*& compare, int& popData);
+	Node* popCAS(Node*& dest, Node*& exchange, Node*& compare, int& popData);
 	//Node* popCAS(Node*& dest, Node*& exchange, Node*& compare);
 	Node* popCAS(Node*& dest, Node*& exchange, Node*& compare, CMemoryViewer* pmv);
 
