@@ -2,6 +2,8 @@
 #include "stdafx.h"
 #include "CMemoryViewer.h"
 
+#define USERBIT (0x007fffffffffff)
+
 Node::Node(int i) : data(i), nextNode(nullptr)
 {
 
@@ -10,28 +12,40 @@ Node::Node(int i) : data(i), nextNode(nullptr)
 //void CLockFreeStack::push(int i)
 //{
 //	//printf("push 진행중\n");
-//	Node* newNode = new Node(i);
+//	Node* newTop = new Node(i);
 //	Node* ptop;
 //
 //	do{
 //		ptop = _pTop;
-//		newNode->nextNode = ptop;
+//		newTop->nextNode = ptop;
 //	
-//	} while(pushCAS(_pTop, newNode, ptop) != ptop);
+//	} while(pushCAS(_pTop, newTop, ptop) != ptop);
 //	
 //}
 
 void CLockFreeStack::push(int i,CMemoryViewer* pmv)
 {
+	//1.17비트의 cnt 값 가져오기
+	long long upper_17bit = InterlockedIncrement((long*)&cnt);
+
+
 	//printf("push 진행중\n");
-	Node* newNode = new Node(i);
+	Node* newTop = new Node(i);
 	Node* ptop;
+
+	//2.newTop의 하위 비트 저장
+	long long lower_47bit = ((long long)newTop & USERBIT);
+	Node* UserBit = (Node*)lower_47bit;
+
+	//3.CAS하기 전에 newTop에 들어갈 주소에 cnt를 나타내는 17비트 세팅
+	newTop = (Node*)((upper_17bit << (64 - 17)) | lower_47bit);
 
 	do {
 		ptop = _pTop;
-		newNode->nextNode = ptop;
+		//4.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
+		UserBit->nextNode = ptop;
 
-	} while (pushCAS(_pTop, newNode, ptop, pmv) != ptop);
+	} while (pushCAS(_pTop, newTop, ptop, pmv) != ptop);
 }
 
 //void CLockFreeStack::pop()
@@ -63,11 +77,14 @@ void CLockFreeStack::pop(CMemoryViewer* pmv)
 
 	do {
 		ptop = _pTop;
+		//1.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
+		long long lower_47bit = ((long long)ptop & USERBIT);
+		Node* UserBit = (Node*)lower_47bit;
 
-		if (ptop != nullptr)
+		if (UserBit != nullptr)
 		{
 		// 디커밋 문제 발생
-			newtop = ptop->nextNode;
+			newtop = UserBit->nextNode;
 		}
 		//if (_pTop != nullptr)
 		//{
@@ -112,12 +129,12 @@ bool CLockFreeStack::empty()
 	return _size == 0;
 }
 
-//Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop)
+//Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ptop)
 //{	
-//	if (ntop ==(Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
+//	if (ptop ==(Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ptop))
 //	{
 //		InterlockedIncrement((long*)&_size);
-//		return ntop;
+//		return ptop;
 //	}
 //	else
 //	{
@@ -127,7 +144,7 @@ bool CLockFreeStack::empty()
 
 Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemoryViewer* pmv)
 {
-	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
+	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ptop, sizeof(Node*));
 	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
 	{
 		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*),epush);
@@ -140,21 +157,21 @@ Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemory
 	}
 }
 
-//Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, int& popData)
+//Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, int& popData)
 //{
-//	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
+//	if (ptop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ptop))
 //	{
-//		if (nNewNode != ntop->nextNode)
+//		if (nNewNode != ptop->nextNode)
 //		{
 //			printf("ABA문제가 발생했다!\n");
 //		}
 //
-//		Node* pt = ntop;
-//		if (ntop != nullptr)
+//		Node* pt = ptop;
+//		if (ptop != nullptr)
 //		{
 //			popData = pt->data;
-//			delete ntop;
-//			ntop = nullptr;
+//			delete ptop;
+//			ptop = nullptr;
 //			InterlockedDecrement((long*)&_size);
 //		}
 //		else
@@ -169,20 +186,20 @@ Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemory
 //	}
 //}
 
-//Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ntop)
+//Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop)
 //{
-//	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
+//	if (ptop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ptop))
 //	{
-//		Node* pt = ntop;
-//		if (ntop != nullptr)
+//		Node* pt = ptop;
+//		if (ptop != nullptr)
 //		{
-//			if (nNewNode != ntop->nextNode)
+//			if (nNewNode != ptop->nextNode)
 //			{
 //				printf("ABA문제가 발생했다!\n");
 //			}
 //
-//			delete ntop;
-//			ntop = nullptr;
+//			delete ptop;
+//			ptop = nullptr;
 //			InterlockedDecrement((long*)&_size);
 //		}
 //		return pt;
@@ -193,22 +210,29 @@ Node* CLockFreeStack::pushCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemory
 //	}
 //}
 
-Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ntop, CMemoryViewer* pmv)
+Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, CMemoryViewer* pmv)
 {
-	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*));
-	if (ntop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ntop))
+	//pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ptop, sizeof(Node*));
+	if (ptop == (Node*)InterlockedCompareExchange((long*)&nTop, (long)nNewNode, (long)ptop))
 	{
-		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ntop, sizeof(Node*), epop);
-		Node* pt = ntop;
-		if (ntop != nullptr)
+
+
+		//유저비트만 받아서 복사하도록 만들어줘야할까?
+		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ptop, sizeof(Node*), epop);
+		Node* pt = ptop;
+
+		//아래 작업도 모두 유저비트를 이용해야 함.
+		long long lower_47bit = ((long long)ptop & USERBIT);
+		Node* UserBit = (Node*)lower_47bit;
+		if (UserBit != nullptr)
 		{
-			if (nNewNode != ntop->nextNode)
+			if (nNewNode != UserBit->nextNode)
 			{
 				printf("ABA문제가 발생했다!\n");
 			}
 
-			delete ntop;
-			ntop = nullptr;
+			delete UserBit;
+			UserBit = nullptr;
 			InterlockedDecrement((long*)&_size);
 		}
 		return pt;

@@ -41,6 +41,7 @@ public:
 	Node* popCAS(Node*& dest, Node*& exchange, Node*& compare, CMemoryViewer* pmv);
 
 private:
+	int cnt;
 	int _size = 0;
 	Node* _pTop = nullptr;
 };
