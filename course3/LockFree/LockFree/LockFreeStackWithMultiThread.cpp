@@ -19,6 +19,7 @@
 
 
 #define RANDRNAGE (1000)
+#define POPPUSHCOUNT (5)
 
 enum PushOrPop
 {
@@ -41,40 +42,62 @@ unsigned int __stdcall PushPopThread(LPVOID arg)
 
 	srand(time(NULL));
 
+	
+	
 	while (1)
 	{
-		int pp = rand() % 2;
-		//printf("진행중\n");
-		switch (pp)
+		printf("진행중\n");
+		bool push = false;
+		int cnt = POPPUSHCOUNT;
+		while (cnt--)
 		{
-		case Epush:
-			for (int i = 0; i < 10000; i++)
+			switch (push)
 			{
+			case 0:
 				g_myStack.push(makeRandNum(), pMv);
-			}
-			break;
-		case Epop:
-			for (int i = 0; i < 10000; i++)
-			{
+				break;
+			case 1:
 				g_myStack.pop(pMv);
+				break;
+			default:
+				break;
 			}
-			break;
-		default:
-			while (1)
-			{
-				printf("말도 안되는게 나옴\n");
-			}
-			break;
 		}
+		push = !push;
+		//int pp = rand() % 2;
+		
+		//switch (pp)
+		//{
+		//case Epush:
+		//	for (int i = 0; i < 10000; i++)
+		//	{
+		//		g_myStack.push(makeRandNum(), pMv);
+		//	}
+		//	break;
+		//case Epop:
+		//	for (int i = 0; i < 10000; i++)
+		//	{
+		//		g_myStack.pop(pMv);
+		//	}
+		//	break;
+		//default:
+		//	while (1)
+		//	{
+		//		printf("말도 안되는게 나옴\n");
+		//	}
+		//	break;
+		//}
 
-		for (int i = 0; i < 10000; i++)
-		{
-			g_myStack.push(makeRandNum(), pMv);
-		}
-		for (int i = 0; i < 10000; i++)
-		{
-			g_myStack.pop(pMv);
-		}
+		//for (int i = 0; i < 10000; i++)
+		//{
+		//	g_myStack.push(makeRandNum(), pMv);
+		//}
+		//for (int i = 0; i < 10000; i++)
+		//{
+		//	g_myStack.pop(pMv);
+		//}
+
+
 	}
 
 	delete pMv;
