@@ -150,9 +150,9 @@ bool CLanServer::Start()
 
 			//세션을 맵에 저장
 			InterlockedIncrement((long*)&_sessionCount);
-			long long id = sessionMap->GetSessionCount();
+			long long id = sessionMap->AddSession(ptr);
 			ptr->session_id = id;
-			sessionMap->AddSession(ptr);
+			
 
 			printf("[TCP 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 			OnClientJoin(clientaddr, id);

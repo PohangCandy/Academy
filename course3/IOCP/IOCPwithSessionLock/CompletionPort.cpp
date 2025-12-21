@@ -227,7 +227,7 @@ public:
 	void AddSession(SOCKETINFO* psession)
 	{
 		EnterCriticalSection(&_sessionMap_cs);
-		_sessionMap[_sessionCounter++] = psession;
+		_sessionMap[_mapIndex++] = psession;
 		LeaveCriticalSection(&_sessionMap_cs);
 	}
 
@@ -261,7 +261,7 @@ public:
 
 	long long GetSessionCount()
 	{
-		return _sessionCounter;
+		return _mapIndex;
 	}
 
 	void GetMapLock()
@@ -293,7 +293,7 @@ private:
 	// 최대치 : 8byte 크기
 	//--------------------------------
 	SOCKETINFO* _sessionMap[1 << 24] = {};
-	long long _sessionCounter = 0;
+	long long _mapIndex = 0;
 	CRITICAL_SECTION _sessionMap_cs;
 };
 cSessionMap* cSessionMap::sessionMapInstance = nullptr;
