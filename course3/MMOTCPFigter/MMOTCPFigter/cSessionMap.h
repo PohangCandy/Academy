@@ -21,7 +21,7 @@ public:
 
 	void GetSessionptr(long long sessionId, SOCKETINFO*& sessionptr);
 
-	long long GetSessionCount();
+	//long long GetSessionCount();
 
 	void GetMapLock();
 
