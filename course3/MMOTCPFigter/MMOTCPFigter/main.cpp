@@ -27,7 +27,9 @@
 #include "CPacket.h"
 using namespace std;
 
-
+//1만여명이 싹다 Mss크기로 보낼 수 있는 경우 최대 버퍼 크기
+//1600 * 10000
+#define RINGBUFSIZE (1600 * 10000)
 
 // 전역
 SOCKET g_ListenSocket = INVALID_SOCKET;
@@ -49,7 +51,7 @@ void BroadcastPacketExcept(SOCKETINFO* exclude, CPacket* pPacket);
 void BroadcastPacket(SOCKETINFO* psession, CPacket* pPacket);
 
 void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self);
-void SendPacketToSession(SOCKETINFO* pSession, const void* data, int len);
+//void SendPacketToSession(SOCKETINFO* pSession, const void* data, int len);
 void UpdateLogic(double dt);
 
 bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& Packet);
@@ -60,9 +62,11 @@ bool netPacketProc_MoveStop(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_Attack1(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_Attack2(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_Attack3(SOCKETINFO* pSession, CPacket* pPacket);
+bool netPacketProc_ECHO(SOCKETINFO* pSession, CPacket* pPacket);
 
 bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket);
 bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket);
+//bool clientPacketProc_ECHO(SOCKETINFO* pSession, CPacket* newPacket);
 //bool clientPacketProc_ATTACK1(SOCKETINFO* pSession, CPacket* newPacket);
 //bool clientPacketProc_ATTACK2(SOCKETINFO* pSession, CPacket* newPacket);
 //bool clientPacketProc_ATTACK3(SOCKETINFO* pSession, CPacket* newPacket);
@@ -77,6 +81,7 @@ void mpAttack(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short 
 void mpMoveStart(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY);
 void mpMoveStop(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY);
 void mpSync(CPacket* pPacket, DWORD dwSessionID, short shX, short shY);
+void mpECHO(CPacket* pPacket, uint32_t Time);
 
 
 
@@ -151,14 +156,7 @@ int main() {
 void netIOProcess() {
 
     long long quotientOfDivide64;
-    if (g_sessionMap->GetSize() % 64 == 0)
-    {
-        quotientOfDivide64 = g_sessionMap->GetSize() / 64;
-    }
-    else
-    {
-        quotientOfDivide64 = g_sessionMap->GetSize() / 64 + 1;
-    }
+    quotientOfDivide64 = g_sessionMap->GetSize() / 64 + 1;
 
     for (long long i = 0; i < quotientOfDivide64; i++)
     {
@@ -228,8 +226,8 @@ void netProc_Accept() {
     u_long on = 1;
     ioctlsocket(clientSock, FIONBIO, &on);
 
-    //64 명이 싹다 Mss크기로 보밸 수 있는 경우 최대 버퍼 크기
-    SOCKETINFO* s = new SOCKETINFO(4 * 1024);
+
+    SOCKETINFO* s = new SOCKETINFO(RINGBUFSIZE);
     long long id = g_sessionMap->AddSession(s);
     s->sock = clientSock;
     s->session_id = id;
@@ -376,7 +374,7 @@ void netProc_Send(SOCKETINFO* pSession) {
         }
     }
     else if (sent > 0) {
-        int dec = pSession->sendBuf->Dequeue(pSession->sendBuf->GetFrontBufferPtr(), sent);
+        int dec = pSession->sendBuf->MoveFront(sent);
 
         if (dec != sent) {
             while (1)
@@ -426,7 +424,7 @@ void BroadcastPacket(SOCKETINFO* psession, CPacket* pPacket) {
         SOCKETINFO* s;
         g_sessionMap->GetSessionptr(i, s);
         if (s == nullptr) continue;
-        s->sendBuf->Enqueue((char*)pPacket, pPacket->GetDataSize());
+        s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
     }
 }
 
@@ -436,7 +434,7 @@ void BroadcastPacketExcept(SOCKETINFO* exclude, CPacket* pPacket) {
         SOCKETINFO* s;
         g_sessionMap->GetSessionptr(i, s);
         if (s == nullptr || s == exclude) continue;
-        s->sendBuf->Enqueue((char*)pPacket, pPacket->GetDataSize());
+        s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
     }
 }
 
@@ -448,7 +446,7 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self)
             SOCKETINFO* s;
             g_sessionMap->GetSessionptr(i, s);
             if (s == nullptr) continue;
-            s->sendBuf->Enqueue((char*)pPacket, pPacket->GetDataSize());
+            s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
         }
     }
     else
@@ -457,17 +455,17 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self)
             SOCKETINFO* s;
             g_sessionMap->GetSessionptr(i, s);
             if (s == nullptr || s == psession) continue;
-            s->sendBuf->Enqueue((char*)pPacket, pPacket->GetDataSize());
+            s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
         }
     }
 
 }
 
-// 특정 세션에 패킷 전송(큐에 저장)
-void SendPacketToSession(SOCKETINFO* pSession, const void* data, int len) {
-    if (!pSession) return;
-    pSession->sendBuf->Enqueue((char*)data, len);
-}
+//// 특정 세션에 패킷 전송(큐에 저장)
+//void SendPacketToSession(SOCKETINFO* pSession, const void* data, int len) {
+//    if (!pSession) return;
+//    pSession->sendBuf->Enqueue((char*)data, len);
+//}
 
 
 // -------------------- 게임 로직 --------------------
@@ -583,6 +581,15 @@ bool SendPacket(SOCKETINFO* pSession, unsigned char byPacketType)
         return clientPacketProc_CREATE_OTHER_CHARACTER(pSession, newPacket);
         break;
 
+    //case dfPACKET_SC_ECHO:
+    //    hdr.bySize = sizeof(st_SC_ECHO);
+    //    hdr.byType = dfPACKET_SC_ECHO;
+    //    *newPacket << hdr.byCode;
+    //    *newPacket << hdr.bySize;
+    //    *newPacket << hdr.byType;
+    //    return clientPacketProc_ECHO(pSession, newPacket);
+    //    break;
+
   /*  case dfPACKET_SC_ATTACK1:
         hdr.bySize = sizeof(st_SC_ATTACK);
         hdr.byType = dfPACKET_SC_ATTACK1;
@@ -673,6 +680,9 @@ bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& pPac
     case dfPACKET_CS_ATTACK3:
         return netPacketProc_Attack3(pSession, pPacket);
         break;
+
+    case dfPACKET_CS_ECHO:
+        return netPacketProc_ECHO(pSession, pPacket);
     default:
         while (1)
         {
@@ -1128,10 +1138,25 @@ bool netPacketProc_Attack3(SOCKETINFO* pSession, CPacket* pPacket)
 
     pPacket->Clear();
     mpAttack(pPacket, pSession->session_id, pSession->byDirection,
-        pSession->shX, pSession->shY, dfPACKET_CS_ATTACK3);
+    pSession->shX, pSession->shY, dfPACKET_CS_ATTACK3);
     SendPacket_Around(pSession, pPacket, true);
     cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
 
+    return true;
+}
+
+bool netPacketProc_ECHO(SOCKETINFO* pSession, CPacket* pPacket)
+{
+
+    if (pPacket->GetDataSize() < (int)sizeof(st_CS_ECHO)) return false;
+
+    uint32_t Time;
+
+    *pPacket >> Time;
+
+    pPacket->Clear();
+    mpECHO(pPacket, Time);
+    pSession->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
     return true;
 }
 
@@ -1146,7 +1171,7 @@ bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* newPack
     *newPacket << pSession->shY;
 
     cout << "Create Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
-    int enqdata = pSession->sendBuf->Enqueue((char*)newPacket, newPacket->GetDataSize());
+    int enqdata = pSession->sendBuf->Enqueue(newPacket->GetBufferPtr(), newPacket->GetDataSize());
     if (enqdata != newPacket->GetDataSize())
     {
         while (1)
@@ -1174,7 +1199,7 @@ bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newP
         *newPacket << other->shX;
         *newPacket << other->shY;
 
-        int enqdata = pSession->sendBuf->Enqueue((char*)newPacket, newPacket->GetDataSize());
+        int enqdata = pSession->sendBuf->Enqueue(newPacket->GetBufferPtr(), newPacket->GetDataSize());
         if (enqdata != newPacket->GetDataSize())
         {
             while (1)
@@ -1188,6 +1213,8 @@ bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newP
     }
     return true;
 }
+
+
 
 //bool clientPacketProc_ATTACK1(SOCKETINFO* pSession, CPacket* newPacket)
 //{
@@ -1307,4 +1334,15 @@ void mpSync(CPacket* pPacket, DWORD dwSessionID, short shX, short shY)
     *pPacket << (long)dwSessionID;
     *pPacket << shX;
     *pPacket << shY;
+}
+
+void mpECHO(CPacket* pPacket, uint32_t Time)
+{
+    st_PACKET_HEADER stPacketHeader;
+    stPacketHeader.byCode = dfPACKET_CODE;
+    stPacketHeader.bySize = sizeof(st_CS_ECHO);
+    stPacketHeader.byType = dfPACKET_CS_ECHO;
+    pPacket->Clear();
+    pPacket->PutData((char*)&stPacketHeader, sizeof(st_PACKET_HEADER));
+    *pPacket << (long)Time;
 }
