@@ -18,6 +18,7 @@ public:
 	long long AddSession(SOCKETINFO* psession);
 
 	void deleteSession(SOCKETINFO*& psession, char* s_ip, int i_port);
+	void OnlydeleteSession(SOCKETINFO*& psession, char* s_ip, int i_port);
 
 	void GetSessionptr(long long sessionId, SOCKETINFO*& sessionptr);
 

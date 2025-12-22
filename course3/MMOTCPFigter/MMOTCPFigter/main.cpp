@@ -22,14 +22,21 @@
 #include "Protocol.h"
 #include "CRingbuffer.h"
 #include <iostream>
-#include <vector>
+//#include <vector>
+#include <map>
+#include <list>
+#include <stack>
 #include "cSessionMap.h"
 #include "CPacket.h"
+#include "Character.h"
 using namespace std;
+
+
 
 //1만여명이 싹다 Mss크기로 보낼 수 있는 경우 최대 버퍼 크기
 //1600 * 10000
-#define RINGBUFSIZE (1600 * 10000)
+#define RINGBUFSIZE (1024 * 16)
+#define BUFSIZE (1024 * 8)
 
 // 전역
 SOCKET g_ListenSocket = INVALID_SOCKET;
@@ -37,22 +44,38 @@ bool g_bShutdown = false;
 uint32_t g_nextSessionID = 1;
 cSessionMap* g_sessionMap = cSessionMap::GetSessionMap();
 
+//------------------------------------------------------------- 
+// 캐릭터 객체 메인 관리 
+//------------------------------------------------------------- 
+map<DWORD, c_CHARACTER*> g_CharacterMap;
+
+//------------------------------------------------------------- 
+// 월드맵 캐릭터 섹터 
+//------------------------------------------------------------- 
+list<c_CHARACTER*> g_Sector[dfSECTOR_MAX_Y][dfSECTOR_MAX_X];
+
+//------------------------------------------------------------- 
+// 삭제한 캐릭터 ID
+//------------------------------------------------------------- 
+stack<int> g_DeleteCharacterID;
+
 //vector <SOCKETINFO* > g_Sessions;
 
 void netIOProcess();
 void netProc_Accept();
-void netProc_Recv(SOCKETINFO* pSession);
-void netProc_Send(SOCKETINFO* pSession);
-void Disconnect(SOCKETINFO* pSession);
+void netProc_Recv(SOCKETINFO*& pSession);
+void netProc_Send(SOCKETINFO*& pSession);
+void Disconnect(SOCKETINFO*& pSession);
+void DisconnectSocket(SOCKETINFO*& pSession);
+void DeleteCharacter();
 // 브로드캐스트(발신자 제외)
-void BroadcastPacketExcept(SOCKETINFO* exclude, CPacket* pPacket);
+//void BroadcastPacketExcept(SOCKETINFO* exclude, CPacket* pPacket);
 // 브로드캐스트(발신자 포함)
 // 나중에 세션이 가진 범위의 세션에게만 전달
-void BroadcastPacket(SOCKETINFO* psession, CPacket* pPacket);
+//void BroadcastPacket(SOCKETINFO* psession, CPacket* pPacket);
 
 void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self);
 //void SendPacketToSession(SOCKETINFO* pSession, const void* data, int len);
-void UpdateLogic(double dt);
 
 bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& Packet);
 bool SendPacket(SOCKETINFO* pSession, unsigned char byPacketType);
@@ -82,6 +105,10 @@ void mpMoveStart(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, sho
 void mpMoveStop(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY);
 void mpSync(CPacket* pPacket, DWORD dwSessionID, short shX, short shY);
 void mpECHO(CPacket* pPacket, uint32_t Time);
+void mpDisconnect(CPacket* pPacket, DWORD dwSessionID);
+
+void Update();
+void PrintPacket(const string& name, CPacket* pPacket);
 
 
 
@@ -139,7 +166,9 @@ int main() {
         auto now = clock::now();
         std::chrono::duration<double> elapsed = now - lastLogic;
         if (elapsed.count() >= logicInterval) {
-            UpdateLogic(elapsed.count());
+            //UpdateLogic(elapsed.count());
+            Update();
+            DeleteCharacter();
             lastLogic = now;
         }
 
@@ -202,6 +231,9 @@ void netIOProcess() {
                 if (FD_ISSET(s->sock, &writeSet)) {
                     netProc_Send(s);
                 }
+            }
+
+            if (s && s->sock != INVALID_SOCKET) {
                 if (FD_ISSET(s->sock, &readSet)) {
                     netProc_Recv(s);
                 }
@@ -231,7 +263,16 @@ void netProc_Accept() {
     long long id = g_sessionMap->AddSession(s);
     s->sock = clientSock;
     s->session_id = id;
+
+    auto it = g_CharacterMap.find(id);
+
+    if (it != g_CharacterMap.end()) {
+        g_CharacterMap.erase(it);
+    }
    
+    c_CHARACTER* character = new c_CHARACTER(s, id);
+    g_CharacterMap.emplace(id, character);
+    s->pCharacter = character;
 
     cout << "Accepted new client (session " << s->session_id << ")\n";
     
@@ -239,22 +280,32 @@ void netProc_Accept() {
     
     //신규 클라이언트에게 자기 캐릭터 할당 패킷 전송
     SendPacket(s, dfPACKET_SC_CREATE_MY_CHARACTER);
+   
 
     //기존 접속자 정보를 신규 클라이언트에게 전송 (SC_CREATE_OTHER_CHARACTER)
     SendPacket(s, dfPACKET_SC_CREATE_OTHER_CHARACTER);
 
 
     CPacket* pPacket = new CPacket;
-    mpCreateOtherCharater(pPacket, s->session_id, s->byDirection, s->shX, s->shY, s->chHP);
+    mpCreateOtherCharater(pPacket, s->session_id, 
+        s->pCharacter->byDirection, 
+        s->pCharacter->shX, 
+        s->pCharacter->shY,
+        s->pCharacter->chHP);
     //다른 클라이언트들에게 신규 접속자 정보 전송
     SendPacket_Around(s, pPacket, false);
+    LOG_PACKET("mpCreateOtherCharater", pPacket);
+    
     delete pPacket;
 }
 
 // recv
-void netProc_Recv(SOCKETINFO* pSession) {
+void netProc_Recv(SOCKETINFO*& pSession) {
     if (!pSession) return;
-    int ret = recv(pSession->sock, pSession->recvBuf->GetRearBufferPtr(), pSession->recvBuf->GetFreeSize(), 0);
+    
+    //받을게 있으면 지금 다 받게 해줄까?
+    char tmp[BUFSIZE];
+    int ret = recv(pSession->sock, tmp, BUFSIZE, 0);
     if (ret == 0) {
         cout << "Client closed (session " << pSession->session_id << ")\n";
         Disconnect(pSession);
@@ -275,7 +326,7 @@ void netProc_Recv(SOCKETINFO* pSession) {
     }
     else {
         // 링버퍼에 저장 (Enqueue)
-        pSession->recvBuf->MoveRear(ret);
+        pSession->recvBuf->Enqueue(tmp,ret);
     }
 
     CPacket* pPacket = new CPacket;
@@ -337,7 +388,7 @@ void netProc_Recv(SOCKETINFO* pSession) {
             }
         }
 
-        if (!PacketProc(pSession, hdr.byType,pPacket)) {
+        if (!PacketProc(pSession, hdr.byType, pPacket)) {
             // 처리 실패 시 연결 종료
             while (1)
             {
@@ -351,60 +402,117 @@ void netProc_Recv(SOCKETINFO* pSession) {
 }
 
 // send: SendQ -> 실제 send (Peek -> send -> Dequeue(sent))
-void netProc_Send(SOCKETINFO* pSession) {
+void netProc_Send(SOCKETINFO*& pSession) {
     if (!pSession) return;
     int avail = pSession->sendBuf->GetUseSize();
     if (avail <= 0) return;
 
-    int sent = send(pSession->sock, pSession->sendBuf->GetFrontBufferPtr(), avail, 0);
-    if (sent == SOCKET_ERROR) {
-        int e = WSAGetLastError();
-        if (e == WSAEWOULDBLOCK) {
-            while (1)
-            {
-                cout << "[Send] 송신 버퍼에 집어넣을 수 없는 상황\n";
+    if (avail < pSession->sendBuf->DirectDequeueSize())
+    {
+        int sent = send(pSession->sock, pSession->sendBuf->GetFrontBufferPtr(), avail, 0);
+        if (sent == SOCKET_ERROR) {
+            int e = WSAGetLastError();
+            if (e == WSAEWOULDBLOCK) {
+                while (1)
+                {
+                    cout << "[Send] 송신 버퍼에 집어넣을 수 없는 상황\n";
+                }
+                // 아무 것도 제거하지 않음 (데이터는 아직 SendQ에 있음)
+                return;
             }
-            // 아무 것도 제거하지 않음 (데이터는 아직 SendQ에 있음)
-            return;
+            else {
+                cerr << "send error (" << pSession->session_id << "): " << e << "\n";
+                Disconnect(pSession);
+                return;
+            }
         }
-        else {
-            cerr << "send error (" << pSession->session_id << "): " << e << "\n";
-            Disconnect(pSession);
-            return;
+        else if (sent > 0) {
+            int dec = pSession->sendBuf->MoveFront(sent);
+
+            if (dec != sent) {
+                while (1)
+                {
+                    cout << "[Send] 송신 버퍼에서 끄집어낸 크기가 달라짐\n";
+                }
+            }
         }
     }
-    else if (sent > 0) {
-        int dec = pSession->sendBuf->MoveFront(sent);
+    else
+    {
+        int directSize = pSession->sendBuf->DirectDequeueSize();
+        int sent = send(pSession->sock, pSession->sendBuf->GetFrontBufferPtr(), directSize, 0);
+        if (sent == SOCKET_ERROR) {
+            int e = WSAGetLastError();
+            if (e == WSAEWOULDBLOCK) {
+                while (1)
+                {
+                    cout << "[Send] 송신 버퍼에 집어넣을 수 없는 상황\n";
+                }
+                // 아무 것도 제거하지 않음 (데이터는 아직 SendQ에 있음)
+                return;
+            }
+            else {
+                cerr << "send error (" << pSession->session_id << "): " << e << "\n";
+                Disconnect(pSession);
+                return;
+            }
+        }
+        else if (sent > 0) {
+            int dec = pSession->sendBuf->MoveFront(sent);
 
-        if (dec != sent) {
-            while (1)
-            {
-                cout << "[Send] 송신 버퍼에서 끄집어낸 크기가 달라짐\n";
+            if (dec != sent) {
+                while (1)
+                {
+                    cout << "[Send] 송신 버퍼에서 끄집어낸 크기가 달라짐\n";
+                }
+            }
+        }
+
+        int frontSize = avail - directSize;
+        sent = send(pSession->sock, pSession->sendBuf->GetBufPtr(), frontSize, 0);
+        if (sent == SOCKET_ERROR) {
+            int e = WSAGetLastError();
+            if (e == WSAEWOULDBLOCK) {
+                while (1)
+                {
+                    cout << "[Send] 송신 버퍼에 집어넣을 수 없는 상황\n";
+                }
+                // 아무 것도 제거하지 않음 (데이터는 아직 SendQ에 있음)
+                return;
+            }
+            else {
+                cerr << "send error (" << pSession->session_id << "): " << e << "\n";
+                Disconnect(pSession);
+                return;
+            }
+        }
+        else if (sent > 0) {
+            int dec = pSession->sendBuf->MoveFront(sent);
+
+            if (dec != sent) {
+                while (1)
+                {
+                    cout << "[Send] 송신 버퍼에서 끄집어낸 크기가 달라짐\n";
+                }
             }
         }
     }
 }
 
 // Disconnect
-void Disconnect(SOCKETINFO* pSession) {
+void Disconnect(SOCKETINFO*& pSession) {
     if (!pSession) return;
     cout << "Disconnect session " << pSession->session_id << "\n";
 
-    //모든 클라이언트에게 삭제 패킷 전송
+    //다른 클라이언트에게 삭제 패킷 전송
     CPacket* pPacket = new CPacket;
-    st_PACKET_HEADER hdr;
-    hdr.byCode = dfPACKET_CODE;
-    hdr.bySize = sizeof(st_SC_DELETE_CHARACTER);
-    hdr.byType = dfPACKET_SC_DELETE_CHARACTER;
-
-    *pPacket << hdr.byCode;
-    *pPacket << hdr.bySize;
-    *pPacket << hdr.byType;
-
-    *pPacket << (long) pSession->session_id;
-
+    mpDisconnect(pPacket, pSession->session_id);
     //어차피 본인은 못받음.
-    BroadcastPacketExcept(pSession, pPacket);
+    //보내면 거시서또 송신 하다 disconnect 될 수도 있음.
+    //BroadcastPacketExcept(pSession, pPacket);
+    SendPacket_Around(pSession, pPacket, false);
+    LOG_PACKET("DELETE_CHARACTER", pPacket);
+    delete pPacket;
 
     //클라이언트 정보 얻기
     SOCKADDR_IN clientaddr;
@@ -415,28 +523,75 @@ void Disconnect(SOCKETINFO* pSession) {
     g_sessionMap->deleteSession(pSession, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 }
 
-
-
-// 브로드캐스트(발신자 포함)
-// 나중에 세션이 가진 범위의 세션에게만 전달
-void BroadcastPacket(SOCKETINFO* psession, CPacket* pPacket) {
-    for (long long i = 0; i < g_sessionMap->GetSize();i++) {
-        SOCKETINFO* s;
-        g_sessionMap->GetSessionptr(i, s);
-        if (s == nullptr) continue;
-        s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
-    }
+void DisconnectSocket(SOCKETINFO*& pSession)
+{
+    closesocket(pSession->sock);
+    g_DeleteCharacterID.push(pSession->session_id);
 }
 
-// 브로드캐스트(발신자 제외)
-void BroadcastPacketExcept(SOCKETINFO* exclude, CPacket* pPacket) {
-    for (long long i = 0; i < g_sessionMap->GetSize();i++) {
+void DeleteCharacter()
+{
+    CPacket* pPacket = new CPacket;
+    while (!g_DeleteCharacterID.empty())
+    {
+        int id = g_DeleteCharacterID.top();
+        g_DeleteCharacterID.pop();
+
         SOCKETINFO* s;
-        g_sessionMap->GetSessionptr(i, s);
-        if (s == nullptr || s == exclude) continue;
-        s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+        g_sessionMap->GetSessionptr(id, s);
+
+        //세션 주변에 캐릭터 삭제 알리기
+        
+        mpDisconnect(pPacket, id);
+        SendPacket_Around(s, pPacket, false);
+        LOG_PACKET("DELETE_CHARACTER", pPacket);
+       
+        //캐릭터 삭제
+        auto it = g_CharacterMap.find(id);
+        if (it != g_CharacterMap.end())
+        {
+            c_CHARACTER* c = it->second;
+            g_CharacterMap.erase(id);
+            delete c;
+        }
+        
+        //세션 삭제
+
+        if (s != nullptr)
+        {
+            //클라이언트 정보 얻기
+            SOCKADDR_IN clientaddr;
+            int addrlen = sizeof(clientaddr);
+            getpeername(s->sock, (SOCKADDR*)&clientaddr, &addrlen);
+            g_sessionMap->OnlydeleteSession(s, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+        }
     }
+    delete pPacket;
+
 }
+
+
+
+//// 브로드캐스트(발신자 포함)
+//// 나중에 세션이 가진 범위의 세션에게만 전달
+//void BroadcastPacket(SOCKETINFO* psession, CPacket* pPacket) {
+//    for (long long i = 0; i < g_sessionMap->GetSize();i++) {
+//        SOCKETINFO* s;
+//        g_sessionMap->GetSessionptr(i, s);
+//        if (s == nullptr) continue;
+//        s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+//    }
+//}
+//
+//// 브로드캐스트(발신자 제외)
+//void BroadcastPacketExcept(SOCKETINFO* exclude, CPacket* pPacket) {
+//    for (long long i = 0; i < g_sessionMap->GetSize();i++) {
+//        SOCKETINFO* s;
+//        g_sessionMap->GetSessionptr(i, s);
+//        if (s == nullptr || s == exclude) continue;
+//        s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+//    }
+//}
 
 void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self)
 {
@@ -468,90 +623,149 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self)
 //}
 
 
-// -------------------- 게임 로직 --------------------
-void UpdateLogic(double dt) {
-    (void)dt;
-    // 각 세션의 이동 처리: byDirection을 가지고 단순 이동 처리
-    for (int i = 0; i < g_sessionMap->GetSize();i++) {
-        SOCKETINFO* s;
-        g_sessionMap->GetSessionptr(i, s);
-        if (s == nullptr)
+
+
+bool CharacterMoveCheck(short NextshX, short NextshY)
+{
+    if (NextshX < dfRANGE_MOVE_LEFT || NextshX > dfRANGE_MOVE_RIGHT 
+        || NextshY > dfRANGE_MOVE_BOTTOM || NextshY < dfRANGE_MOVE_TOP) return false;
+
+    return true;
+}
+
+void Update(void)
+{
+    //… 적절한 게임 업데이트 처리 타이밍 계산 …  // 25fps 
+        //return;
+    // 게임 업데이트 처리를 CPU 100% 을 먹도록 해줄 순 없을 것입니다.  
+    // 가장 좋은 것은 네트워크 송수신 스레드와, 로직 스레드를 분리하고  
+   // 로직 스레드의 루프는 클라이언트 프레임에 대응 되도록 맞추는 것입니다. 
+    // 지금 우리는 싱글 스레드로  네트워크 송수신 + 로직 루프 가 함께 처리 되어야 하는 상황이고 
+   // Sleep 같은 대기를 통해 로직 프레임을 제어하면 네트워크 송수신의 응답성이 너무 떨어지게 
+   // 됩니다. 그래서 기본 루프는 최대한 빠르게 돌리며 네트워크 처리를 시도하고, 로직 프레임은 
+   // 클라이언트 프레임과 비슷하도록 로직을 돌릴 의도로 설계 하였습니다. 
+    c_CHARACTER* pCharacter = NULL;
+    map<DWORD, c_CHARACTER*>::iterator Iter;
+
+    for (Iter = g_CharacterMap.begin(); Iter != g_CharacterMap.end(); )
+    {
+        pCharacter = Iter->second;
+        Iter++;
+        if (0 >= pCharacter->chHP)
         {
-            continue;
+            // 사망처리. 
+            //Disconnect(pCharacter->pSession);
+            DisconnectSocket(pCharacter->pSession);
         }
+        else
+        {
+            // 일정 시간동안 수신이 없으면 종료처리 
+            //if (dwCurrentTick - pCharacter->pSession->dwLastRecvTime >
+            //    dfNETWORK_PACKET_RECV_TIMEOUT)
+            //{
+            //    DisconnectSession(pCharacter->pSession->Socket);
+            //    continue;
+            //}
 
-        if (s->chHP <= 0) {
-            cout << "Dead Client Session ID : " << s->session_id << " Client X: " << s->shX << " Y: " << s->shY << " HP:" << (int)s->chHP << "\n";
-            Disconnect(s);
-            continue;
-        }
-
-        if (s->dwAction == 1) {
-            switch (s->byDirection) {
+            //----------------------------------------------------------- 
+            // 현재 동작에 따른 처리. 
+            //----------------------------------------------------------- 
+            switch (pCharacter->dwAction)
+            {
             case dfPACKET_MOVE_DIR_LL:
-                if (s->shX > dfRANGE_MOVE_LEFT)
+                if (CharacterMoveCheck(pCharacter->shX - dfSPEED_PLAYER_X,
+                    pCharacter->shY))
                 {
-                    s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
-                    cout << "# gameRun:RR # SessionID:" << s->session_id << " / X:" << s->shX << " / Y:" << s->shY << "\n";
+                    pCharacter->shX -= dfSPEED_PLAYER_X;
                 }
-                else s->byDirection = dfPACKET_MOVE_DIR_LL; // 멈춤 처리
                 break;
+
             case dfPACKET_MOVE_DIR_LU:
-                if (s->shX > dfRANGE_MOVE_LEFT && s->shY > dfRANGE_MOVE_TOP) {
-                    s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
-                    s->shY = (unsigned short)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
-                }
-                else s->byDirection = dfPACKET_MOVE_DIR_LU; // 멈춤 처리
-                break;
-            case dfPACKET_MOVE_DIR_UU:
-                if (s->shY > dfRANGE_MOVE_TOP)
+                if (CharacterMoveCheck(pCharacter->shX - dfSPEED_PLAYER_X,
+                    pCharacter->shY - dfSPEED_PLAYER_Y))
                 {
-                    s->shY = (unsigned short)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
-                    cout << "# gameRun:RR # SessionID:" << s->session_id << " / X:" << s->shX << " / Y:" << s->shY << "\n";
+                    pCharacter->shX -= dfSPEED_PLAYER_X;
+                    pCharacter->shY -= dfSPEED_PLAYER_Y;
                 }
-                else s->byDirection = dfPACKET_MOVE_DIR_UU;
+                break;
+
+            case dfPACKET_MOVE_DIR_UU:
+                if (CharacterMoveCheck(pCharacter->shX,
+                    pCharacter->shY - dfSPEED_PLAYER_Y))
+                    pCharacter->shY -= dfSPEED_PLAYER_Y;
+
                 break;
             case dfPACKET_MOVE_DIR_RU:
-                if (s->shX < dfRANGE_MOVE_RIGHT && s->shY > dfRANGE_MOVE_TOP) {
-                    s->shX = (unsigned short)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
-                    s->shY = (unsigned short)max((int)dfRANGE_MOVE_TOP, (int)s->shY - MOVE_UNIT_Y);
-                }
-                else s->byDirection = dfPACKET_MOVE_DIR_RU;
-                break;
-            case dfPACKET_MOVE_DIR_RR:
-                if (s->shX < dfRANGE_MOVE_RIGHT)
+                if (CharacterMoveCheck(pCharacter->shX + dfSPEED_PLAYER_X,
+                    pCharacter->shY - dfSPEED_PLAYER_Y))
                 {
-                    s->shX = (unsigned short)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
-                    cout << "# gameRun:RR # SessionID:" << s->session_id << " / X:" << s->shX << " / Y:" << s->shY << "\n";
+                    pCharacter->shX += dfSPEED_PLAYER_X;
+                    pCharacter->shY -= dfSPEED_PLAYER_Y;
                 }
-                else s->byDirection = dfPACKET_MOVE_DIR_RR;
                 break;
-            case dfPACKET_MOVE_DIR_RD:
-                if (s->shX < dfRANGE_MOVE_RIGHT && s->shY < dfRANGE_MOVE_BOTTOM) {
-                    s->shX = (unsigned short)min((int)dfRANGE_MOVE_RIGHT, (int)s->shX + MOVE_UNIT_X);
-                    s->shY = (unsigned short)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
+
+            case dfPACKET_MOVE_DIR_RR:
+                if (CharacterMoveCheck(pCharacter->shX + dfSPEED_PLAYER_X, pCharacter->shY))
+                {
+                    pCharacter->shX += dfSPEED_PLAYER_X;
                 }
-                else s->byDirection = dfPACKET_MOVE_DIR_RD;
+                break;
+
+            case dfPACKET_MOVE_DIR_RD:
+                if (CharacterMoveCheck(pCharacter->shX + dfSPEED_PLAYER_X,
+                    pCharacter->shY + dfSPEED_PLAYER_Y))
+                {
+                    pCharacter->shX += dfSPEED_PLAYER_X;
+                    pCharacter->shY += dfSPEED_PLAYER_Y;
+                }
                 break;
 
             case dfPACKET_MOVE_DIR_DD:
-                if (s->shY < dfRANGE_MOVE_BOTTOM) {
-                    cout << "# gameRun:RR # SessionID:" << s->session_id << " / X:" << s->shX << " / Y:" << s->shY << "\n";
-                    s->shY = (unsigned short)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
+                if (CharacterMoveCheck(pCharacter->shX, pCharacter->shY + dfSPEED_PLAYER_Y))
+                {
+                    pCharacter->shY += dfSPEED_PLAYER_Y;
                 }
-                else s->byDirection = dfPACKET_MOVE_DIR_DD;
                 break;
+
             case dfPACKET_MOVE_DIR_LD:
-                if (s->shX > dfRANGE_MOVE_LEFT && s->shY < dfRANGE_MOVE_BOTTOM) {
-                    s->shX = (unsigned short)max((int)dfRANGE_MOVE_LEFT, (int)s->shX - MOVE_UNIT_X);
-                    s->shY = (unsigned short)min((int)dfRANGE_MOVE_BOTTOM, (int)s->shY + MOVE_UNIT_Y);
+                if (CharacterMoveCheck(pCharacter->shX - dfSPEED_PLAYER_X,
+                    pCharacter->shY + dfSPEED_PLAYER_Y))
+                {
+                    pCharacter->shX -= dfSPEED_PLAYER_X;
+                    pCharacter->shY += dfSPEED_PLAYER_Y;
                 }
-                else s->byDirection = dfPACKET_MOVE_DIR_LD;
-                break;
-            default:
                 break;
             }
+            if (pCharacter->dwAction >= dfPACKET_MOVE_DIR_LL && pCharacter->dwAction <= dfPACKET_MOVE_DIR_LD)
+            {
+                // 이동인 경우 섹터 업데이트를 함. 
+                //if (Sector_UpdateCharacter(pCharacter))
+                {
+                    // 섹터가 변경된 경우는 클라에게 관련 정보를 쏜다. 
+                   // CharacterSectorUpdatePacket(pCharacter);
+                }
+            }
         }
+    }
+}
+
+void PrintPacket(const string& name, CPacket* pPacket)
+{
+    
+    char log[100];
+    memcpy(log, pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    log[pPacket->GetDataSize()] = '/0';
+    printf("#Packet : ");
+    printf("[ %s ]", name.c_str());
+    for (int i = 0; i < pPacket->GetDataSize();i++)
+    {
+        printf("%02X", (unsigned char)log[i]);
+    }
+    cout << "\n";
+    
+    if (pPacket->GetDataSize() >= 20)
+    {
+        DebugBreak();
     }
 }
 
@@ -573,11 +787,6 @@ bool SendPacket(SOCKETINFO* pSession, unsigned char byPacketType)
         break;
 
     case dfPACKET_SC_CREATE_OTHER_CHARACTER:
-        hdr.bySize = sizeof(st_SC_CREATE_OTHER_CHARACTER);
-        hdr.byType = dfPACKET_SC_CREATE_OTHER_CHARACTER;
-        *newPacket << hdr.byCode;
-        *newPacket << hdr.bySize;
-        *newPacket << hdr.byType;
         return clientPacketProc_CREATE_OTHER_CHARACTER(pSession, newPacket);
         break;
 
@@ -686,6 +895,12 @@ bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& pPac
     default:
         while (1)
         {
+            //SOCKADDR_IN clientaddr;
+            //int addrlen = sizeof(clientaddr);
+            //getpeername(pSession->sock, (SOCKADDR*)&clientaddr, &addrlen);
+            //char* s_ip = inet_ntoa(clientaddr.sin_addr);
+            //int i_port = (int)ntohs(clientaddr.sin_port);
+            //printf("[Network] 클라이언트: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
             cerr << "Unknown packet type from " << pSession->session_id << ": " << (int)byPacketType << "\n";
         }
         break;
@@ -709,26 +924,26 @@ bool netPacketProc_MoveStart(SOCKETINFO* pSession, CPacket* pPacket)
     //    pSession->dwSessionID, byDirection, shX, shY);
 
     // 위치 오차 검사
-    if ((int)abs((int)pSession->shX - (int)shX) > dfERROR_RANGE ||
-        (int)abs((int)pSession->shY - (int)shY) > dfERROR_RANGE) {
-        mpSync(pPacket, pSession->session_id, pSession->shX, pSession->shY);
+    if ((int)abs((int)pSession->pCharacter->shX - (int)shX) > dfERROR_RANGE ||
+        (int)abs((int)pSession->pCharacter->shY - (int)shY) > dfERROR_RANGE) {
+        mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
         SendPacket_Around(pSession, pPacket, true);
-
-        shX = pSession->shX;
-        shY = pSession->shY;
+        LOG_PACKET("Sync", pPacket);
+        shX = pSession->pCharacter->shX;
+        shY = pSession->pCharacter->shY;
     }
 
     // 상태 갱신
     //----------------------------------------------------- 
     // 동작을 변경.  동작번호와, 방향값이 같다. 
     //----------------------------------------------------- 
-    pSession->dwAction = byDirection;
+    pSession->pCharacter->dwAction = byDirection;
 
     //----------------------------------------------------- 
     // 단순 방향표시용 byDirection (LL,RR) 과  
     // 이동시 8방향 (LL,LU,UU,RU,RR,RD,DD,LD) 용 MoveDirection 이 있음. 
     //----------------------------------------------------- 
-    pSession->byMoveDirection = byDirection;
+    pSession->pCharacter->byMoveDirection = byDirection;
 
     //----------------------------------------------------- 
      // 방향을 변경. 
@@ -738,17 +953,17 @@ bool netPacketProc_MoveStart(SOCKETINFO* pSession, CPacket* pPacket)
     case dfPACKET_MOVE_DIR_RR:
     case dfPACKET_MOVE_DIR_RU:
     case dfPACKET_MOVE_DIR_RD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_RR;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_RR;
         break;
 
     case dfPACKET_MOVE_DIR_LU:
     case dfPACKET_MOVE_DIR_LL:
     case dfPACKET_MOVE_DIR_LD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_LL;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_LL;
         break;
     }
-    pSession->shX = shX;
-    pSession->shY = shY;
+    pSession->pCharacter->shX = shX;
+    pSession->pCharacter->shY = shY;
 
     // 정지를 하면서 좌표가 약간 조절된 경우섹터 업데이트를 함.  (섹터는 차후 설명) 
     //----------------------------------------------------------------------- 
@@ -761,19 +976,21 @@ bool netPacketProc_MoveStart(SOCKETINFO* pSession, CPacket* pPacket)
     //}
     //----------------------------------------------------------------------- 
 
-    mpMoveStart(pPacket, pSession->session_id, byDirection, pSession->shX, pSession->shY);
+    mpMoveStart(pPacket, pSession->session_id, byDirection, pSession->pCharacter->shX, pSession->pCharacter->shY);
 
 
     //----------------------------------------------------- 
     // 현재 접속중인 사용자에게 모든 패킷을 뿌린다. (섹터 단위 패킷 전송 함수 ) 
     //----------------------------------------------------- 
     SendPacket_Around(pSession, pPacket, true);
+    LOG_PACKET("MoveStart", pPacket);
+
     return true;
 }
 
 bool netPacketProc_MoveStop(SOCKETINFO* pSession, CPacket* pPacket)
 {
-    if (pPacket->GetDataSize() < (int)sizeof(st_CS_MOVE_START)) return false;
+    if (pPacket->GetDataSize() < (int)sizeof(st_CS_MOVE_STOP)) return false;
 
     BYTE byDirection;
     short shX, shY;
@@ -786,26 +1003,26 @@ bool netPacketProc_MoveStop(SOCKETINFO* pSession, CPacket* pPacket)
    //    pSession->dwSessionID, byDirection, shX, shY);
 
    // 위치 오차 검사
-    if ((int)abs((int)pSession->shX - (int)shX) > dfERROR_RANGE ||
-        (int)abs((int)pSession->shY - (int)shY) > dfERROR_RANGE) {
-        mpSync(pPacket, pSession->session_id, pSession->shX, pSession->shY);
+    if ((int)abs((int)pSession->pCharacter->shX - (int)shX) > dfERROR_RANGE ||
+        (int)abs((int)pSession->pCharacter->shY - (int)shY) > dfERROR_RANGE) {
+        mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
         SendPacket_Around(pSession, pPacket, true);
-
-        shX = pSession->shX;
-        shY = pSession->shY;
+        LOG_PACKET("Sync", pPacket);
+        shX = pSession->pCharacter->shX;
+        shY = pSession->pCharacter->shY;
     }
 
     // 상태 갱신
     //----------------------------------------------------- 
     // 동작을 변경.  동작번호와, 방향값이 같다. 
     //----------------------------------------------------- 
-    pSession->dwAction = byDirection;
+    pSession->pCharacter->dwAction = dfPACKET_CS_MOVE_STOP;
 
     //----------------------------------------------------- 
     // 단순 방향표시용 byDirection (LL,RR) 과  
     // 이동시 8방향 (LL,LU,UU,RU,RR,RD,DD,LD) 용 MoveDirection 이 있음. 
     //----------------------------------------------------- 
-    pSession->byMoveDirection = byDirection;
+    pSession->pCharacter->byMoveDirection = byDirection;
 
     //----------------------------------------------------- 
      // 방향을 변경. 
@@ -815,17 +1032,17 @@ bool netPacketProc_MoveStop(SOCKETINFO* pSession, CPacket* pPacket)
     case dfPACKET_MOVE_DIR_RR:
     case dfPACKET_MOVE_DIR_RU:
     case dfPACKET_MOVE_DIR_RD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_RR;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_RR;
         break;
 
     case dfPACKET_MOVE_DIR_LU:
     case dfPACKET_MOVE_DIR_LL:
     case dfPACKET_MOVE_DIR_LD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_LL;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_LL;
         break;
     }
-    pSession->shX = shX;
-    pSession->shY = shY;
+    pSession->pCharacter->shX = shX;
+    pSession->pCharacter->shY = shY;
 
     // 정지를 하면서 좌표가 약간 조절된 경우섹터 업데이트를 함.  (섹터는 차후 설명) 
     //----------------------------------------------------------------------- 
@@ -838,19 +1055,20 @@ bool netPacketProc_MoveStop(SOCKETINFO* pSession, CPacket* pPacket)
     //}
     //----------------------------------------------------------------------- 
 
-    mpMoveStop(pPacket, pSession->session_id, byDirection, pSession->shX, pSession->shY);
+    mpMoveStop(pPacket, pSession->session_id, byDirection, pSession->pCharacter->shX, pSession->pCharacter->shY);
 
 
     //----------------------------------------------------- 
     // 현재 접속중인 사용자에게 모든 패킷을 뿌린다. (섹터 단위 패킷 전송 함수 ) 
     //----------------------------------------------------- 
     SendPacket_Around(pSession, pPacket, true);
+    LOG_PACKET("MoveStop", pPacket);
     return true;
 }
 
 bool netPacketProc_Attack1(SOCKETINFO* pSession, CPacket* pPacket)
 {
-    if (pPacket->GetDataSize() < (int)sizeof(st_CS_MOVE_START)) return false;
+    if (pPacket->GetDataSize() < (int)sizeof(st_CS_ATTACK)) return false;
 
     BYTE byDirection;
     short shX, shY;
@@ -863,26 +1081,26 @@ bool netPacketProc_Attack1(SOCKETINFO* pSession, CPacket* pPacket)
    //    pSession->dwSessionID, byDirection, shX, shY);
 
    // 위치 오차 검사
-    if ((int)abs((int)pSession->shX - (int)shX) > dfERROR_RANGE ||
-        (int)abs((int)pSession->shY - (int)shY) > dfERROR_RANGE) {
-        mpSync(pPacket, pSession->session_id, pSession->shX, pSession->shY);
+    if ((int)abs((int)pSession->pCharacter->shX - (int)shX) > dfERROR_RANGE ||
+        (int)abs((int)pSession->pCharacter->shY - (int)shY) > dfERROR_RANGE) {
+        mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
         SendPacket_Around(pSession, pPacket, true);
-
-        shX = pSession->shX;
-        shY = pSession->shY;
+        LOG_PACKET("Sync", pPacket);
+        shX = pSession->pCharacter->shX;
+        shY = pSession->pCharacter->shY;
     }
 
     // 상태 갱신
      //----------------------------------------------------- 
-     // 동작을 변경.  동작번호와, 방향값이 같다. ??
+     // 동작을 변경.  동작번호와, 방향값이 같다.
      //----------------------------------------------------- 
-     pSession->dwAction = byDirection;
+     pSession->pCharacter->dwAction = dfPACKET_CS_ATTACK1;
 
     //----------------------------------------------------- 
     // 단순 방향표시용 byDirection (LL,RR) 과  
     // 이동시 8방향 (LL,LU,UU,RU,RR,RD,DD,LD) 용 MoveDirection 이 있음. 
     //----------------------------------------------------- 
-    pSession->byMoveDirection = byDirection;
+    pSession->pCharacter->byMoveDirection = byDirection;
 
     //----------------------------------------------------- 
      // 방향을 변경. 
@@ -892,17 +1110,17 @@ bool netPacketProc_Attack1(SOCKETINFO* pSession, CPacket* pPacket)
     case dfPACKET_MOVE_DIR_RR:
     case dfPACKET_MOVE_DIR_RU:
     case dfPACKET_MOVE_DIR_RD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_RR;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_RR;
         break;
 
     case dfPACKET_MOVE_DIR_LU:
     case dfPACKET_MOVE_DIR_LL:
     case dfPACKET_MOVE_DIR_LD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_LL;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_LL;
         break;
     }
-    pSession->shX = shX;
-    pSession->shY = shY;
+    pSession->pCharacter->shX = shX;
+    pSession->pCharacter->shY = shY;
 
     // 공격 범위 내 충돌 검사 및 데미지 처리
     int ATTACK_RANGE_X = dfATTACK1_RANGE_X;
@@ -915,41 +1133,43 @@ bool netPacketProc_Attack1(SOCKETINFO* pSession, CPacket* pPacket)
         SOCKETINFO* target;
         g_sessionMap->GetSessionptr(i, target);
         if (target == nullptr || target == pSession) continue;
-        if (target->chHP <= 0) continue;
+        if (target->pCharacter->chHP <= 0) continue;
 
         bool rangeDirection = false;
-        if (((int)target->shX >= (int)pSession->shX && pSession->byDirection == dfPACKET_MOVE_DIR_RR) ||
-            ((int)target->shX <= (int)pSession->shX && pSession->byDirection == dfPACKET_MOVE_DIR_LL))
+        if (((int)target->pCharacter->shX >= (int)pSession->pCharacter->shX && 
+            pSession->pCharacter->byDirection == dfPACKET_MOVE_DIR_RR) ||
+            ((int)target->pCharacter->shX <= (int)pSession->pCharacter->shX && 
+                pSession->pCharacter->byDirection == dfPACKET_MOVE_DIR_LL))
         {
             rangeDirection = true;
         }
 
-        unsigned int dx = abs((int)target->shX - (int)pSession->shX);
-        unsigned int dy = abs((int)target->shY - (int)pSession->shY);
+        unsigned int dx = abs((int)target->pCharacter->shX - (int)pSession->pCharacter->shX);
+        unsigned int dy = abs((int)target->pCharacter->shY - (int)pSession->pCharacter->shY);
 
         if (dx <= ATTACK_RANGE_X && rangeDirection && dy <= ATTACK_RANGE_Y) {
-            target->chHP -= 10;
+            target->pCharacter->chHP -= 10;
 
             pPacket->Clear();
-            mpDamage(pPacket, pSession->session_id, target->session_id, target->chHP);
+            mpDamage(pPacket, pSession->session_id, target->session_id, target->pCharacter->chHP);
             SendPacket_Around(target, pPacket, true);
-
-            cout << "Damged Client Session ID : " << target->session_id << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
+            LOG_PACKET("Damage", pPacket);
+            //cout << "Damged Client Session ID : " << target->session_id << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
         }
     }
 
-    pPacket->Clear();
-    mpAttack(pPacket, pSession->session_id, pSession->byDirection, 
-        pSession->shX, pSession->shY, dfPACKET_CS_ATTACK1);
+    mpAttack(pPacket, pSession->session_id, pSession->pCharacter->byDirection,
+        pSession->pCharacter->shX, pSession->pCharacter->shY, dfPACKET_SC_ATTACK1);
     SendPacket_Around(pSession, pPacket, true);
-    cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
+    LOG_PACKET("Attack1", pPacket);
+    //cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
 
     return true;
 }
 
 bool netPacketProc_Attack2(SOCKETINFO* pSession, CPacket* pPacket)
 {
-    if (pPacket->GetDataSize() < (int)sizeof(st_CS_MOVE_START)) return false;
+    if (pPacket->GetDataSize() < (int)sizeof(st_CS_ATTACK)) return false;
 
     BYTE byDirection;
     short shX, shY;
@@ -962,26 +1182,26 @@ bool netPacketProc_Attack2(SOCKETINFO* pSession, CPacket* pPacket)
    //    pSession->dwSessionID, byDirection, shX, shY);
 
    // 위치 오차 검사
-    if ((int)abs((int)pSession->shX - (int)shX) > dfERROR_RANGE ||
-        (int)abs((int)pSession->shY - (int)shY) > dfERROR_RANGE) {
-        mpSync(pPacket, pSession->session_id, pSession->shX, pSession->shY);
+    if ((int)abs((int)pSession->pCharacter->shX - (int)shX) > dfERROR_RANGE ||
+        (int)abs((int)pSession->pCharacter->shY - (int)shY) > dfERROR_RANGE) {
+        mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
         SendPacket_Around(pSession, pPacket, true);
-
-        shX = pSession->shX;
-        shY = pSession->shY;
+        LOG_PACKET("Sync", pPacket);
+        shX = pSession->pCharacter->shX;
+        shY = pSession->pCharacter->shY;
     }
 
     // 상태 갱신
      //----------------------------------------------------- 
      // 동작을 변경.  동작번호와, 방향값이 같다. ??
      //----------------------------------------------------- 
-    pSession->dwAction = byDirection;
+    pSession->pCharacter->dwAction = dfPACKET_CS_ATTACK2;
 
     //----------------------------------------------------- 
     // 단순 방향표시용 byDirection (LL,RR) 과  
     // 이동시 8방향 (LL,LU,UU,RU,RR,RD,DD,LD) 용 MoveDirection 이 있음. 
     //----------------------------------------------------- 
-    pSession->byMoveDirection = byDirection;
+    pSession->pCharacter->byMoveDirection = byDirection;
 
     //----------------------------------------------------- 
      // 방향을 변경. 
@@ -991,17 +1211,17 @@ bool netPacketProc_Attack2(SOCKETINFO* pSession, CPacket* pPacket)
     case dfPACKET_MOVE_DIR_RR:
     case dfPACKET_MOVE_DIR_RU:
     case dfPACKET_MOVE_DIR_RD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_RR;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_RR;
         break;
 
     case dfPACKET_MOVE_DIR_LU:
     case dfPACKET_MOVE_DIR_LL:
     case dfPACKET_MOVE_DIR_LD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_LL;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_LL;
         break;
     }
-    pSession->shX = shX;
-    pSession->shY = shY;
+    pSession->pCharacter->shX = shX;
+    pSession->pCharacter->shY = shY;
 
     // 공격 범위 내 충돌 검사 및 데미지 처리
     int ATTACK_RANGE_X = dfATTACK2_RANGE_X;
@@ -1014,41 +1234,45 @@ bool netPacketProc_Attack2(SOCKETINFO* pSession, CPacket* pPacket)
         SOCKETINFO* target;
         g_sessionMap->GetSessionptr(i, target);
         if (target == nullptr || target == pSession) continue;
-        if (target->chHP <= 0) continue;
+        if (target->pCharacter->chHP <= 0) continue;
 
         bool rangeDirection = false;
-        if (((int)target->shX >= (int)pSession->shX && pSession->byDirection == dfPACKET_MOVE_DIR_RR) ||
-            ((int)target->shX <= (int)pSession->shX && pSession->byDirection == dfPACKET_MOVE_DIR_LL))
+        if (((int)target->pCharacter->shX >= (int)pSession->pCharacter->shX && 
+            pSession->pCharacter->byDirection == dfPACKET_MOVE_DIR_RR) ||
+            ((int)target->pCharacter->shX <= (int)pSession->pCharacter->shX &&
+                pSession->pCharacter->byDirection == dfPACKET_MOVE_DIR_LL))
         {
             rangeDirection = true;
         }
 
-        unsigned int dx = abs((int)target->shX - (int)pSession->shX);
-        unsigned int dy = abs((int)target->shY - (int)pSession->shY);
+        unsigned int dx = abs((int)target->pCharacter->shX - (int)pSession->pCharacter->shX);
+        unsigned int dy = abs((int)target->pCharacter->shY - (int)pSession->pCharacter->shY);
 
         if (dx <= ATTACK_RANGE_X && rangeDirection && dy <= ATTACK_RANGE_Y) {
-            target->chHP -= 10;
+            target->pCharacter->chHP -= 10;
 
             pPacket->Clear();
-            mpDamage(pPacket, pSession->session_id, target->session_id, target->chHP);
+            mpDamage(pPacket, pSession->session_id, target->session_id, target->pCharacter->chHP);
             SendPacket_Around(target, pPacket, true);
-
-            cout << "Damged Client Session ID : " << target->session_id << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
+            LOG_PACKET("Damage", pPacket);
+            //cout << "Damged Client Session ID : " << target->session_id << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
         }
     }
 
     pPacket->Clear();
-    mpAttack(pPacket, pSession->session_id, pSession->byDirection,
-        pSession->shX, pSession->shY, dfPACKET_CS_ATTACK2);
+    mpAttack(pPacket, pSession->session_id, pSession->pCharacter->byDirection,
+        pSession->pCharacter->shX, pSession->pCharacter->shY, dfPACKET_SC_ATTACK2);
     SendPacket_Around(pSession, pPacket, true);
-    cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
+    LOG_PACKET("Attack2",pPacket);
+
+    //cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
 
     return true;
 }
 
 bool netPacketProc_Attack3(SOCKETINFO* pSession, CPacket* pPacket)
 {
-    if (pPacket->GetDataSize() < (int)sizeof(st_CS_MOVE_START)) return false;
+    if (pPacket->GetDataSize() < (int)sizeof(st_CS_ATTACK)) return false;
 
     BYTE byDirection;
     short shX, shY;
@@ -1061,26 +1285,26 @@ bool netPacketProc_Attack3(SOCKETINFO* pSession, CPacket* pPacket)
    //    pSession->dwSessionID, byDirection, shX, shY);
 
    // 위치 오차 검사
-    if ((int)abs((int)pSession->shX - (int)shX) > dfERROR_RANGE ||
-        (int)abs((int)pSession->shY - (int)shY) > dfERROR_RANGE) {
-        mpSync(pPacket, pSession->session_id, pSession->shX, pSession->shY);
+    if ((int)abs((int)pSession->pCharacter->shX - (int)shX) > dfERROR_RANGE ||
+        (int)abs((int)pSession->pCharacter->shY - (int)shY) > dfERROR_RANGE) {
+        mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
         SendPacket_Around(pSession, pPacket, true);
-
-        shX = pSession->shX;
-        shY = pSession->shY;
+        LOG_PACKET("Sync",pPacket);
+        shX = pSession->pCharacter->shX;
+        shY = pSession->pCharacter->shY;
     }
 
     // 상태 갱신
      //----------------------------------------------------- 
-     // 동작을 변경.  동작번호와, 방향값이 같다. ??
+     // 동작을 변경.  동작번호와, 방향값이 같다.
      //----------------------------------------------------- 
-    pSession->dwAction = byDirection;
+    pSession->pCharacter->dwAction = dfPACKET_CS_ATTACK3;
 
     //----------------------------------------------------- 
     // 단순 방향표시용 byDirection (LL,RR) 과  
     // 이동시 8방향 (LL,LU,UU,RU,RR,RD,DD,LD) 용 MoveDirection 이 있음. 
     //----------------------------------------------------- 
-    pSession->byMoveDirection = byDirection;
+    pSession->pCharacter->byMoveDirection = byDirection;
 
     //----------------------------------------------------- 
      // 방향을 변경. 
@@ -1090,17 +1314,17 @@ bool netPacketProc_Attack3(SOCKETINFO* pSession, CPacket* pPacket)
     case dfPACKET_MOVE_DIR_RR:
     case dfPACKET_MOVE_DIR_RU:
     case dfPACKET_MOVE_DIR_RD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_RR;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_RR;
         break;
 
     case dfPACKET_MOVE_DIR_LU:
     case dfPACKET_MOVE_DIR_LL:
     case dfPACKET_MOVE_DIR_LD:
-        pSession->byDirection = dfPACKET_MOVE_DIR_LL;
+        pSession->pCharacter->byDirection = dfPACKET_MOVE_DIR_LL;
         break;
     }
-    pSession->shX = shX;
-    pSession->shY = shY;
+    pSession->pCharacter->shX = shX;
+    pSession->pCharacter->shY = shY;
 
     // 공격 범위 내 충돌 검사 및 데미지 처리
     int ATTACK_RANGE_X = dfATTACK3_RANGE_X;
@@ -1113,34 +1337,37 @@ bool netPacketProc_Attack3(SOCKETINFO* pSession, CPacket* pPacket)
         SOCKETINFO* target;
         g_sessionMap->GetSessionptr(i, target);
         if (target == nullptr || target == pSession) continue;
-        if (target->chHP <= 0) continue;
+        if (target->pCharacter->chHP <= 0) continue;
 
         bool rangeDirection = false;
-        if (((int)target->shX >= (int)pSession->shX && pSession->byDirection == dfPACKET_MOVE_DIR_RR) ||
-            ((int)target->shX <= (int)pSession->shX && pSession->byDirection == dfPACKET_MOVE_DIR_LL))
+        if (((int)target->pCharacter->shX >= (int)pSession->pCharacter->shX 
+            && pSession->pCharacter->byDirection == dfPACKET_MOVE_DIR_RR) ||
+            ((int)target->pCharacter->shX <= (int)pSession->pCharacter->shX 
+                && pSession->pCharacter->byDirection == dfPACKET_MOVE_DIR_LL))
         {
             rangeDirection = true;
         }
 
-        unsigned int dx = abs((int)target->shX - (int)pSession->shX);
-        unsigned int dy = abs((int)target->shY - (int)pSession->shY);
+        unsigned int dx = abs((int)target->pCharacter->shX - (int)pSession->pCharacter->shX);
+        unsigned int dy = abs((int)target->pCharacter->shY - (int)pSession->pCharacter->shY);
 
         if (dx <= ATTACK_RANGE_X && rangeDirection && dy <= ATTACK_RANGE_Y) {
-            target->chHP -= 10;
+            target->pCharacter->chHP -= 10;
 
             pPacket->Clear();
-            mpDamage(pPacket, pSession->session_id, target->session_id, target->chHP);
+            mpDamage(pPacket, pSession->session_id, target->session_id, target->pCharacter->chHP);
             SendPacket_Around(target, pPacket, true);
-
-            cout << "Damged Client Session ID : " << target->session_id << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
+            LOG_PACKET("Damage",pPacket);
+            //cout << "Damged Client Session ID : " << target->session_id << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
         }
     }
 
     pPacket->Clear();
-    mpAttack(pPacket, pSession->session_id, pSession->byDirection,
-    pSession->shX, pSession->shY, dfPACKET_CS_ATTACK3);
+    mpAttack(pPacket, pSession->session_id, pSession->pCharacter->byDirection,
+    pSession->pCharacter->shX, pSession->pCharacter->shY, dfPACKET_SC_ATTACK3);
     SendPacket_Around(pSession, pPacket, true);
-    cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
+    LOG_PACKET("Attack3",pPacket);
+    //cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
 
     return true;
 }
@@ -1164,19 +1391,20 @@ bool netPacketProc_ECHO(SOCKETINFO* pSession, CPacket* pPacket)
 
 bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket)
 {
-    *newPacket << pSession->byDirection;
-    *newPacket << pSession->chHP;
     *newPacket << (long)pSession->session_id;
-    *newPacket << pSession->shX;
-    *newPacket << pSession->shY;
+    *newPacket << pSession->pCharacter->byDirection;
+    *newPacket << pSession->pCharacter->shX;
+    *newPacket << pSession->pCharacter->shY;
+    *newPacket << pSession->pCharacter->chHP;
 
-    cout << "Create Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
+    LOG_PACKET("CreateMyCharacter", newPacket);
+    //cout << "Create Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
     int enqdata = pSession->sendBuf->Enqueue(newPacket->GetBufferPtr(), newPacket->GetDataSize());
     if (enqdata != newPacket->GetDataSize())
     {
         while (1)
         {
-            printf("[SendPacket] 송신 버퍼에 넣기 실패");
+            printf("[SendPacket] 송신 버퍼에 넣기 실패\n");
         }
     }
 
@@ -1186,6 +1414,10 @@ bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* newPack
 bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket)
 {
     //주변 캐릭터를 대입하도록 바꿔야하지만 일단은 전체에서 받도록
+    st_PACKET_HEADER hdr;
+    hdr.byCode = dfPACKET_CODE;
+    hdr.bySize = sizeof(st_SC_CREATE_OTHER_CHARACTER);
+    hdr.byType = dfPACKET_SC_CREATE_OTHER_CHARACTER;
 
     for (long long i = 0; i < g_sessionMap->GetSize(); i++)
     {
@@ -1193,12 +1425,18 @@ bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newP
         g_sessionMap->GetSessionptr(i, other);
         if (other == nullptr || other == pSession) continue;
 
-        *newPacket << other->byDirection;
-        *newPacket << other->chHP;
+        newPacket->Clear();
+        *newPacket << hdr.byCode;
+        *newPacket << hdr.bySize;
+        *newPacket << hdr.byType;
+        
         *newPacket << (long)other->session_id;
-        *newPacket << other->shX;
-        *newPacket << other->shY;
+        *newPacket << other->pCharacter->byDirection;
+        *newPacket << other->pCharacter->shX;
+        *newPacket << other->pCharacter->shY;
+        *newPacket << other->pCharacter->chHP;
 
+        LOG_PACKET("CreateOtherCharacter",newPacket);
         int enqdata = pSession->sendBuf->Enqueue(newPacket->GetBufferPtr(), newPacket->GetDataSize());
         if (enqdata != newPacket->GetDataSize())
         {
@@ -1257,7 +1495,7 @@ void mpCreateOtherCharater(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, shor
 {
     st_PACKET_HEADER stPacketHeader;
     stPacketHeader.byCode = dfPACKET_CODE;
-    stPacketHeader.bySize = 10;
+    stPacketHeader.bySize = sizeof(st_SC_CREATE_OTHER_CHARACTER);
     stPacketHeader.byType = dfPACKET_SC_CREATE_OTHER_CHARACTER;
     pPacket->Clear();
     pPacket->PutData((char*)&stPacketHeader, sizeof(st_PACKET_HEADER));
@@ -1299,7 +1537,7 @@ void mpMoveStart(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, sho
 {
     st_PACKET_HEADER stPacketHeader;
     stPacketHeader.byCode = dfPACKET_CODE;
-    stPacketHeader.bySize = 9;
+    stPacketHeader.bySize = sizeof(st_SC_MOVE_START);
     stPacketHeader.byType = dfPACKET_SC_MOVE_START;
     pPacket->Clear();
     pPacket->PutData((char*)&stPacketHeader, sizeof(st_PACKET_HEADER));
@@ -1313,7 +1551,7 @@ void mpMoveStop(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, shor
 {
     st_PACKET_HEADER stPacketHeader;
     stPacketHeader.byCode = dfPACKET_CODE;
-    stPacketHeader.bySize = 9;
+    stPacketHeader.bySize = sizeof(st_SC_MOVE_STOP);
     stPacketHeader.byType = dfPACKET_SC_MOVE_STOP;
     pPacket->Clear();
     pPacket->PutData((char*)&stPacketHeader, sizeof(st_PACKET_HEADER));
@@ -1340,9 +1578,22 @@ void mpECHO(CPacket* pPacket, uint32_t Time)
 {
     st_PACKET_HEADER stPacketHeader;
     stPacketHeader.byCode = dfPACKET_CODE;
-    stPacketHeader.bySize = sizeof(st_CS_ECHO);
-    stPacketHeader.byType = dfPACKET_CS_ECHO;
+    stPacketHeader.bySize = sizeof(st_SC_ECHO);
+    stPacketHeader.byType = dfPACKET_SC_ECHO;
     pPacket->Clear();
     pPacket->PutData((char*)&stPacketHeader, sizeof(st_PACKET_HEADER));
     *pPacket << (long)Time;
+}
+
+void mpDisconnect(CPacket* pPacket, DWORD dwSessionID)
+{
+    pPacket->Clear();
+
+    st_PACKET_HEADER stPacketHeader;
+    stPacketHeader.byCode = dfPACKET_CODE;
+    stPacketHeader.bySize = sizeof(st_SC_DELETE_CHARACTER);
+    stPacketHeader.byType = dfPACKET_SC_DELETE_CHARACTER;
+    pPacket->Clear();
+    pPacket->PutData((char*)&stPacketHeader, sizeof(st_PACKET_HEADER));
+    *pPacket << (long)dwSessionID;
 }

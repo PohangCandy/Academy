@@ -23,12 +23,12 @@ void cSessionMap::Destroy()
 long long cSessionMap::AddSession(SOCKETINFO* psession)
 {
 	long long id;
-	EnterCriticalSection(&_sessionMap_cs);
+	//EnterCriticalSection(&_sessionMap_cs);
 	if (!_deletedIdStack.empty())
 	{
 		id = _deletedIdStack.top();
 		_deletedIdStack.pop();
-		LeaveCriticalSection(&_sessionMap_cs);
+		//LeaveCriticalSection(&_sessionMap_cs);
 
 		if (_sessionMap[id] != nullptr)
 		{
@@ -41,7 +41,7 @@ long long cSessionMap::AddSession(SOCKETINFO* psession)
 	}
 	else
 	{
-		LeaveCriticalSection(&_sessionMap_cs);
+		//LeaveCriticalSection(&_sessionMap_cs);
 		id = _mapSize++;
 		_sessionMap[id] = psession;
 	}
@@ -65,10 +65,22 @@ void cSessionMap::deleteSession(SOCKETINFO*& psession, char* s_ip, int i_port)
 	delete psession;
 	psession = nullptr;
 
-	EnterCriticalSection(&_sessionMap_cs);
+	//EnterCriticalSection(&_sessionMap_cs);
 	_deletedIdStack.push(id);
 
-	LeaveCriticalSection(&_sessionMap_cs);
+	//LeaveCriticalSection(&_sessionMap_cs);
+}
+
+void cSessionMap::OnlydeleteSession(SOCKETINFO*& psession, char* s_ip, int i_port)
+{
+	long long id = psession->session_id;
+
+	_sessionMap[id] = nullptr;
+	printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
+	delete psession;
+	psession = nullptr;
+
+	_deletedIdStack.push(id);
 }
 
 void cSessionMap::GetSessionptr(long long sessionId, SOCKETINFO*& sessionptr)

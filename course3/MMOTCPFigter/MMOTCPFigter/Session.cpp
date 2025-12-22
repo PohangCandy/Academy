@@ -15,11 +15,7 @@ SOCKETINFO::SOCKETINFO()
 	sendOverlapped = new OVERLAPPED_CONTEXT(ESend);
 	recvOverlapped = new OVERLAPPED_CONTEXT(ERecv);
 
-	dwAction = 0;
-	byDirection=dfPACKET_MOVE_DIR_RR;
-	shX =(rand() % (dfRANGE_MOVE_RIGHT - dfRANGE_MOVE_LEFT + 1)) + dfRANGE_MOVE_LEFT;
-	shY = (rand() % (dfRANGE_MOVE_BOTTOM - dfRANGE_MOVE_TOP + 1)) + dfRANGE_MOVE_TOP;
-	chHP = 100;
+	pCharacter = nullptr;
 }
 
 SOCKETINFO::SOCKETINFO(int bufsize)
@@ -32,11 +28,7 @@ SOCKETINFO::SOCKETINFO(int bufsize)
 	sendOverlapped = new OVERLAPPED_CONTEXT(ESend);
 	recvOverlapped = new OVERLAPPED_CONTEXT(ERecv);
 
-	dwAction = 0;
-	byDirection = dfPACKET_MOVE_DIR_RR;
-	shX = (rand() % (dfRANGE_MOVE_RIGHT - dfRANGE_MOVE_LEFT + 1)) + dfRANGE_MOVE_LEFT;
-	shY = (rand() % (dfRANGE_MOVE_BOTTOM - dfRANGE_MOVE_TOP + 1)) + dfRANGE_MOVE_TOP;
-	chHP = 100;
+	pCharacter = nullptr;
 }
 
 SOCKETINFO::~SOCKETINFO()

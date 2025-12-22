@@ -1,6 +1,16 @@
 #ifndef __PROTOCOL__
 #define __PROTOCOL__
 
+#define DEBUG_LOG_ON 0
+
+#if DEBUG_LOG_ON
+// 로그가 켜져 있을 때: PrintPacket 함수 등을 정상 호출
+#define LOG_PACKET(name, pPacket) PrintPacket(name, pPacket)
+#else
+// 로그가 꺼져 있을 때: 컴파일러가 아무것도 하지 않도록 빈칸으로 대체
+#define LOG_PACKET(name, pPacket) 
+#endif
+
 
 #define dfNETWORK_PORT		5000
 #define dfPACKET_CODE		0x89
@@ -13,6 +23,10 @@
 // 이동 단위
 #define MOVE_UNIT_X 3
 #define MOVE_UNIT_Y 2
+
+//섹터 크기
+#define dfSECTOR_MAX_Y 100
+#define dfSECTOR_MAX_X 100
 
 
 
@@ -373,15 +387,15 @@ struct st_SC_ECHO {
 //-----------------------------------------------------------------
 // 화면 이동 범위.
 //-----------------------------------------------------------------
-//#define dfRANGE_MOVE_TOP	0
-//#define dfRANGE_MOVE_LEFT	0
-//#define dfRANGE_MOVE_RIGHT	6400
-//#define dfRANGE_MOVE_BOTTOM	6400
+#define dfRANGE_MOVE_TOP	0
+#define dfRANGE_MOVE_LEFT	0
+#define dfRANGE_MOVE_RIGHT	6400
+#define dfRANGE_MOVE_BOTTOM	6400
 // 이동 범위
-#define dfRANGE_MOVE_TOP    50
-#define dfRANGE_MOVE_LEFT   10
-#define dfRANGE_MOVE_RIGHT  630
-#define dfRANGE_MOVE_BOTTOM 470
+//#define dfRANGE_MOVE_TOP    50
+//#define dfRANGE_MOVE_LEFT   10
+//#define dfRANGE_MOVE_RIGHT  630
+//#define dfRANGE_MOVE_BOTTOM 470
 
 //---------------------------------------------------------------
 // 공격범위.
@@ -405,8 +419,10 @@ struct st_SC_ECHO {
 //-----------------------------------------------------------------
 // 캐릭터 이동 속도   // 25fps 기준 이동속도
 //-----------------------------------------------------------------
-#define dfSPEED_PLAYER_X	6	// 3   50fps
-#define dfSPEED_PLAYER_Y	4	// 2   50fps
+//#define dfSPEED_PLAYER_X	6	// 25fps
+//#define dfSPEED_PLAYER_Y	4	// 25fps
+#define dfSPEED_PLAYER_X	3   // 50fps
+#define dfSPEED_PLAYER_Y	2  // 50fps
 
 
 //-----------------------------------------------------------------

@@ -5,6 +5,7 @@
 class MessageQueue;
 class CRingBuffer;
 struct OVERLAPPED_CONTEXT;
+class c_CHARACTER;
 
 //소켓 정보 저장을 위한 클래스
 class SOCKETINFO
@@ -36,10 +37,5 @@ public:
 	//OVERLAPPED_CONTEXT contentsOverlapped{ EContents };
 
 	//CharacterInfo
-	unsigned long	 dwAction;
-	char byDirection;
-	char byMoveDirection;
-	short shX;
-	short shY;
-	char chHP;
+	c_CHARACTER* pCharacter;
 };
