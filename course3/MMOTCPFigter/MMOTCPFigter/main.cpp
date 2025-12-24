@@ -31,12 +31,13 @@
 #include "cSessionMap.h"
 #include "CPacket.h"
 #include "Character.h"
+#include "MemoryPool.h"
 using namespace std;
 
 
 
 //1만여명이 싹다 Mss크기로 보낼 수 있는 경우 최대 버퍼 크기
-//1600 * 10000
+//1600 * 10000?
 #define RINGBUFSIZE (1024 * 16)
 #define BUFSIZE (1024 * 8)
 
@@ -45,6 +46,11 @@ SOCKET g_ListenSocket = INVALID_SOCKET;
 bool g_bShutdown = false;
 uint32_t g_nextSessionID = 1;
 cSessionMap* g_sessionMap = cSessionMap::GetSessionMap();
+
+//-------------------------------------------
+// 패킷 메모리 풀
+//-------------------------------------------
+procademy::CMemoryPool<CPacket> CPacketPool(1000, true);
 
 //------------------------------------------------------------- 
 // 캐릭터 객체 메인 관리 
@@ -77,16 +83,15 @@ void DisconnectSocket(SOCKETINFO*& pSession);
 void DeleteDieCharacter();
 //캐릭터 맵 삭제 + 캐릭터 delete
 void DeleteCharacter(c_CHARACTER* pCharacter);
-//---------------------------------------------------------------------------------------
-// 섹터 맵에서 pop > 다른 캐릭터에게 삭제 패킷 전송 > 다른 캐릭터 삭제
-//---------------------------------------------------------------------------------------
-void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_SECTOR_POS* pSector);
+
 
 
 void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECTOR_AROUND* pSectorRange);
 
+// 특정 섹터 1개에 있는 클라이언트들 에게 메시지 보내기
+void SendPacket_SectorOne(c_SECTOR_POS* pSector, CPacket* pPacket, SOCKETINFO* pExceptSession);
+
 bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& Packet);
-bool SendPacket(SOCKETINFO* pSession, unsigned char byPacketType);
 
 bool netPacketProc_MoveStart(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_MoveStop(SOCKETINFO* pSession, CPacket* pPacket);
@@ -101,14 +106,6 @@ bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* newPack
 
 //신규 섹터 클라에게 기존의 다른 클라이언트 생성 패킷 전송
 bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket);
-//bool clientPacketProc_ECHO(SOCKETINFO* pSession, CPacket* newPacket);
-//bool clientPacketProc_ATTACK1(SOCKETINFO* pSession, CPacket* newPacket);
-//bool clientPacketProc_ATTACK2(SOCKETINFO* pSession, CPacket* newPacket);
-//bool clientPacketProc_ATTACK3(SOCKETINFO* pSession, CPacket* newPacket);
-//bool clientPacketProc_DAMAGE(SOCKETINFO* pSession, CPacket* newPacket);
-//bool clientPacketProc_DELETE_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket);
-//bool clientPacketProc_MOVE_START(SOCKETINFO* pSession, CPacket* newPacket);
-//bool clientPacketProc_MOVE_STOP(SOCKETINFO* pSession, CPacket* newPacket);
 
 void mpCreateOtherCharater(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY, BYTE hp);
 void mpDamage(CPacket* pPacket, DWORD dwAttackerSessionID, DWORD dwDamagerID, BYTE hp);
@@ -139,6 +136,10 @@ void CharacterSectorUpdatePacket(c_CHARACTER* pCharacter,CPacket* pPacket);
 //섹터 맵 추가 > 다른 클라이언트의 캐릭터 생성 > 다른 클라이언트에게 클라이언트의 캐릭터 생성
 //---------------------------------------------------------------------
 void AddCharacterToSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket);
+//---------------------------------------------------------------------------------------
+// 섹터 맵에서 pop > 다른 캐릭터에게 삭제 패킷 전송 > 다른 캐릭터 삭제
+//---------------------------------------------------------------------------------------
+void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_SECTOR_POS* pSector);
 
 
 
@@ -310,12 +311,13 @@ void netProc_Accept() {
    
     //cout << "Accepted new client (session " << s->session_id << ")\n";
     //신규 클라이언트에게 자기 캐릭터 할당 패킷 전송
-    SendPacket(s, dfPACKET_SC_CREATE_MY_CHARACTER);
+    CPacket* pPacket = CPacketPool.Alloc();
+
+    clientPacketProc_CREATE_MY_CHARACTER(s, pPacket);
 
     //섹터 맵 추가 > 다른 클라이언트의 캐릭터 생성 > 다른 클라이언트에게 클라이언트의 캐릭터 생성
-    CPacket* pPacket = new CPacket;
     AddCharacterToSectorMap(character,pPacket);
-    delete pPacket;
+    CPacketPool.Free(pPacket);
 }
 
 // recv
@@ -348,8 +350,8 @@ void netProc_Recv(SOCKETINFO*& pSession) {
         pSession->recvBuf->Enqueue(tmp,ret);
     }
 
-    CPacket* pPacket = new CPacket;
-    
+    CPacket* pPacket = CPacketPool.Alloc();
+   
     // 완성된 패킷이 있으면 처리
     while (pSession->recvBuf->GetUseSize() >= (int)sizeof(st_PACKET_HEADER)) {
 
@@ -417,7 +419,7 @@ void netProc_Recv(SOCKETINFO*& pSession) {
             return;
         }
     }
-    delete pPacket;
+    CPacketPool.Free(pPacket);
 }
 
 // send: SendQ -> 실제 send (Peek -> send -> Dequeue(sent))
@@ -526,7 +528,7 @@ void Disconnect(SOCKETINFO*& pSession) {
 
     //섹터 맵 삭제
     //현재 섹터에서 삭제
-    CPacket* pPacket = new CPacket;
+    CPacket* pPacket = CPacketPool.Alloc();
     DeleteCharacterFromSectorMap(pSession->pCharacter, pPacket, &pSession->pCharacter->CurSector);
     //캐릭터 맵 삭제 >캐릭터 삭제
     DeleteCharacter(pSession->pCharacter);
@@ -538,7 +540,7 @@ void Disconnect(SOCKETINFO*& pSession) {
 
     //세션 맵 삭제 > 소켓 종료 > 세션 삭제
     g_sessionMap->deleteSession(pSession, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-    delete pPacket;
+    CPacketPool.Free(pPacket);
 }
 
 void DisconnectSocket(SOCKETINFO*& pSession)
@@ -621,16 +623,88 @@ void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_S
 
         mpDisconnect(pPacket, pCharacter->dwSessionID);
 
-        //현재 섹터 기준으로 삭제 패킷 전송
+        
+        //현재 섹터 기준으로 삭제 패킷 전송(연결 끊김, hp == 0 인 경우)
         if (pSector == &pCharacter->CurSector)
         {
             SendPacket_Around(pCharacter->pSession, pPacket, false, &pCharacter->CurSectorRange);
             LOG_PACKET("DELETE_CHARACTER", pPacket);
         }
-        //과거 섹터 기준으로 삭제 패킷 전송
+        //과거 섹터 기준으로 삭제 패킷 전송(이동에 의한 삭제)
         else if(pSector == &pCharacter->OldSector)
         {
-            SendPacket_Around(pCharacter->pSession, pPacket, false, &pCharacter->OldSectorRange);
+            if (pCharacter->OldSector.index = -1)
+            {
+                while (1)
+                {
+                    printf("[DeleteCharacterFromSectorMap] 이동 삭제인데 oldSector = -1\n");
+                }
+            }
+            int changedIndex = pCharacter->OldSector.index - pCharacter->CurSector.index;
+            c_SECTOR_AROUND* oldrange = &pCharacter->OldSectorRange;
+            switch (changedIndex)
+            {
+            case sector_LU:
+                //과거 섹터 기준 12369섹터만 전송
+                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                break;
+            case sector_UU:
+                //123
+                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
+                break;
+            case sector_RU:
+                //12347
+                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[4], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
+                break;
+            case sector_LL:
+                //369
+                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                break;
+            case sector_SAME:
+                break;
+            case sector_RR:
+                //147
+                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[4], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
+                break;
+            case sector_RD:
+                //14789
+                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[4], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                break;
+            case sector_DD:
+                //789
+                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                break;
+            case sector_LD:
+                //36789
+                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pCharacter->pSession);
+                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                break;
+            default:
+                break;
+            }
             LOG_PACKET("DELETE_CHARACTER", pPacket);
 
             //섹터 변경한 클라에게 과거 섹터 주변 클라이언트들 삭제 패킷 전송
@@ -668,15 +742,14 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECT
     {
         for (int i = 0; i < 9; i++)
         {
-            if (pSectorRange->Around[i].index != -1)
-            {
-                for (const auto& pair : g_Sector[pSectorRange->Around[i].iY][pSectorRange->Around[i].iX]) {
-                    int sessionID = pair.first;
-                    SOCKETINFO* s;
-                    g_sessionMap->GetSessionptr(sessionID, s);
-                    if (s == nullptr) continue;
-                    s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
-                }
+            //맵 밖을 벗어나는 경우 제외
+            if (pSectorRange->Around[i].index != -1) continue;
+            for (const auto& pair : g_Sector[pSectorRange->Around[i].iY][pSectorRange->Around[i].iX]) {
+                int sessionID = pair.first;
+                SOCKETINFO* s;
+                g_sessionMap->GetSessionptr(sessionID, s);
+                if (s == nullptr) continue;
+                s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
             }
         }
     }
@@ -684,15 +757,14 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECT
     {
         for (int i = 0; i < 9; i++)
         {
-            if (pSectorRange->Around[i].index != -1)
-            {
-                for (const auto& pair : g_Sector[pSectorRange->Around[i].iY][pSectorRange->Around[i].iX]) {
-                    int sessionID = pair.first;
-                    SOCKETINFO* s;
-                    g_sessionMap->GetSessionptr(sessionID, s);
-                    if (s == nullptr || s == psession) continue;
-                    s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
-                }
+            //맵 밖을 벗어나는 경우 제외
+            if (pSectorRange->Around[i].index != -1) continue;
+            for (const auto& pair : g_Sector[pSectorRange->Around[i].iY][pSectorRange->Around[i].iX]) {
+                int sessionID = pair.first;
+                SOCKETINFO* s;
+                g_sessionMap->GetSessionptr(sessionID, s);
+                if (s == nullptr || s == psession) continue;
+                s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
             }
         }
     }
@@ -738,9 +810,9 @@ void Update(void)
             // 사망처리. 
             //Disconnect(pCharacter->pSession);
             DisconnectSocket(pCharacter->pSession);
-            CPacket* pPacket = new CPacket;
+            CPacket* pPacket = CPacketPool.Alloc();
             DeleteCharacterFromSectorMap(pCharacter, pPacket, &pCharacter->CurSector);
-            delete pPacket;
+            CPacketPool.Free(pPacket);
         }
         else
         {
@@ -826,7 +898,7 @@ void Update(void)
                  //이동인 경우 섹터 업데이트를 함. 
                 if (IsSectorUpdate(pCharacter))
                 {
-                    CPacket* pPacket = new CPacket;
+                    CPacket* pPacket = CPacketPool.Alloc();
                     
 
                     //printf("[UpdateSector] sessionid : %d  x : %d y : %d\n", pCharacter->dwSessionID, pCharacter->shX, pCharacter->shY);
@@ -842,7 +914,7 @@ void Update(void)
                     //printf("\n");
 
                     CharacterSectorUpdatePacket(pCharacter, pPacket);
-                    delete pPacket;
+                    CPacketPool.Free(pPacket);
                 }
             }
         }
@@ -899,8 +971,8 @@ void AddCharacterToSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket)
 {
     //섹터 맵 추가
     g_Sector[pCharacter->CurSector.iY][pCharacter->CurSector.iX].emplace(pCharacter->dwSessionID, pCharacter);
-   // printf("[SetCharacterAtSectorMap] session_id : %d SectorY :  %d SectorX : %d  Index: %d\n",
-       // pCharacter->dwSessionID, pCharacter->CurSector.iY, pCharacter->CurSector.iX, pCharacter->CurSector.index);
+    printf("[SetCharacterAtSectorMap] session_id : %d SectorY :  %d SectorX : %d  Index: %d\n",
+        pCharacter->dwSessionID, pCharacter->CurSector.iY, pCharacter->CurSector.iX, pCharacter->CurSector.index);
 
     //새로운 섹터의 다른 클라이언트 캐릭터 생성
     SOCKETINFO* session = pCharacter->pSession;
@@ -927,103 +999,21 @@ void AddCharacterToSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket)
 //   }
 //}
 
-bool SendPacket(SOCKETINFO* pSession, unsigned char byPacketType)
+
+
+void SendPacket_SectorOne(c_SECTOR_POS* pSector, CPacket* pPacket, SOCKETINFO* pExceptSession)
 {
-    CPacket* newPacket = new CPacket;
-    st_PACKET_HEADER hdr;
-    hdr.byCode = dfPACKET_CODE;
-
-    switch (byPacketType)
-    {
-    case dfPACKET_SC_CREATE_MY_CHARACTER:
-        hdr.bySize = sizeof(st_SC_CREATE_MY_CHARACTER);
-        hdr.byType = dfPACKET_SC_CREATE_MY_CHARACTER;
-        *newPacket << hdr.byCode;
-        *newPacket << hdr.bySize;
-        *newPacket << hdr.byType;
-        return clientPacketProc_CREATE_MY_CHARACTER(pSession, newPacket);
-        break;
-
-    case dfPACKET_SC_CREATE_OTHER_CHARACTER:
-        return clientPacketProc_CREATE_OTHER_CHARACTER(pSession, newPacket);
-        break;
-
-    //case dfPACKET_SC_ECHO:
-    //    hdr.bySize = sizeof(st_SC_ECHO);
-    //    hdr.byType = dfPACKET_SC_ECHO;
-    //    *newPacket << hdr.byCode;
-    //    *newPacket << hdr.bySize;
-    //    *newPacket << hdr.byType;
-    //    return clientPacketProc_ECHO(pSession, newPacket);
-    //    break;
-
-  /*  case dfPACKET_SC_ATTACK1:
-        hdr.bySize = sizeof(st_SC_ATTACK);
-        hdr.byType = dfPACKET_SC_ATTACK1;
-        *newPacket << hdr.byCode;
-        *newPacket << hdr.bySize;
-        *newPacket << hdr.byType;
-        return clientPacketProc_ATTACK1(pSession, newPacket);
-        break;
-
-    case dfPACKET_SC_ATTACK2:
-        hdr.bySize = sizeof(st_SC_ATTACK);
-        hdr.byType = dfPACKET_SC_ATTACK2;
-        *newPacket << hdr.byCode;
-        *newPacket << hdr.bySize;
-        *newPacket << hdr.byType;
-        return clientPacketProc_ATTACK2(pSession, newPacket);
-        break;
-
-    case dfPACKET_SC_ATTACK3:
-        hdr.bySize = sizeof(st_SC_ATTACK);
-        hdr.byType = dfPACKET_SC_ATTACK3;
-        *newPacket << hdr.byCode;
-        *newPacket << hdr.bySize;
-        *newPacket << hdr.byType;
-        return clientPacketProc_ATTACK3(pSession, newPacket);
-        break;
-
-    case dfPACKET_SC_DAMAGE:
-        hdr.bySize = sizeof(st_SC_DAMAGE);
-        hdr.byType = dfPACKET_SC_DAMAGE;
-        *newPacket << hdr.byCode;
-        *newPacket << hdr.bySize;
-        *newPacket << hdr.byType;
-        return clientPacketProc_DAMAGE(pSession, newPacket);
-        break;*/
-
-    //case dfPACKET_SC_DELETE_CHARACTER:
-    //    hdr.bySize = sizeof(st_SC_DELETE_CHARACTER);
-    //    hdr.byType = dfPACKET_SC_DELETE_CHARACTER;
-    //    *newPacket << hdr.byCode;
-    //    *newPacket << hdr.bySize;
-    //    *newPacket << hdr.byType;
-    //    return clientPacketProc_DELETE_CHARACTER(pSession, newPacket);
-    //    break;
-
-   /* case dfPACKET_SC_MOVE_START:
-        hdr.bySize = sizeof(st_SC_MOVE_START);
-        hdr.byType = dfPACKET_SC_MOVE_START;
-        *newPacket << hdr.byCode;
-        *newPacket << hdr.bySize;
-        *newPacket << hdr.byType;
-        return clientPacketProc_MOVE_START(pSession, newPacket);
-        break;
-
-    case dfPACKET_SC_MOVE_STOP:
-        hdr.bySize = sizeof(st_SC_MOVE_STOP);
-        hdr.byType = dfPACKET_SC_MOVE_STOP;
-        *newPacket << hdr.byCode;
-        *newPacket << hdr.bySize;
-        *newPacket << hdr.byType;
-        return clientPacketProc_MOVE_STOP(pSession, newPacket);
-        break;*/
+    if (pSector->index == -1) return;
+    int iSectorY = pSector->iX;
+    int iSectorX = pSector->iY;
+    for (const auto& pair : g_Sector[iSectorY][iSectorX]) {
+        int sessionID = pair.first;
+        SOCKETINFO* s;
+        g_sessionMap->GetSessionptr(sessionID, s);
+        if (s == nullptr || s == pExceptSession) continue;
+        s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
     }
-    return TRUE;
 }
-
-
 
 bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& pPacket)
 {
@@ -1526,18 +1516,27 @@ bool netPacketProc_Sync(SOCKETINFO* pSession, CPacket* pPacket)
 
 
 
-bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket)
+bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* pPacket)
 {
-    *newPacket << (long)pSession->session_id;
-    *newPacket << pSession->pCharacter->byDirection;
-    *newPacket << pSession->pCharacter->shX;
-    *newPacket << pSession->pCharacter->shY;
-    *newPacket << pSession->pCharacter->chHP;
+    pPacket->Clear();
+    st_PACKET_HEADER hdr;
+    hdr.byCode = dfPACKET_CODE;
+    hdr.bySize = sizeof(st_SC_CREATE_MY_CHARACTER);
+    hdr.byType = dfPACKET_SC_CREATE_MY_CHARACTER;
+    *pPacket << hdr.byCode;
+    *pPacket << hdr.bySize;
+    *pPacket << hdr.byType;
 
-    LOG_PACKET("CreateMyCharacter", newPacket);
+    *pPacket << (long)pSession->session_id;
+    *pPacket << pSession->pCharacter->byDirection;
+    *pPacket << pSession->pCharacter->shX;
+    *pPacket << pSession->pCharacter->shY;
+    *pPacket << pSession->pCharacter->chHP;
+
+    LOG_PACKET("CreateMyCharacter", pPacket);
     //cout << "Create Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
-    int enqdata = pSession->sendBuf->Enqueue(newPacket->GetBufferPtr(), newPacket->GetDataSize());
-    if (enqdata != newPacket->GetDataSize())
+    int enqdata = pSession->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    if (enqdata != pPacket->GetDataSize())
     {
         while (1)
         {
@@ -1593,44 +1592,6 @@ bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newP
     return true;
 }
 
-
-
-//bool clientPacketProc_ATTACK1(SOCKETINFO* pSession, CPacket* newPacket)
-//{
-//    return false;
-//}
-//
-//bool clientPacketProc_ATTACK2(SOCKETINFO* pSession, CPacket* newPacket)
-//{
-//    return false;
-//}
-//
-//bool clientPacketProc_ATTACK3(SOCKETINFO* pSession, CPacket* newPacket)
-//{
-//    return false;
-//}
-//
-//bool clientPacketProc_DAMAGE(SOCKETINFO* pSession, CPacket* newPacket)
-//{
-//    pSession->sendBuf->Enqueue((char*)newPacket, newPacket->GetDataSize());
-//    SendPacket_Around(pSession, newPacket, false);
-//    return false;
-//}
-//
-//bool clientPacketProc_DELETE_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket)
-//{
-//    return false;
-//}
-//
-//bool clientPacketProc_MOVE_START(SOCKETINFO* pSession, CPacket* newPacket)
-//{
-//    return false;
-//}
-//
-//bool clientPacketProc_MOVE_STOP(SOCKETINFO* pSession, CPacket* newPacket)
-//{
-//    return false;
-//}
 
 void mpCreateOtherCharater(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY, BYTE hp)
 {
