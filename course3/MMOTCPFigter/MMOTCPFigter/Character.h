@@ -11,6 +11,8 @@ class c_SECTOR_POS
 public:
 	int iX;
 	int iY;
+	//한 숫자로 섹터를 특정하기위한 변수
+	int index;
 };
 
 //----------------------------------------------- 
@@ -18,7 +20,8 @@ public:
 //----------------------------------------------- 
 class c_SECTOR_AROUND
 {
-	int iCount;
+public:
+	//int iCount;
 	c_SECTOR_POS Around[9];
 };
 
@@ -32,6 +35,10 @@ public:
 	c_CHARACTER(SOCKETINFO* psession, DWORD sessionID);
 	~c_CHARACTER();
 
+	int GetUpdateCurSectorIndex();
+	int UpdateCurSector();
+	int UpdateCurSectorRange();
+
 	SOCKETINFO* pSession;
 	DWORD  dwSessionID;
 
@@ -44,6 +51,9 @@ public:
 
 	c_SECTOR_POS CurSector;  // 섹터 파트에서 설명 
 	c_SECTOR_POS OldSector;
+
+	c_SECTOR_AROUND CurSectorRange;
+	c_SECTOR_AROUND OldSectorRange;
 
 	char   chHP;
 };

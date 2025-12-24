@@ -16,8 +16,9 @@ public:
 
 	//return SessionId
 	long long AddSession(SOCKETINFO* psession);
-
+	//技记 甘 昏力 > 家南 辆丰 > 技记 昏力
 	void deleteSession(SOCKETINFO*& psession, char* s_ip, int i_port);
+	//技记 甘 昏力 > 技记 昏力
 	void OnlydeleteSession(SOCKETINFO*& psession, char* s_ip, int i_port);
 
 	void GetSessionptr(long long sessionId, SOCKETINFO*& sessionptr);

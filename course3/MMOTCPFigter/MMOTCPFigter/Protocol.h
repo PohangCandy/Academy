@@ -6,13 +6,14 @@
 #if DEBUG_LOG_ON
 // 로그가 켜져 있을 때: PrintPacket 함수 등을 정상 호출
 #define LOG_PACKET(name, pPacket) PrintPacket(name, pPacket)
+#define LOG_Func(name, pSession) PrintFunc(name, pSession)
 #else
 // 로그가 꺼져 있을 때: 컴파일러가 아무것도 하지 않도록 빈칸으로 대체
 #define LOG_PACKET(name, pPacket) 
 #endif
 
 
-#define dfNETWORK_PORT		5000
+#define dfNETWORK_PORT		21501
 #define dfPACKET_CODE		0x89
 
 
@@ -24,9 +25,27 @@
 #define MOVE_UNIT_X 3
 #define MOVE_UNIT_Y 2
 
-//섹터 크기
-#define dfSECTOR_MAX_Y 100
-#define dfSECTOR_MAX_X 100
+//-----------------------------------------------------------------
+// 화면 이동 범위.
+//-----------------------------------------------------------------
+#define dfRANGE_MOVE_TOP	0
+#define dfRANGE_MOVE_LEFT	0
+#define dfRANGE_MOVE_RIGHT	6400
+#define dfRANGE_MOVE_BOTTOM	6400
+// 이동 범위
+//#define dfRANGE_MOVE_TOP    50
+//#define dfRANGE_MOVE_LEFT   10
+//#define dfRANGE_MOVE_RIGHT  630
+//#define dfRANGE_MOVE_BOTTOM 470
+
+//섹터 길이
+#define dfSECTOR_Y_Length 200
+#define dfSECTOR_X_Length 200
+
+//섹터 맵 크기
+//+1을 한 이유 : 마지막 6400이 100으로 나눠진 64에 접근-> 맵은 0~63까지라 터짐
+#define dfSECTOR_MAPMAX_Y (dfRANGE_MOVE_RIGHT / dfSECTOR_Y_Length)
+#define dfSECTOR_MAPMAX_X (dfRANGE_MOVE_BOTTOM / dfSECTOR_X_Length)
 
 
 
@@ -384,18 +403,7 @@ struct st_SC_ECHO {
 #define dfNETWORK_PACKET_RECV_TIMEOUT	30000
 
 
-//-----------------------------------------------------------------
-// 화면 이동 범위.
-//-----------------------------------------------------------------
-#define dfRANGE_MOVE_TOP	0
-#define dfRANGE_MOVE_LEFT	0
-#define dfRANGE_MOVE_RIGHT	6400
-#define dfRANGE_MOVE_BOTTOM	6400
-// 이동 범위
-//#define dfRANGE_MOVE_TOP    50
-//#define dfRANGE_MOVE_LEFT   10
-//#define dfRANGE_MOVE_RIGHT  630
-//#define dfRANGE_MOVE_BOTTOM 470
+
 
 //---------------------------------------------------------------
 // 공격범위.
