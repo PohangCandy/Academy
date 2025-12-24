@@ -18,7 +18,6 @@ c_CHARACTER::c_CHARACTER(SOCKETINFO* psession, DWORD sessionID)
 	CurSector.iY = shY / dfSECTOR_Y_Length;
 	CurSector.index = CurSector.iY * dfSECTOR_MAPMAX_X + CurSector.iX;
 
-	OldSector = CurSector;
 	UpdateCurSectorRange();
 }
 

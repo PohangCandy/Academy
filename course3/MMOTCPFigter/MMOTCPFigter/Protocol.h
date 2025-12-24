@@ -47,6 +47,13 @@
 #define dfSECTOR_MAPMAX_Y (dfRANGE_MOVE_RIGHT / dfSECTOR_Y_Length)
 #define dfSECTOR_MAPMAX_X (dfRANGE_MOVE_BOTTOM / dfSECTOR_X_Length)
 
+enum e_ChangeDirection
+{
+    sector_LU = -dfSECTOR_X_Length - 1, sector_UU = -dfSECTOR_X_Length, sector_RU = -dfSECTOR_X_Length + 1,
+    sector_LL = -1, sector_SAME = 0, sector_RR = 1,
+    sector_LD = dfSECTOR_X_Length - 1, sector_DD = dfSECTOR_X_Length, sector_RD = dfSECTOR_X_Length + 1
+};
+
 
 
 

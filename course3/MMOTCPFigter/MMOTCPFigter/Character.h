@@ -9,10 +9,10 @@ class SOCKETINFO;
 class c_SECTOR_POS
 {
 public:
-	int iX;
-	int iY;
+	int iX = -1;
+	int iY = -1;
 	//한 숫자로 섹터를 특정하기위한 변수
-	int index;
+	int index = -1;
 };
 
 //----------------------------------------------- 
@@ -36,7 +36,7 @@ public:
 	~c_CHARACTER();
 
 	int GetUpdateCurSectorIndex();
-	int UpdateCurSector();
+	//int UpdateCurSector();
 	int UpdateCurSectorRange();
 
 	SOCKETINFO* pSession;

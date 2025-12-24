@@ -142,6 +142,7 @@
     <ClInclude Include="CPacket.h" />
     <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="cSessionMap.h" />
+    <ClInclude Include="MemoryPool.h" />
     <ClInclude Include="MessageQueue.h" />
     <ClInclude Include="OVERLAPPED_CONTEXT.h" />
     <ClInclude Include="Protocol.h" />
