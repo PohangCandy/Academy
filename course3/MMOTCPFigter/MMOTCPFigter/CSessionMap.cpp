@@ -53,7 +53,13 @@ void cSessionMap::deleteSession(SOCKETINFO*& psession, char* s_ip, int i_port)
 {
 	long long id = psession->session_id;
 	
-
+	if (_sessionMap[id] == nullptr)
+	{
+		while (1)
+		{
+			printf("[deleteSession] duplicate id remove\n");
+		}
+	}
 	//EnterCriticalSection(&_sessionMap_cs);
 	_sessionMap[id] = nullptr;
 
@@ -61,7 +67,7 @@ void cSessionMap::deleteSession(SOCKETINFO*& psession, char* s_ip, int i_port)
 	//psession->GetSessionLock();
 	//psession->UnLockSession();
 	closesocket(psession->sock);
-	printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
+	//printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
 	delete psession;
 	psession = nullptr;
 
@@ -75,8 +81,16 @@ void cSessionMap::OnlydeleteSession(SOCKETINFO*& psession, char* s_ip, int i_por
 {
 	long long id = psession->session_id;
 
+	if (_sessionMap[id] == nullptr)
+	{
+		while (1)
+		{
+			printf("[OnlydeleteSession] duplicate id remove\n");
+		}
+	}
+
 	_sessionMap[id] = nullptr;
-	printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
+	//printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
 	delete psession;
 	psession = nullptr;
 
