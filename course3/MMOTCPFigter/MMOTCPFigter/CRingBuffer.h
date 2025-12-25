@@ -1,6 +1,8 @@
 #pragma once
 #include "stdafx.h"
 
+#define RINGBUFSIZE (1024 * 16)
+
 //---------------------------------------------------------------------------------------------
 // 프로젝트명: 
 // 세션 별 네트워크 통신에 사용할 L7 메시지 버퍼 설계
@@ -42,9 +44,9 @@ public:
 	CRingBuffer(void);
 	CRingBuffer(int iBufferSize);
 
-	~CRingBuffer();
+	~CRingBuffer(){};
 
-	void	Resize(int size);
+	//void	Resize(int size);
 
 	int GetBufferSize(void);
 
@@ -152,15 +154,8 @@ public:
 	//--------------------------------------------------------
 	char* GetBufPtr(void);
 
-	//----------------------------------------------------
-	// 멀티 스레드에서 링버퍼의 락을 보장받기 위한 락과 언락
-	//----------------------------------------------------
-	void GetLockBuffer();
-	void UnLockBuffer();
-
 private:
-	CRITICAL_SECTION m_csRingbuffer;
-	char* m_pBuffer;
+	char m_pBuffer[RINGBUFSIZE] = { 0 };
 	int m_iBufferSize;
 	int m_iFront;
 	int m_iRear;

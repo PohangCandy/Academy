@@ -134,17 +134,14 @@
     <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="CSessionMap.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="MessageQueue.cpp" />
-    <ClCompile Include="OVERLAPPED_CONTEXT.cpp" />
     <ClCompile Include="Session.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CPacket.h" />
     <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="cSessionMap.h" />
+    <ClInclude Include="Dump.h" />
     <ClInclude Include="MemoryPool.h" />
-    <ClInclude Include="MessageQueue.h" />
-    <ClInclude Include="OVERLAPPED_CONTEXT.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="Session.h" />
     <ClInclude Include="stdafx.h" />

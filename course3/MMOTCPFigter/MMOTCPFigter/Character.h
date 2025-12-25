@@ -32,12 +32,15 @@ public:
 class c_CHARACTER
 {
 public:
+	c_CHARACTER();
 	c_CHARACTER(SOCKETINFO* psession, DWORD sessionID);
 	~c_CHARACTER();
 
 	int GetUpdateCurSectorIndex();
 	//int UpdateCurSector();
 	int UpdateCurSectorRange();
+
+	bool IsDie = false;
 
 	SOCKETINFO* pSession;
 	DWORD  dwSessionID;

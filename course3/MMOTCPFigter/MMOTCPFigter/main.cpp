@@ -32,25 +32,25 @@
 #include "CPacket.h"
 #include "Character.h"
 #include "MemoryPool.h"
+#include "Dump.h"
 using namespace std;
 
 
 
-//1만여명이 싹다 Mss크기로 보낼 수 있는 경우 최대 버퍼 크기
-//1600 * 10000?
-#define RINGBUFSIZE (1024 * 16)
+
 #define BUFSIZE (1024 * 8)
+#define MAX_CLIENTS (15000)
 
 // 전역
 SOCKET g_ListenSocket = INVALID_SOCKET;
 bool g_bShutdown = false;
-uint32_t g_nextSessionID = 1;
 cSessionMap* g_sessionMap = cSessionMap::GetSessionMap();
 
 //-------------------------------------------
 // 패킷 메모리 풀
 //-------------------------------------------
 procademy::CMemoryPool<CPacket> CPacketPool(1000, true);
+procademy::CMemoryPool<c_CHARACTER> ChacracterPool(20000, true);
 
 //------------------------------------------------------------- 
 // 캐릭터 객체 메인 관리 
@@ -63,22 +63,22 @@ unordered_map<DWORD, c_CHARACTER*> g_CharacterMap;
 unordered_map<int ,c_CHARACTER*> g_Sector[dfSECTOR_MAPMAX_Y + 1][dfSECTOR_MAPMAX_X + 1];
 
 //------------------------------------------------------------- 
-// 삭제한 캐릭터 ID
+// HP가 0이 된 캐릭터 ID
 //------------------------------------------------------------- 
-stack<int> g_DeleteCharacterID;
-set<int> g_DeleteCheckSet;
+stack<int> g_DieCharacterID;
 
 //vector <SOCKETINFO* > g_Sessions;
+SOCKETINFO* g_SessionArray[MAX_CLIENTS];
+int g_CurSessionArraySize = 0;
+stack<int> g_DeletedSessionArrayIndex;
 
 void netIOProcess();
 void netProc_Accept();
 void netProc_Recv(SOCKETINFO*& pSession);
 void netProc_Send(SOCKETINFO*& pSession);
 //연결끊김 감지
-//섹터 맵 삭제>캐릭터 맵 삭제 >캐릭터 삭제 >세션 맵 삭제 > 소켓 종료 > 세션 삭제
+//캐릭터 사망 표시
 void Disconnect(SOCKETINFO*& pSession);
-//소켓 닫기..이건 세션 맴버로 나중에 넣어야겠다.
-void DisconnectSocket(SOCKETINFO*& pSession);
 //캐릭터 맵, 캐릭터 삭제 + 세션 맵,세션 삭제
 void DeleteDieCharacter();
 //캐릭터 맵 삭제 + 캐릭터 delete
@@ -90,6 +90,12 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECT
 
 // 특정 섹터 1개에 있는 클라이언트들 에게 메시지 보내기
 void SendPacket_SectorOne(c_SECTOR_POS* pSector, CPacket* pPacket, SOCKETINFO* pExceptSession);
+// 특정 1명의 클라이언트에게 특정 섹터 1개에 있는 클라이언트들 삭제 메시지 보내기 
+void SendDleteCharaterPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket, c_SECTOR_POS* pSector);
+// 특정 1명의 클라이언트에게 특정 섹터 1개에 있는 클라이언트들 생성 메시지 보내기 
+void SendCreateCharaterPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket, c_SECTOR_POS* pSector);
+// 특정 1명의 클라이언트 에게 메시지 보내기 
+void SendPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket);
 
 bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& Packet);
 
@@ -102,12 +108,13 @@ bool netPacketProc_ECHO(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRange, int Attack_YRange);
 bool netPacketProc_Sync(SOCKETINFO* pSession, CPacket* pPacket);
 
-bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket);
+bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* pPacket);
 
 //신규 섹터 클라에게 기존의 다른 클라이언트 생성 패킷 전송
-bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket);
+bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* pPacket);
 
-void mpCreateOtherCharater(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY, BYTE hp);
+void mpCreateCharaterToOtherAndGiveMovePacket(CPacket* pPacket, DWORD dwSessionID,BYTE byDir, BYTE moveDir, short shX, short shY, BYTE hp);
+void mpCreateCharaterToOther(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY, BYTE hp);
 void mpDamage(CPacket* pPacket, DWORD dwAttackerSessionID, DWORD dwDamagerID, BYTE hp);
 void mpAttack(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY, char attackType);
 void mpMoveStart(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY);
@@ -144,7 +151,18 @@ void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_S
 
 
 int main() {
+    SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);
+
     timeBeginPeriod(1);
+
+    g_CharacterMap.reserve(15000);
+    for (int i = 0; i < dfSECTOR_MAPMAX_Y + 1; i++)
+    {
+        for (int j = 0; j < dfSECTOR_MAPMAX_X + 1; j++)
+        {
+            g_Sector[i][j].reserve(15000);
+        }
+    }
 
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
@@ -188,22 +206,23 @@ int main() {
     // 메인 루프
     using clock = std::chrono::high_resolution_clock;
     auto lastLogic = clock::now();
+    double accumulator = 0.0;
     const double logicInterval = 1.0 / TICKS_PER_SEC;
 
     while (!g_bShutdown) {
         netIOProcess();
 
-        //프레임
         auto now = clock::now();
         std::chrono::duration<double> elapsed = now - lastLogic;
-        if (elapsed.count() >= logicInterval) {
-            //UpdateLogic(elapsed.count());
-            Update();
-            DeleteDieCharacter();
-            lastLogic = now;
-        }
+        lastLogic = now;
 
-        //Sleep(1);
+        accumulator += elapsed.count();
+
+        while (accumulator >= logicInterval) {
+            Update();
+            accumulator -= logicInterval;
+        }
+        DeleteDieCharacter();
     }
 
     closesocket(g_ListenSocket);
@@ -216,7 +235,7 @@ int main() {
 void netIOProcess() {
 
     long long quotientOfDivide64;
-    quotientOfDivide64 = g_sessionMap->GetSize() / 64 + 1;
+    quotientOfDivide64 = MAX_CLIENTS / 64 + 1;
 
     for (long long i = 0; i < quotientOfDivide64; i++)
     {
@@ -229,10 +248,12 @@ void netIOProcess() {
         for (long long j = 0; j < 64; j++)
         {
             long long index = 64 * i + j;
-            SOCKETINFO* s;
-            g_sessionMap->GetSessionptr(index, s);
+            if (index >= MAX_CLIENTS) continue;
+            if (g_SessionArray[index] == 0) continue;
+
+            SOCKETINFO* s = g_SessionArray[index];
             if (s && s->sock != INVALID_SOCKET) {
-                if (s->sendBuf->GetUseSize() > 0) FD_SET(s->sock, &writeSet);
+                if (s->sendBuf.GetUseSize() > 0) FD_SET(s->sock, &writeSet);
                 FD_SET(s->sock, &readSet);
             }
         }
@@ -278,46 +299,86 @@ void netIOProcess() {
 void netProc_Accept() {
     sockaddr_in clientAddr;
     int addrlen = sizeof(clientAddr);
-    SOCKET clientSock = accept(g_ListenSocket, (sockaddr*)&clientAddr, &addrlen);
-    if (clientSock == INVALID_SOCKET) {
-        int e = WSAGetLastError();
-        if (e != WSAEWOULDBLOCK) cerr << "accept failed: " << e << "\n";
-        return;
-    }
 
-    // 논블로킹으로
-    u_long on = 1;
-    ioctlsocket(clientSock, FIONBIO, &on);
-
-
-    SOCKETINFO* s = new SOCKETINFO(RINGBUFSIZE);
-    long long id = g_sessionMap->AddSession(s);
-    s->sock = clientSock;
-    s->session_id = id;
-
-    auto it = g_CharacterMap.find(id);
-
-    if (it != g_CharacterMap.end()) {
-        while (1)
-        {
-            cout << "duplicate character map\n";
+    while (1)
+    {
+        SOCKET clientSock = accept(g_ListenSocket, (sockaddr*)&clientAddr, &addrlen);
+        if (clientSock == INVALID_SOCKET) {
+            int e = WSAGetLastError();
+            if (e != WSAEWOULDBLOCK) cerr << "accept failed: " << e << "\n";
+            break;;
         }
-        g_CharacterMap.erase(it);
+
+        // 논블로킹으로
+        u_long on = 1;
+        ioctlsocket(clientSock, FIONBIO, &on);
+
+        LINGER lingerOption;
+        lingerOption.l_onoff = 1;  // Linger 옵션 활성화
+        lingerOption.l_linger = 0; // 대기 시간을 0으로 설정 (즉시 RST 송신)
+
+        if (setsockopt(clientSock, SOL_SOCKET, SO_LINGER, (char*)&lingerOption, sizeof(lingerOption)) == SOCKET_ERROR) {
+            int err = WSAGetLastError();
+            if (err != WSAEWOULDBLOCK) cerr << "setsockopt failed: " << err << "\n";
+            break;;
+        }
+
+        SOCKETINFO* s;
+        long long id = g_sessionMap->AddSession(s);
+        s->sock = clientSock;
+        s->session_id = id;
+
+        //세션 배열에 세션 추가하기
+        if (!g_DeletedSessionArrayIndex.empty())
+        {
+            int top = g_DeletedSessionArrayIndex.top();
+            g_DeletedSessionArrayIndex.pop();
+            g_SessionArray[top] = s;
+            s->Arrayindex = top;
+        }
+        else
+        {
+            g_SessionArray[g_CurSessionArraySize] = s;
+            s->Arrayindex = g_CurSessionArraySize;
+            g_CurSessionArraySize++;
+        }
+
+        if (g_CurSessionArraySize >= 15000)
+        {
+            while (1)
+            {
+                cout << "[netProc_Accept] 15000명 초과!";
+            }
+        }
+
+        auto it = g_CharacterMap.find(id);
+
+        //error 잡기
+        //if (it != g_CharacterMap.end()) {
+        //    while (1)
+        //    {
+        //        cout << "duplicate character map\n";
+        //    }
+        //    g_CharacterMap.erase(it);
+        //}
+
+        c_CHARACTER* character = ChacracterPool.Alloc();
+        character->pSession = s;
+        character->dwSessionID = id;
+
+        g_CharacterMap.emplace(id, character);
+        s->pCharacter = character;
+
+        //cout << "Accepted new client (session " << s->session_id << ")\n";
+        //신규 클라이언트에게 자기 캐릭터 할당 패킷 전송
+        CPacket* pPacket = CPacketPool.Alloc();
+
+        clientPacketProc_CREATE_MY_CHARACTER(s, pPacket);
+
+        //섹터 맵 추가 > 다른 클라이언트의 캐릭터 생성 > 다른 클라이언트에게 클라이언트의 캐릭터 생성
+        AddCharacterToSectorMap(character, pPacket);
+        CPacketPool.Free(pPacket);
     }
-   
-    c_CHARACTER* character = new c_CHARACTER(s, id);
-    g_CharacterMap.emplace(id, character);
-    s->pCharacter = character;
-   
-    //cout << "Accepted new client (session " << s->session_id << ")\n";
-    //신규 클라이언트에게 자기 캐릭터 할당 패킷 전송
-    CPacket* pPacket = CPacketPool.Alloc();
-
-    clientPacketProc_CREATE_MY_CHARACTER(s, pPacket);
-
-    //섹터 맵 추가 > 다른 클라이언트의 캐릭터 생성 > 다른 클라이언트에게 클라이언트의 캐릭터 생성
-    AddCharacterToSectorMap(character,pPacket);
-    CPacketPool.Free(pPacket);
 }
 
 // recv
@@ -340,23 +401,23 @@ void netProc_Recv(SOCKETINFO*& pSession) {
         }
         else
         {
-            cerr << "recv error (" << pSession->session_id << "): " << e << "\n";
+            //cerr << "recv error (" << pSession->session_id << "): " << e << "\n";
             Disconnect(pSession);
             return;
         }
     }
     else {
         // 링버퍼에 저장 (Enqueue)
-        pSession->recvBuf->Enqueue(tmp,ret);
+        pSession->recvBuf.Enqueue(tmp,ret);
     }
 
     CPacket* pPacket = CPacketPool.Alloc();
    
     // 완성된 패킷이 있으면 처리
-    while (pSession->recvBuf->GetUseSize() >= (int)sizeof(st_PACKET_HEADER)) {
+    while (pSession->recvBuf.GetUseSize() >= (int)sizeof(st_PACKET_HEADER)) {
 
         st_PACKET_HEADER hdr;
-        int peeked = pSession->recvBuf->Peek((char*)&hdr, (int)sizeof(hdr));
+        int peeked = pSession->recvBuf.Peek((char*)&hdr, (int)sizeof(hdr));
         if (peeked < (int)sizeof(hdr)) break; // 안전
         if (hdr.byCode != dfPACKET_CODE) {
             while (1)
@@ -375,11 +436,11 @@ void netProc_Recv(SOCKETINFO*& pSession) {
             return;
         }
         // 아직 전체 도착 안함
-        if (pSession->recvBuf->GetUseSize() < (int)sizeof(hdr) + hdr.bySize) break;
+        if (pSession->recvBuf.GetUseSize() < (int)sizeof(hdr) + hdr.bySize) break;
 
         // 전체 패킷을 꺼내서 처리 (Dequeue)
         char buf[100];
-        int got = pSession->recvBuf->Dequeue(buf, hdr.bySize + sizeof(st_PACKET_HEADER));
+        int got = pSession->recvBuf.Dequeue(buf, hdr.bySize + sizeof(st_PACKET_HEADER));
         if (got != hdr.bySize + sizeof(st_PACKET_HEADER)) {
             while (1)
             {
@@ -425,12 +486,12 @@ void netProc_Recv(SOCKETINFO*& pSession) {
 // send: SendQ -> 실제 send (Peek -> send -> Dequeue(sent))
 void netProc_Send(SOCKETINFO*& pSession) {
     if (!pSession) return;
-    int avail = pSession->sendBuf->GetUseSize();
+    int avail = pSession->sendBuf.GetUseSize();
     if (avail <= 0) return;
 
-    if (avail < pSession->sendBuf->DirectDequeueSize())
+    if (avail <= pSession->sendBuf.DirectDequeueSize())
     {
-        int sent = send(pSession->sock, pSession->sendBuf->GetFrontBufferPtr(), avail, 0);
+        int sent = send(pSession->sock, pSession->sendBuf.GetFrontBufferPtr(), avail, 0);
         if (sent == SOCKET_ERROR) {
             int e = WSAGetLastError();
             if (e == WSAEWOULDBLOCK) {
@@ -442,55 +503,77 @@ void netProc_Send(SOCKETINFO*& pSession) {
                 return;
             }
             else {
-                cerr << "send error (" << pSession->session_id << "): " << e << "\n";
+               // cerr << "send error (" << pSession->session_id << "): " << e << "\n";
                 Disconnect(pSession);
                 return;
             }
         }
-        else if (sent > 0) {
-            int dec = pSession->sendBuf->MoveFront(sent);
+        else if (sent == avail && sent > 0) {
+            int dec = pSession->sendBuf.MoveFront(sent);
 
             if (dec != sent) {
                 while (1)
                 {
                     cout << "[Send] 송신 버퍼에서 끄집어낸 크기가 달라짐\n";
                 }
+            }
+        }
+        else
+        {
+            while (1)
+            {
+                cout << "avail <= Direct 한번에 넣으려다가 실패함.";
+                cout << "[Send] 송신 실패\n";
             }
         }
     }
     else
     {
-        int directSize = pSession->sendBuf->DirectDequeueSize();
-        int sent = send(pSession->sock, pSession->sendBuf->GetFrontBufferPtr(), directSize, 0);
-        if (sent == SOCKET_ERROR) {
-            int e = WSAGetLastError();
-            if (e == WSAEWOULDBLOCK) {
-                while (1)
-                {
-                    cout << "[Send] 송신 버퍼에 집어넣을 수 없는 상황\n";
+        int directSize = pSession->sendBuf.DirectDequeueSize();
+        if (directSize != 0)
+        {
+            int sent = send(pSession->sock, pSession->sendBuf.GetFrontBufferPtr(), directSize, 0);
+            if (sent == SOCKET_ERROR) {
+                int e = WSAGetLastError();
+                if (e == WSAEWOULDBLOCK) {
+                    while (1)
+                    {
+                        cout << "[Send] 송신 버퍼에 집어넣을 수 없는 상황\n";
+                    }
+                    // 아무 것도 제거하지 않음 (데이터는 아직 SendQ에 있음)
+                    return;
                 }
-                // 아무 것도 제거하지 않음 (데이터는 아직 SendQ에 있음)
-                return;
+                else {
+                    // cerr << "send error (" << pSession->session_id << "): " << e << "\n";
+                    Disconnect(pSession);
+                    return;
+                }
             }
-            else {
-                cerr << "send error (" << pSession->session_id << "): " << e << "\n";
-                Disconnect(pSession);
-                return;
-            }
-        }
-        else if (sent > 0) {
-            int dec = pSession->sendBuf->MoveFront(sent);
+            else if (sent > 0) {
+                int dec = pSession->sendBuf.MoveFront(sent);
 
-            if (dec != sent) {
+                if (dec != sent) {
+                    while (1)
+                    {
+                        cout << "[Send] 송신 버퍼에서 끄집어낸 크기가 달라짐\n";
+                    }
+                }
+            }
+            else
+            {
                 while (1)
                 {
-                    cout << "[Send] 송신 버퍼에서 끄집어낸 크기가 달라짐\n";
+                    cout << "directSize : " << directSize << "\n";
+                    cout << "sent : " << sent << "\n";
+                    cout << "나눠서 넣기 실패1 ";
+                    cout << "[Send] 송신 실패\n";
                 }
             }
         }
+       
 
         int frontSize = avail - directSize;
-        sent = send(pSession->sock, pSession->sendBuf->GetBufPtr(), frontSize, 0);
+        int sent = send(pSession->sock, pSession->sendBuf.GetBufPtr(), frontSize, 0);
         if (sent == SOCKET_ERROR) {
             int e = WSAGetLastError();
             if (e == WSAEWOULDBLOCK) {
@@ -502,86 +585,93 @@ void netProc_Send(SOCKETINFO*& pSession) {
                 return;
             }
             else {
-                cerr << "send error (" << pSession->session_id << "): " << e << "\n";
+               // cerr << "send error (" << pSession->session_id << "): " << e << "\n";
                 Disconnect(pSession);
                 return;
             }
         }
         else if (sent > 0) {
-            int dec = pSession->sendBuf->MoveFront(sent);
+            int dec = pSession->sendBuf.MoveFront(sent);
 
             if (dec != sent) {
                 while (1)
                 {
                     cout << "[Send] 송신 버퍼에서 끄집어낸 크기가 달라짐\n";
                 }
+            }
+        }
+        else
+        {
+            while (1)
+            {
+                cout << "나눠서 넣기 실패2 ";
+                cout << "[Send] 송신 실패\n";
             }
         }
     }
+
 }
 
 //섹터 맵 삭제>캐릭터 맵 삭제 >캐릭터 삭제 >세션 맵 삭제 > 소켓 종료 > 세션 삭제
 void Disconnect(SOCKETINFO*& pSession) {
-    if (!pSession) return;
-    //cout << "Disconnect session " << pSession->session_id << "\n";
-  
-
-    //섹터 맵 삭제
-    //현재 섹터에서 삭제
-    CPacket* pPacket = CPacketPool.Alloc();
-    DeleteCharacterFromSectorMap(pSession->pCharacter, pPacket, &pSession->pCharacter->CurSector);
-    //캐릭터 맵 삭제 >캐릭터 삭제
-    DeleteCharacter(pSession->pCharacter);
-
-    //클라이언트 정보 얻기
-    SOCKADDR_IN clientaddr;
-    int addrlen = sizeof(clientaddr);
-    getpeername(pSession->sock, (SOCKADDR*)&clientaddr, &addrlen);
-
-    //세션 맵 삭제 > 소켓 종료 > 세션 삭제
-    g_sessionMap->deleteSession(pSession, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-    CPacketPool.Free(pPacket);
-}
-
-void DisconnectSocket(SOCKETINFO*& pSession)
-{
-    closesocket(pSession->sock);
-    g_DeleteCharacterID.push(pSession->session_id);
-    if (g_DeleteCheckSet.insert(pSession->session_id).second) {
-    }
-    else {
+    if (pSession == nullptr)
+    {
         while (1)
         {
-            // 이미 삭제 대기열에 들어있다면 무시
-            printf("[DEBUG] 이미 삭제 대기 중인 ID: %d\n", (int)pSession->session_id);
+            cout << "[Disconnect] pSession == nullptr";
         }
     }
+    if (pSession->pCharacter == nullptr)
+    {
+        while (1)
+        {
+            cout << "[Disconnect] pCharacter == nullptr";
+        }
+    }
+    if (pSession->pCharacter->IsDie) return;
+    pSession->pCharacter->IsDie = true;
+    g_DieCharacterID.push(pSession->session_id);
 }
 
 void DeleteDieCharacter()
 {
-    while (!g_DeleteCharacterID.empty())
+    while (!g_DieCharacterID.empty())
     {
-        int id = g_DeleteCharacterID.top();
-        g_DeleteCharacterID.pop();
-        g_DeleteCheckSet.erase(id);
+        int id = g_DieCharacterID.top();
+        g_DieCharacterID.pop();
 
-        SOCKETINFO* s;
-        g_sessionMap->GetSessionptr(id, s);
+        SOCKETINFO* pSession;
+        g_sessionMap->GetSessionptr(id, pSession);
 
-       
-        //캐릭터 맵 > 캐릭터 삭제
-        DeleteCharacter(s->pCharacter);
-        
-        //세션 맵, 세션 삭제
-        if (s != nullptr)
+        if (pSession == nullptr)
         {
-            //클라이언트 정보 얻기
-            SOCKADDR_IN clientaddr;
-            int addrlen = sizeof(clientaddr);
-            getpeername(s->sock, (SOCKADDR*)&clientaddr, &addrlen);
-            g_sessionMap->OnlydeleteSession(s, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+            while (1)
+            {
+                printf("[DeleteDieCharacter] 죽이려고 하는 캐릭터가 이미 소멸됨\n");
+            }
         }
+
+        CPacket* pPacket = CPacketPool.Alloc();
+        c_CHARACTER* pCharacter = pSession->pCharacter;
+        DeleteCharacterFromSectorMap(pCharacter,pPacket, &pCharacter->CurSector);
+        CPacketPool.Free(pPacket);
+
+        //캐릭터 맵 > 캐릭터 삭제
+        DeleteCharacter(pCharacter);
+
+        ////삭제하기 전에 sendbuf send
+        //netProc_Send(pSession);
+
+        //클라이언트 정보 얻기
+        SOCKADDR_IN clientaddr;
+        int addrlen = sizeof(clientaddr);
+        getpeername(pSession->sock, (SOCKADDR*)&clientaddr, &addrlen);
+
+        //세션 배열 인덱스 회수
+        g_DeletedSessionArrayIndex.push(pSession->Arrayindex);
+        g_SessionArray[pSession->Arrayindex] = 0;
+
+        g_sessionMap->deleteSession(pSession, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
     }
 
 }
@@ -594,7 +684,8 @@ void DeleteCharacter(c_CHARACTER* pCharacter)
     {
         c_CHARACTER* c = it->second;
         g_CharacterMap.erase(it);
-        delete c;
+        ChacracterPool.Free(c);
+        c = nullptr;
     }
 }
 
@@ -622,85 +713,128 @@ void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_S
            // pCharacter->dwSessionID, pCharacter->CurSector.iY, pCharacter->CurSector.iX);
 
         mpDisconnect(pPacket, pCharacter->dwSessionID);
-
         
         //현재 섹터 기준으로 삭제 패킷 전송(연결 끊김, hp == 0 인 경우)
         if (pSector == &pCharacter->CurSector)
         {
+            //먼저 자신의 연결 끊기
+            SendPacket_Unicast(pCharacter->pSession, pPacket);
+            //주위 섹터에 적용
             SendPacket_Around(pCharacter->pSession, pPacket, false, &pCharacter->CurSectorRange);
             LOG_PACKET("DELETE_CHARACTER", pPacket);
         }
         //과거 섹터 기준으로 삭제 패킷 전송(이동에 의한 삭제)
         else if(pSector == &pCharacter->OldSector)
         {
-            if (pCharacter->OldSector.index = -1)
+            if (pCharacter->OldSector.index == -1)
             {
                 while (1)
                 {
                     printf("[DeleteCharacterFromSectorMap] 이동 삭제인데 oldSector = -1\n");
                 }
             }
-            int changedIndex = pCharacter->OldSector.index - pCharacter->CurSector.index;
+            int changedIndex = pCharacter->CurSector.index - pCharacter->OldSector.index;
             c_SECTOR_AROUND* oldrange = &pCharacter->OldSectorRange;
+            SOCKETINFO* pSession = pCharacter->pSession;
             switch (changedIndex)
             {
             case sector_LU:
-                //과거 섹터 기준 12369섹터만 전송
-                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                //과거 섹터 기준 25678섹터만 전송
+                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[5], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pSession);
+
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[2]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[5]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[6]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[7]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[8]);
                 break;
             case sector_UU:
-                //123
-                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
+                //678
+                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pSession);
+
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[6]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[7]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[8]);
                 break;
             case sector_RU:
-                //12347
-                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[4], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
+                //03678
+                SendPacket_SectorOne(&oldrange->Around[0], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pSession);
+
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[0]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[3]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[6]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[7]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[8]);
                 break;
             case sector_LL:
-                //369
-                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                //258
+                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[5], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pSession);
+
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[2]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[5]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[8]);
                 break;
             case sector_SAME:
                 break;
             case sector_RR:
-                //147
-                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[4], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
+                //036
+                SendPacket_SectorOne(&oldrange->Around[0], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pSession);
+
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[0]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[3]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[6]);
                 break;
             case sector_RD:
-                //14789
-                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[4], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                //01236
+                SendPacket_SectorOne(&oldrange->Around[0], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pSession);
+
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[0]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[1]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[2]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[3]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[6]);
                 break;
             case sector_DD:
-                //789
-                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                //012
+                SendPacket_SectorOne(&oldrange->Around[0], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pSession);
+
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[0]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[1]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[2]);
                 break;
             case sector_LD:
-                //36789
-                SendPacket_SectorOne(&oldrange->Around[3], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[6], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[7], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pCharacter->pSession);
-                SendPacket_SectorOne(&oldrange->Around[9], pPacket, pCharacter->pSession);
+                //01258
+                SendPacket_SectorOne(&oldrange->Around[0], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[1], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[2], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[5], pPacket, pSession);
+                SendPacket_SectorOne(&oldrange->Around[8], pPacket, pSession);
+
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[0]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[1]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[2]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[5]);
+                SendDleteCharaterPacket_Unicast(pSession, pPacket, &oldrange->Around[8]);
                 break;
             default:
                 break;
@@ -708,21 +842,7 @@ void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_S
             LOG_PACKET("DELETE_CHARACTER", pPacket);
 
             //섹터 변경한 클라에게 과거 섹터 주변 클라이언트들 삭제 패킷 전송
-            SOCKETINFO* session = pCharacter->pSession;
-            for (int i = 0; i < 9; i++)
-            {
-                if (pCharacter->OldSectorRange.Around[i].index != -1)
-                {
-                    //섹터 리스트에 있는 모든 플레이어의 삭제 패킷 전송
-                    for (const auto& pair : g_Sector[pCharacter->OldSectorRange.Around[i].iY][pCharacter->OldSectorRange.Around[i].iX]) {
-                        c_CHARACTER* otherCharater = pair.second;
-                        if (otherCharater == nullptr || otherCharater == pCharacter) continue;
-                        mpDisconnect(pPacket, otherCharater->dwSessionID);
-                        session->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
-                    }
 
-                }
-            }
         }
         else
         {
@@ -732,6 +852,15 @@ void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_S
             }
         }
         
+    }
+    else
+    {
+        //accept하기 전, 삭제가 일어난 경우 -> 말이 안됨.
+        //accept한 후라면 무조건 섹터 배정이 발생했고, 이후엔 여기로 올 수 없음.
+        while (1)
+        {
+            printf("[DeleteCharacterFromSectorMap] 지우려고 하는 캐릭터가 이미 맵에 없음");
+        }
     }
 }
 
@@ -743,13 +872,13 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECT
         for (int i = 0; i < 9; i++)
         {
             //맵 밖을 벗어나는 경우 제외
-            if (pSectorRange->Around[i].index != -1) continue;
+            if (pSectorRange->Around[i].index == -1) continue;
             for (const auto& pair : g_Sector[pSectorRange->Around[i].iY][pSectorRange->Around[i].iX]) {
                 int sessionID = pair.first;
-                SOCKETINFO* s;
-                g_sessionMap->GetSessionptr(sessionID, s);
-                if (s == nullptr) continue;
-                s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+                SOCKETINFO* pSession;
+                g_sessionMap->GetSessionptr(sessionID, pSession);
+                if (pSession == nullptr) continue;
+                pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
             }
         }
     }
@@ -758,13 +887,13 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECT
         for (int i = 0; i < 9; i++)
         {
             //맵 밖을 벗어나는 경우 제외
-            if (pSectorRange->Around[i].index != -1) continue;
+            if (pSectorRange->Around[i].index == -1) continue;
             for (const auto& pair : g_Sector[pSectorRange->Around[i].iY][pSectorRange->Around[i].iX]) {
                 int sessionID = pair.first;
-                SOCKETINFO* s;
-                g_sessionMap->GetSessionptr(sessionID, s);
-                if (s == nullptr || s == psession) continue;
-                s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+                SOCKETINFO* pSession;
+                g_sessionMap->GetSessionptr(sessionID, pSession);
+                if (pSession == nullptr || pSession == psession) continue;
+                pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
             }
         }
     }
@@ -805,14 +934,14 @@ void Update(void)
     {
         pCharacter = Iter->second;
         Iter++;
+        if (pCharacter->IsDie) continue;
+
         if (0 >= pCharacter->chHP)
-        {
+        {   
+            pCharacter->IsDie = true;
+            g_DieCharacterID.push(pCharacter->pSession->session_id);
             // 사망처리. 
             //Disconnect(pCharacter->pSession);
-            DisconnectSocket(pCharacter->pSession);
-            CPacket* pPacket = CPacketPool.Alloc();
-            DeleteCharacterFromSectorMap(pCharacter, pPacket, &pCharacter->CurSector);
-            CPacketPool.Free(pPacket);
         }
         else
         {
@@ -944,8 +1073,8 @@ void PrintPacket(const string& name, CPacket* pPacket)
 bool IsSectorUpdate(c_CHARACTER* pCharacter)
 {
     c_SECTOR_POS curSector = pCharacter->CurSector;
-    int newIndex = pCharacter->GetUpdateCurSectorIndex();
-    if (curSector.index != newIndex)
+    int updateIndex = pCharacter->GetUpdateCurSectorIndex();
+    if (curSector.index != updateIndex)
     {
         pCharacter->OldSector = curSector;
         pCharacter->UpdateCurSectorRange();
@@ -969,23 +1098,159 @@ void CharacterSectorUpdatePacket(c_CHARACTER* pCharacter, CPacket* pPacket)
 //섹터 맵 추가 > 다른 클라이언트의 캐릭터 생성 > 다른 클라이언트에게 클라이언트의 캐릭터 생성
 void AddCharacterToSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket)
 {
+    //error 잡기
+    //------------------------
+    //auto a = g_Sector[pCharacter->CurSector.iY][pCharacter->CurSector.iX].find(pCharacter->dwSessionID);
+    //if (a != g_Sector[pCharacter->CurSector.iY][pCharacter->CurSector.iX].end())
+    //{
+    //    while (1)
+    //    {
+    //        printf("[AddCharacterToSectorMap] 중복된 캐릭터 생성 시도\n");
+    //    }
+    //}
+    //------------------------
+    
     //섹터 맵 추가
     g_Sector[pCharacter->CurSector.iY][pCharacter->CurSector.iX].emplace(pCharacter->dwSessionID, pCharacter);
-    printf("[SetCharacterAtSectorMap] session_id : %d SectorY :  %d SectorX : %d  Index: %d\n",
-        pCharacter->dwSessionID, pCharacter->CurSector.iY, pCharacter->CurSector.iX, pCharacter->CurSector.index);
+ /*   printf("[SetCharacterAtSectorMap] session_id : %d SectorY :  %d SectorX : %d  Index: %d\n",
+        pCharacter->dwSessionID, pCharacter->CurSector.iY, pCharacter->CurSector.iX, pCharacter->CurSector.index);*/
 
-    //새로운 섹터의 다른 클라이언트 캐릭터 생성
-    SOCKETINFO* session = pCharacter->pSession;
-    clientPacketProc_CREATE_OTHER_CHARACTER(session, pPacket);
-    
-    //다른 클라이언트에게 섹터의 새로운 클라 캐릭터 생성
-    mpCreateOtherCharater(pPacket, session->session_id,
-        session->pCharacter->byDirection,
-        session->pCharacter->shX,
-        session->pCharacter->shY,
-        session->pCharacter->chHP);
-    SendPacket_Around(session, pPacket, false, &pCharacter->CurSectorRange);
-    LOG_PACKET("mpCreateOtherCharater", pPacket);
+    //지금이 첫 생성이라면 현재 모든 섹터에 생성
+    if (-1 == pCharacter->OldSector.index)
+    {
+        //새로운 섹터의 다른 클라이언트 캐릭터 생성
+        SOCKETINFO* session = pCharacter->pSession;
+        clientPacketProc_CREATE_OTHER_CHARACTER(session, pPacket);
+
+        //다른 클라이언트에게 섹터의 새로운 클라 캐릭터 생성
+        mpCreateCharaterToOther(pPacket, session->session_id,
+            session->pCharacter->byDirection,
+            session->pCharacter->shX,
+            session->pCharacter->shY,
+            session->pCharacter->chHP);
+        SendPacket_Around(session, pPacket, false, &pCharacter->CurSectorRange);
+        LOG_PACKET("mpCreateOtherCharater", pPacket);
+    }
+    //과거의 섹터가 있었던 경우, 움직임 방향에 따라 생성 섹터 결정
+    else
+    {
+        int changedIndex = pCharacter->CurSector.index - pCharacter->OldSector.index;
+        c_SECTOR_AROUND* currange = &pCharacter->CurSectorRange;
+        SOCKETINFO* pSession = pCharacter->pSession;
+
+        //다른 클라이언트에게 섹터의 새로운 클라 캐릭터 생성 + 움직임 반영
+        mpCreateCharaterToOtherAndGiveMovePacket(pPacket, pCharacter->dwSessionID,
+            pCharacter->byDirection,
+            pCharacter->byMoveDirection,
+            pCharacter->shX,
+            pCharacter->shY,
+            pCharacter->chHP);
+        switch (changedIndex)
+        {
+        case sector_LU:
+            //새로운 섹터 기준 01236섹터만 전송
+            SendPacket_SectorOne(&currange->Around[0], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[1], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[2], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[3], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[6], pPacket, pCharacter->pSession);
+
+            //01236 클라만 새로 생성
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[0]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[1]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[2]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[3]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[6]);
+            break;
+        case sector_UU:
+            //012
+            SendPacket_SectorOne(&currange->Around[0], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[1], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[2], pPacket, pCharacter->pSession);
+
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[0]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[1]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[2]);
+            break;
+        case sector_RU:
+            //01258
+            SendPacket_SectorOne(&currange->Around[0], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[1], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[2], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[5], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[8], pPacket, pCharacter->pSession);
+
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[0]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[1]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[2]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[5]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[8]);
+            break;
+        case sector_LL:
+            //036
+            SendPacket_SectorOne(&currange->Around[0], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[3], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[6], pPacket, pCharacter->pSession);
+
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[0]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[3]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[6]);
+            break;
+        case sector_SAME:
+            break;
+        case sector_RR:
+            //258
+            SendPacket_SectorOne(&currange->Around[2], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[5], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[8], pPacket, pCharacter->pSession);
+
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[2]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[5]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[8]);
+            break;
+        case sector_RD:
+            //25678
+            SendPacket_SectorOne(&currange->Around[2], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[5], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[6], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[7], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[8], pPacket, pCharacter->pSession);
+
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[2]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[5]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[6]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[7]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[8]);
+            break;
+        case sector_DD:
+            //678
+            SendPacket_SectorOne(&currange->Around[6], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[7], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[8], pPacket, pCharacter->pSession);
+
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[6]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[7]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[8]);
+            break;
+        case sector_LD:
+            //03678
+            SendPacket_SectorOne(&currange->Around[0], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[3], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[6], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[7], pPacket, pCharacter->pSession);
+            SendPacket_SectorOne(&currange->Around[8], pPacket, pCharacter->pSession);
+
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[0]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[3]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[6]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[7]);
+            SendCreateCharaterPacket_Unicast(pSession, pPacket, &currange->Around[8]);
+            break;
+        default:
+            break;
+        }
+        LOG_PACKET("DELETE_CHARACTER", pPacket);
+    }
 }
 
 //void DeleteCharacterFromOldSector(c_CHARACTER* pCharacter)
@@ -1004,19 +1269,94 @@ void AddCharacterToSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket)
 void SendPacket_SectorOne(c_SECTOR_POS* pSector, CPacket* pPacket, SOCKETINFO* pExceptSession)
 {
     if (pSector->index == -1) return;
-    int iSectorY = pSector->iX;
-    int iSectorX = pSector->iY;
+    int iSectorX = pSector->iX;
+    int iSectorY = pSector->iY;
     for (const auto& pair : g_Sector[iSectorY][iSectorX]) {
         int sessionID = pair.first;
-        SOCKETINFO* s;
-        g_sessionMap->GetSessionptr(sessionID, s);
-        if (s == nullptr || s == pExceptSession) continue;
-        s->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+        SOCKETINFO* pSession;
+        g_sessionMap->GetSessionptr(sessionID, pSession);
+        if (pSession == nullptr || pSession == pExceptSession) continue;
+        pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
     }
+}
+
+void SendDleteCharaterPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket, c_SECTOR_POS* pSector)
+{
+    if (pSector->index == -1) return;
+    int sectorX = pSector->iX;
+    int sectorY = pSector->iY;
+    //섹터 리스트에 있는 모든 플레이어의 삭제 패킷 전송
+    for (const auto& pair : g_Sector[sectorY][sectorX]) {
+        int otherSessionID = pair.first;
+        if (otherSessionID == pSession->session_id) continue;
+        mpDisconnect(pPacket, otherSessionID);
+        pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    }
+}
+
+void SendCreateCharaterPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket, c_SECTOR_POS* pSector)
+{
+    if (pSector->index == -1) return;
+
+    st_PACKET_HEADER hdr;
+
+    int sectorX = pSector->iX;
+    int sectorY = pSector->iY;
+
+    c_CHARACTER* myCharacter = pSession->pCharacter;
+    c_CHARACTER* otherCharacter;
+    for (const auto& pair : g_Sector[sectorY][sectorX]) {
+        otherCharacter = pair.second;
+
+        if (otherCharacter == nullptr || otherCharacter == myCharacter) continue;
+
+        pPacket->Clear();
+        hdr.byCode = dfPACKET_CODE;
+        hdr.bySize = sizeof(st_SC_CREATE_OTHER_CHARACTER);
+        hdr.byType = dfPACKET_SC_CREATE_OTHER_CHARACTER;
+        pPacket->PutData((char*)&hdr, sizeof(st_PACKET_HEADER));
+
+        *pPacket << (long)otherCharacter->dwSessionID;
+        *pPacket << otherCharacter->byDirection;
+        *pPacket << otherCharacter->shX;
+        *pPacket << otherCharacter->shY;
+        *pPacket << otherCharacter->chHP;
+
+        //다른 캐릭터가 이동 중에 있다면 이를 반영
+        if (otherCharacter->dwAction >= dfPACKET_MOVE_DIR_LL && otherCharacter->dwAction <= dfPACKET_MOVE_DIR_LD)
+        {
+            hdr.bySize = sizeof(st_SC_MOVE_START);
+            hdr.byType = dfPACKET_SC_MOVE_START;
+            pPacket->PutData((char*)&hdr, sizeof(st_PACKET_HEADER));
+            *pPacket << (long)otherCharacter->dwSessionID;
+            *pPacket << otherCharacter->byMoveDirection;
+            *pPacket << otherCharacter->shX;
+            *pPacket << otherCharacter->shY;
+        }
+
+        LOG_PACKET("CreateOtherCharacter", pPacket);
+        int enqdata = pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+        if (enqdata != pPacket->GetDataSize())
+        {
+            while (1)
+            {
+                printf("[SendPacket] 송신 버퍼에 넣기 실패");
+            }
+        }
+    }
+}
+
+void SendPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket)
+{
+    pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
 }
 
 bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& pPacket)
 {
+    if (pSession->pCharacter->IsDie) {
+        cout << "[PacketProc] 여기까지 온다고?\n";
+        return false;
+    }
 
     switch (byPacketType)
     {
@@ -1114,7 +1454,7 @@ bool netPacketProc_MoveStart(SOCKETINFO* pSession, CPacket* pPacket)
     pSession->pCharacter->shX = shX;
     pSession->pCharacter->shY = shY;
     
-    //여기서 섹터 업데이트를 한다.. 왜지? 움직일때 오차범위를 벗어날 수 있다??
+    //여기서 섹터 업데이트를 한다...?
     //----------------------------------------------------------------------- 
     if (IsSectorUpdate(pSession->pCharacter))
     {
@@ -1463,7 +1803,7 @@ bool netPacketProc_ECHO(SOCKETINFO* pSession, CPacket* pPacket)
 
     pPacket->Clear();
     mpECHO(pPacket, Time);
-    pSession->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
     return true;
 }
 
@@ -1510,7 +1850,7 @@ bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRa
 bool netPacketProc_Sync(SOCKETINFO* pSession, CPacket* pPacket)
 {
     mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
-    pSession->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
     return false;
 }
 
@@ -1535,7 +1875,7 @@ bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* pPacket
 
     LOG_PACKET("CreateMyCharacter", pPacket);
     //cout << "Create Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
-    int enqdata = pSession->sendBuf->Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    int enqdata = pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
     if (enqdata != pPacket->GetDataSize())
     {
         while (1)
@@ -1547,38 +1887,50 @@ bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* pPacket
     return true;
 }
 
-bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newPacket)
+bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* pPacket)
 {
     st_PACKET_HEADER hdr;
-    hdr.byCode = dfPACKET_CODE;
-    hdr.bySize = sizeof(st_SC_CREATE_OTHER_CHARACTER);
-    hdr.byType = dfPACKET_SC_CREATE_OTHER_CHARACTER;
 
-    c_CHARACTER* c = pSession->pCharacter;
+    c_CHARACTER* MyCharacter = pSession->pCharacter;
     for (int i = 0; i < 9; i++)
     {
-        if (c->CurSectorRange.Around[i].index != -1)
+        int sectorX = MyCharacter->CurSectorRange.Around[i].iX;
+        int sectorY = MyCharacter->CurSectorRange.Around[i].iY;
+        c_CHARACTER* otherCharacter;
+        if (MyCharacter->CurSectorRange.Around[i].index != -1)
         {
-            for (const auto& pair : g_Sector[c->CurSectorRange.Around[i].iY][c->CurSectorRange.Around[i].iX]) {
+            for (const auto& pair : g_Sector[sectorY][sectorX]) {
                 int sessionID = pair.first;
-                SOCKETINFO* other;
-                g_sessionMap->GetSessionptr(sessionID, other);
-                if (other == nullptr || other == pSession) continue;
+                otherCharacter = pair.second;
+                if (otherCharacter == MyCharacter) continue;
 
-                newPacket->Clear();
-                *newPacket << hdr.byCode;
-                *newPacket << hdr.bySize;
-                *newPacket << hdr.byType;
+                pPacket->Clear();
+                hdr.byCode = dfPACKET_CODE;
+                hdr.bySize = sizeof(st_SC_CREATE_OTHER_CHARACTER);
+                hdr.byType = dfPACKET_SC_CREATE_OTHER_CHARACTER;
+                pPacket->PutData((char*)&hdr, sizeof(st_PACKET_HEADER));
 
-                *newPacket << (long)other->session_id;
-                *newPacket << other->pCharacter->byDirection;
-                *newPacket << other->pCharacter->shX;
-                *newPacket << other->pCharacter->shY;
-                *newPacket << other->pCharacter->chHP;
+                *pPacket << (long)otherCharacter->dwSessionID;
+                *pPacket << otherCharacter->byDirection;
+                *pPacket << otherCharacter->shX;
+                *pPacket << otherCharacter->shY;
+                *pPacket << otherCharacter->chHP;
 
-                LOG_PACKET("CreateOtherCharacter", newPacket);
-                int enqdata = pSession->sendBuf->Enqueue(newPacket->GetBufferPtr(), newPacket->GetDataSize());
-                if (enqdata != newPacket->GetDataSize())
+                //다른 캐릭터가 이동 중에 있다면 이를 반영
+                if (otherCharacter->dwAction >= dfPACKET_MOVE_DIR_LL && otherCharacter->dwAction <= dfPACKET_MOVE_DIR_LD)
+                {
+                    hdr.bySize = sizeof(st_SC_MOVE_START);
+                    hdr.byType = dfPACKET_SC_MOVE_START;
+                    pPacket->PutData((char*)&hdr, sizeof(st_PACKET_HEADER));
+                    *pPacket << (long)otherCharacter->dwSessionID;
+                    *pPacket << otherCharacter->byMoveDirection;
+                    *pPacket << otherCharacter->shX;
+                    *pPacket << otherCharacter->shY;
+                }
+
+                LOG_PACKET("CreateOtherCharacter", pPacket);
+                int enqdata = pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+                if (enqdata != pPacket->GetDataSize())
                 {
                     while (1)
                     {
@@ -1593,7 +1945,30 @@ bool clientPacketProc_CREATE_OTHER_CHARACTER(SOCKETINFO* pSession, CPacket* newP
 }
 
 
-void mpCreateOtherCharater(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY, BYTE hp)
+void mpCreateCharaterToOtherAndGiveMovePacket(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, BYTE moveDir, short shX, short shY, BYTE hp)
+{
+    st_PACKET_HEADER stPacketHeader;
+    stPacketHeader.byCode = dfPACKET_CODE;
+    stPacketHeader.bySize = sizeof(st_SC_CREATE_OTHER_CHARACTER);
+    stPacketHeader.byType = dfPACKET_SC_CREATE_OTHER_CHARACTER;
+    pPacket->Clear();
+    pPacket->PutData((char*)&stPacketHeader, sizeof(st_PACKET_HEADER));
+    *pPacket << (long)dwSessionID;
+    *pPacket << byDir;
+    *pPacket << shX;
+    *pPacket << shY;
+    *pPacket << hp;
+
+    stPacketHeader.bySize = sizeof(st_SC_MOVE_START);
+    stPacketHeader.byType = dfPACKET_SC_MOVE_START;
+    pPacket->PutData((char*)&stPacketHeader, sizeof(st_PACKET_HEADER));
+    *pPacket << (long)dwSessionID;
+    *pPacket << moveDir;
+    *pPacket << shX;
+    *pPacket << shY;
+}
+
+void mpCreateCharaterToOther(CPacket* pPacket, DWORD dwSessionID, BYTE byDir, short shX, short shY, BYTE hp)
 {
     st_PACKET_HEADER stPacketHeader;
     stPacketHeader.byCode = dfPACKET_CODE;

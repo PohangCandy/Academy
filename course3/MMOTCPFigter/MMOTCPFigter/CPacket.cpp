@@ -5,27 +5,27 @@
 
 // ============================== 내부 유틸 ==============================
 
-void CPacket::_EnsureCapacity(int requireBytes)
-{
-    // requireBytes는 추가로 "더 써야 하는" 용량.
-    // 필요 총량 = m_iWritePos + requireBytes
-    if (m_iWritePos + requireBytes <= m_iBufferSize) return;
-
-    int newSize = std::max(m_iBufferSize, 1);
-    while (newSize < m_iWritePos + requireBytes)
-        newSize <<= 1; // 2배씩 확장
-
-    char* newBuf = new (std::nothrow) char[newSize];
-    if (!newBuf) return; // 메모리 부족 시 안전 탈출(실전이면 예외/로그 권장)
-
-    // 기존 데이터 복사
-    if (m_chpBuffer && m_iWritePos > 0)
-        std::memcpy(newBuf, m_chpBuffer, m_iWritePos);
-
-    delete[] m_chpBuffer;
-    m_chpBuffer = newBuf;
-    m_iBufferSize = newSize;
-}
+//void CPacket::_EnsureCapacity(int requireBytes)
+//{
+//    // requireBytes는 추가로 "더 써야 하는" 용량.
+//    // 필요 총량 = m_iWritePos + requireBytes
+//    if (m_iWritePos + requireBytes <= m_iBufferSize) return;
+//
+//    int newSize = std::max(m_iBufferSize, 1);
+//    while (newSize < m_iWritePos + requireBytes)
+//        newSize <<= 1; // 2배씩 확장
+//
+//    char* newBuf = new (std::nothrow) char[newSize];
+//    if (!newBuf) return; // 메모리 부족 시 안전 탈출(실전이면 예외/로그 권장)
+//
+//    // 기존 데이터 복사
+//    if (m_chpBuffer && m_iWritePos > 0)
+//        std::memcpy(newBuf, m_chpBuffer, m_iWritePos);
+//
+//    delete[] m_chpBuffer;
+//    m_chpBuffer = newBuf;
+//    m_iBufferSize = newSize;
+//}
 
 void CPacket::_CompactIfEmpty()
 {
@@ -49,7 +49,7 @@ void CPacket::_CompactIfEmpty()
 CPacket::CPacket()
 {
     m_iBufferSize = eBUFFER_DEFAULT;
-    m_chpBuffer = new char[m_iBufferSize];
+    //m_chpBuffer = new char[m_iBufferSize];
     m_iDataSize = 0;
     m_iReadPos = 0;
     m_iWritePos = 0;
@@ -59,7 +59,7 @@ CPacket::CPacket(int iBufferSize)
 {
     if (iBufferSize <= 0) iBufferSize = eBUFFER_DEFAULT;
     m_iBufferSize = iBufferSize;
-    m_chpBuffer = new char[m_iBufferSize];
+    //m_chpBuffer = new char[m_iBufferSize];
     m_iDataSize = 0;
     m_iReadPos = 0;
     m_iWritePos = 0;
@@ -67,8 +67,8 @@ CPacket::CPacket(int iBufferSize)
 
 CPacket::~CPacket()
 {
-    delete[] m_chpBuffer;
-    m_chpBuffer = nullptr;
+    //delete[] m_chpBuffer;
+    //m_chpBuffer = nullptr;
 }
 
 void CPacket::Clear(void)
@@ -84,7 +84,7 @@ void CPacket::Clear(void)
 int CPacket::MoveWritePos(int iSize)
 {
     if (iSize <= 0) return 0;
-    _EnsureCapacity(iSize);
+    //_EnsureCapacity(iSize);
     int moved = iSize;
     m_iWritePos += moved;
     m_iDataSize = m_iWritePos - m_iReadPos;
@@ -112,9 +112,9 @@ CPacket& CPacket::operator = (CPacket& src)
     // 버퍼 크기 맞추기
     if (m_iBufferSize < src.m_iWritePos)
     {
-        delete[] m_chpBuffer;
+        //delete[] m_chpBuffer;
         m_iBufferSize = std::max(src.m_iBufferSize, src.m_iWritePos);
-        m_chpBuffer = new char[m_iBufferSize];
+        //m_chpBuffer = new char[m_iBufferSize];
     }
 
     // 데이터 복사(버퍼 전체가 아니라 실제 writePos까지)
@@ -134,7 +134,7 @@ int CPacket::PutData(char* chpSrc, int iSrcSize)
 {
     if (iSrcSize <= 0 || chpSrc == nullptr) return 0;
 
-    _EnsureCapacity(iSrcSize);
+    //_EnsureCapacity(iSrcSize);
     std::memcpy(m_chpBuffer + m_iWritePos, chpSrc, iSrcSize);
     m_iWritePos += iSrcSize;
     m_iDataSize = m_iWritePos - m_iReadPos;
