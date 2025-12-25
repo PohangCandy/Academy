@@ -18,7 +18,7 @@
 
 
 //프레임
-#define TICKS_PER_SEC 50.0
+#define TICKS_PER_SEC 25
 
 
 // 이동 단위
@@ -49,9 +49,9 @@
 
 enum e_ChangeDirection
 {
-    sector_LU = -dfSECTOR_X_Length - 1, sector_UU = -dfSECTOR_X_Length, sector_RU = -dfSECTOR_X_Length + 1,
+    sector_LU = -dfSECTOR_MAPMAX_X - 1, sector_UU = -dfSECTOR_MAPMAX_X, sector_RU = -dfSECTOR_MAPMAX_X + 1,
     sector_LL = -1, sector_SAME = 0, sector_RR = 1,
-    sector_LD = dfSECTOR_X_Length - 1, sector_DD = dfSECTOR_X_Length, sector_RD = dfSECTOR_X_Length + 1
+    sector_LD = dfSECTOR_MAPMAX_X - 1, sector_DD = dfSECTOR_MAPMAX_X, sector_RD = dfSECTOR_MAPMAX_X + 1
 };
 
 
@@ -434,10 +434,10 @@ struct st_SC_ECHO {
 //-----------------------------------------------------------------
 // 캐릭터 이동 속도   // 25fps 기준 이동속도
 //-----------------------------------------------------------------
-//#define dfSPEED_PLAYER_X	6	// 25fps
-//#define dfSPEED_PLAYER_Y	4	// 25fps
-#define dfSPEED_PLAYER_X	3   // 50fps
-#define dfSPEED_PLAYER_Y	2  // 50fps
+#define dfSPEED_PLAYER_X	6	// 25fps
+#define dfSPEED_PLAYER_Y	4	// 25fps
+//#define dfSPEED_PLAYER_X	3   // 50fps
+//#define dfSPEED_PLAYER_Y	2  // 50fps
 
 
 //-----------------------------------------------------------------

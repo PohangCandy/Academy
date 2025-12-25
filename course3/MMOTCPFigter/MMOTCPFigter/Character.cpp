@@ -2,6 +2,27 @@
 #include "Session.h"
 #include "Protocol.h"
 
+c_CHARACTER::c_CHARACTER()
+{
+	pSession = nullptr;
+	dwSessionID = -1;
+
+	dwAction = dfPACKET_CS_MOVE_STOP;
+	byDirection = dfPACKET_MOVE_DIR_RR;
+	byMoveDirection = byDirection;
+	shX = (rand() % (dfRANGE_MOVE_RIGHT - dfRANGE_MOVE_LEFT + 1)) + dfRANGE_MOVE_LEFT;
+	//shX = 50;
+	shY = (rand() % (dfRANGE_MOVE_BOTTOM - dfRANGE_MOVE_TOP + 1)) + dfRANGE_MOVE_TOP;
+	//shY = 50;
+	chHP = 100;
+
+	CurSector.iX = shX / dfSECTOR_X_Length;
+	CurSector.iY = shY / dfSECTOR_Y_Length;
+	CurSector.index = CurSector.iY * dfSECTOR_MAPMAX_X + CurSector.iX;
+
+	UpdateCurSectorRange();
+}
+
 c_CHARACTER::c_CHARACTER(SOCKETINFO* psession, DWORD sessionID)
 {
 	pSession = psession;

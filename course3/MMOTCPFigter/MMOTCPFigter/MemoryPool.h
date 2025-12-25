@@ -79,6 +79,7 @@ namespace procademy
 			{
 				//지금은 메모리만 확보
 				st_BLOCK_NODE* newNode = (st_BLOCK_NODE*)malloc(sizeof(st_BLOCK_NODE));
+				memset(newNode, 0, sizeof(st_BLOCK_NODE));
 				newNode->nextNode = m_pFreeNode;
 				m_pFreeNode = newNode;
 			}
