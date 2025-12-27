@@ -22,10 +22,10 @@ void cSessionMap::Destroy()
 }
 
 
-long long cSessionMap::AddSession(SOCKETINFO*& psession)
+DWORD cSessionMap::AddSession(SOCKETINFO*& psession)
 {
 	psession = SessionPool.Alloc();
-	long long id;
+	DWORD id;
 	
 	id = _mapSize++;
 	m_sessionMap[id] = psession;
@@ -37,16 +37,18 @@ void cSessionMap::deleteSession(SOCKETINFO*& psession, char* s_ip, int i_port)
 {
 	long long id = psession->session_id;
 	
-	if (m_sessionMap[id] == nullptr)
+	// 1. find를 사용하여 존재 여부 확인
+	auto it = m_sessionMap.find(id);
+
+	if (it == m_sessionMap.end()) // 키가 존재하지 않는 경우
 	{
-		while (1)
-		{
-			printf("[deleteSession] duplicate id remove\n");
-		}
+		// 에러 처리 또는 로그 출력
+		printf("[deleteSession] Session ID %lld not found\n", id);
+		return;
 	}
 
-	m_sessionMap[id] = nullptr;
-	m_sessionMap.erase(id);
+	//m_sessionMap[id] = nullptr;
+	m_sessionMap.erase(it);
 
 	closesocket(psession->sock);
 	SessionPool.Free(psession);
@@ -72,9 +74,16 @@ void cSessionMap::OnlydeleteSession(SOCKETINFO*& psession, char* s_ip, int i_por
 	psession = nullptr;
 }
 
-void cSessionMap::GetSessionptr(long long sessionId, SOCKETINFO*& sessionptr)
+void cSessionMap::GetSessionptr(DWORD sessionId, SOCKETINFO*& sessionptr)
 {
-	sessionptr = m_sessionMap[sessionId];
+	auto it = m_sessionMap.find(sessionId);
+	if (it == m_sessionMap.end())
+	{
+		sessionptr = nullptr;
+		return;
+	}
+	sessionptr = it->second;
+	return;
 }
 
 long long cSessionMap::GetSize()

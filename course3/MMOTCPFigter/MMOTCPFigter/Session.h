@@ -11,14 +11,16 @@ class SOCKETINFO
 public:
 	SOCKETINFO();
 	SOCKETINFO(int bufsize);
-	~SOCKETINFO() {};
+	~SOCKETINFO();
 
+	bool Active = true;
 	int Arrayindex = -1;
-
+	int session_id = -1;
 	SOCKET sock;
 	CRingBuffer recvBuf;
 	CRingBuffer sendBuf;
-	int session_id = 0;
+
+	int dwLastRecvTime = 0;
 
 	c_CHARACTER* pCharacter;
 };

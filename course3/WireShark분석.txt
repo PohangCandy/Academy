@@ -1,0 +1,12 @@
+포트 찾기
+89 0a 00 ed 18 00 00
+[56757]
+
+[DamagePacket]
+89 09 1e attckerID 5b 01 00 00 00
+
+[DeletePlayer]
+89 04 02 01 00 00 00
+
+473
+

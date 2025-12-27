@@ -277,4 +277,31 @@ char* CRingBuffer::GetBufPtr(void)
     return m_pBuffer;
 }
 
+int CRingBuffer::putWsabufData(WSABUF* wsabuf)
+{
+    int sendlen = GetUseSize();
+    if (sendlen == 0)
+    {
+        while (1)
+        {
+            printf("[Network] 미친 지금 0짜리 보낼뻔\n");
+        }
+    }
+    if (sendlen > DirectDequeueSize())
+    {
+        wsabuf[0].buf = GetFrontBufferPtr();
+        wsabuf[0].len = DirectDequeueSize();
+        int frontSize = GetBufferSize() - GetFreeSize() - DirectDequeueSize();
+        wsabuf[1].buf = GetBufPtr();
+        wsabuf[1].len = frontSize;
+        return 2;
+    }
+    else
+    {
+        wsabuf[0].buf = GetFrontBufferPtr();
+        wsabuf[0].len = DirectDequeueSize();
+        return 1;
+    }
+}
+
 
