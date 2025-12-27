@@ -67,8 +67,7 @@ CPacket::CPacket(int iBufferSize)
 
 CPacket::~CPacket()
 {
-    //delete[] m_chpBuffer;
-    //m_chpBuffer = nullptr;
+    CPacket::Clear();
 }
 
 void CPacket::Clear(void)

@@ -17,13 +17,13 @@ public:
 	static void Destroy();
 
 	//return SessionId
-	long long AddSession(SOCKETINFO*& psession);
+	DWORD AddSession(SOCKETINFO*& psession);
 	//技记 甘 昏力 > 家南 辆丰 > 技记 昏力
 	void deleteSession(SOCKETINFO*& psession, char* s_ip, int i_port);
 	//技记 甘 昏力 > 技记 昏力
 	void OnlydeleteSession(SOCKETINFO*& psession, char* s_ip, int i_port);
 
-	void GetSessionptr(long long sessionId, SOCKETINFO*& sessionptr);
+	void GetSessionptr(DWORD sessionId, SOCKETINFO*& sessionptr);
 
 	long long GetSize();
 
@@ -34,7 +34,7 @@ private:
 	cSessionMap();
 	~cSessionMap() {};
 
-	std::unordered_map<long long, SOCKETINFO*> m_sessionMap;
+	std::unordered_map<DWORD, SOCKETINFO*> m_sessionMap;
 
-	long long _mapSize = 0;
+	DWORD _mapSize = 0;
 };

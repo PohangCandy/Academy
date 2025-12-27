@@ -18,7 +18,8 @@
 
 
 //프레임
-#define TICKS_PER_SEC 25
+#define LOGIC_FRAME 25
+#define LOGIC_FRAME_TO_MS (1000 / LOGIC_FRAME)
 
 
 // 이동 단위

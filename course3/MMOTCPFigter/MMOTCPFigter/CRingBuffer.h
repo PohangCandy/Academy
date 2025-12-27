@@ -154,6 +154,11 @@ public:
 	//--------------------------------------------------------
 	char* GetBufPtr(void);
 
+	//--------------------------------------------------------
+	// wsabuf에 나눠 담는 작업을 하는 함수
+	//--------------------------------------------------------
+	int putWsabufData(WSABUF* wsabuf);
+
 private:
 	char m_pBuffer[RINGBUFSIZE] = { 0 };
 	int m_iBufferSize;
