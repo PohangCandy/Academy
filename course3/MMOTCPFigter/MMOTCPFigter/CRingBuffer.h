@@ -1,7 +1,7 @@
 #pragma once
 #include "stdafx.h"
 
-#define RINGBUFSIZE (1024 * 16)
+#define RINGBUFSIZE (1024 * 256)
 
 //---------------------------------------------------------------------------------------------
 // 프로젝트명: 
@@ -42,9 +42,9 @@
 class CRingBuffer {
 public:
 	CRingBuffer(void);
-	CRingBuffer(int iBufferSize);
+	//CRingBuffer(int iBufferSize);
 
-	~CRingBuffer(){};
+	~CRingBuffer();
 
 	//void	Resize(int size);
 
@@ -160,7 +160,7 @@ public:
 	int putWsabufData(WSABUF* wsabuf);
 
 private:
-	char m_pBuffer[RINGBUFSIZE] = { 0 };
+	char* m_pBuffer;
 	int m_iBufferSize;
 	int m_iFront;
 	int m_iRear;

@@ -29,7 +29,11 @@ public:
 	CPacket();
 	CPacket(int iBufferSize);
 
-	virtual	~CPacket();
+	//virtual	~CPacket();
+	~CPacket();
+
+	void onAccept();
+	void onRelease();
 
 
 	//////////////////////////////////////////////////////////////////////////

@@ -3,7 +3,7 @@
 #include "MemoryPool.h"
 
 cSessionMap* cSessionMap::sessionMapInstance = nullptr;
-procademy::CMemoryPool<SOCKETINFO> SessionPool(20000, true);
+procademy::CMemoryPool<SOCKETINFO> SessionPool(15000, true);
 
 cSessionMap* cSessionMap::GetSessionMap()
 {
@@ -25,6 +25,7 @@ void cSessionMap::Destroy()
 DWORD cSessionMap::AddSession(SOCKETINFO*& psession)
 {
 	psession = SessionPool.Alloc();
+	psession->OnAccept();
 	DWORD id;
 	
 	id = _mapSize++;
@@ -51,25 +52,7 @@ void cSessionMap::deleteSession(SOCKETINFO*& psession, char* s_ip, int i_port)
 	m_sessionMap.erase(it);
 
 	closesocket(psession->sock);
-	SessionPool.Free(psession);
-	psession = nullptr;
-}
-
-void cSessionMap::OnlydeleteSession(SOCKETINFO*& psession, char* s_ip, int i_port)
-{
-	long long id = psession->session_id;
-
-	if (m_sessionMap[id] == nullptr)
-	{
-		while (1)
-		{
-			printf("[OnlydeleteSession] duplicate id remove\n");
-		}
-	}
-
-	m_sessionMap[id] = nullptr;
-	m_sessionMap.erase(id);
-	//printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
+	psession->OnRelease();
 	SessionPool.Free(psession);
 	psession = nullptr;
 }

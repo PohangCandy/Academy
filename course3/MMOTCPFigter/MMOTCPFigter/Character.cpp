@@ -23,17 +23,25 @@ c_CHARACTER::c_CHARACTER()
 	UpdateCurSectorRange();
 }
 
-c_CHARACTER::c_CHARACTER(SOCKETINFO* psession, DWORD sessionID)
+c_CHARACTER::~c_CHARACTER()
 {
-	pSession = psession;
-	dwSessionID = sessionID;
+	pSession = nullptr;
+	dwSessionID = -1;
+}
+
+void c_CHARACTER::OnAccept()
+{
+	pSession = nullptr;
+	dwSessionID = -1;
 
 	dwAction = dfPACKET_CS_MOVE_STOP;
 	byDirection = dfPACKET_MOVE_DIR_RR;
 	byMoveDirection = byDirection;
-	shX = (rand() % (dfRANGE_MOVE_RIGHT - dfRANGE_MOVE_LEFT + 1)) + dfRANGE_MOVE_LEFT;
-	shY = (rand() % (dfRANGE_MOVE_BOTTOM - dfRANGE_MOVE_TOP + 1)) + dfRANGE_MOVE_TOP;
-	chHP = 100;
+	//shX = (rand() % (dfRANGE_MOVE_RIGHT - dfRANGE_MOVE_LEFT + 1)) + dfRANGE_MOVE_LEFT;
+	shX = 100;
+	//shY = (rand() % (dfRANGE_MOVE_BOTTOM - dfRANGE_MOVE_TOP + 1)) + dfRANGE_MOVE_TOP;
+	shY = 100;
+	chHP = 20;
 
 	CurSector.iX = shX / dfSECTOR_X_Length;
 	CurSector.iY = shY / dfSECTOR_Y_Length;
@@ -42,10 +50,9 @@ c_CHARACTER::c_CHARACTER(SOCKETINFO* psession, DWORD sessionID)
 	UpdateCurSectorRange();
 }
 
-c_CHARACTER::~c_CHARACTER()
+void c_CHARACTER::OnRelease()
 {
-	pSession = nullptr;
-	dwSessionID = -1;
+
 }
 
 int c_CHARACTER::GetUpdateCurSectorIndex()

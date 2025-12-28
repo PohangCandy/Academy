@@ -33,8 +33,10 @@ class c_CHARACTER
 {
 public:
 	c_CHARACTER();
-	c_CHARACTER(SOCKETINFO* psession, DWORD sessionID);
 	~c_CHARACTER();
+
+	void OnAccept();
+	void OnRelease();
 
 	int GetUpdateCurSectorIndex();
 	//int UpdateCurSector();
