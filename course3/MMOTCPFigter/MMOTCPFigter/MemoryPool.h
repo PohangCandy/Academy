@@ -79,7 +79,12 @@ namespace procademy
 			{
 				//지금은 메모리만 확보
 				st_BLOCK_NODE* newNode = (st_BLOCK_NODE*)malloc(sizeof(st_BLOCK_NODE));
+				
+				//printf("%d\n",i);
 				memset(newNode, 0, sizeof(st_BLOCK_NODE));
+
+				new(&newNode->d) DATA();
+
 				newNode->nextNode = m_pFreeNode;
 				m_pFreeNode = newNode;
 			}
@@ -95,7 +100,14 @@ namespace procademy
 			while (m_pFreeNode != nullptr)
 			{
 				tempNode = m_pFreeNode->nextNode;
+
+				if (m_bPlacementNew)
+				{
+					m_pFreeNode->d.~DATA();
+				}
+
 				free(m_pFreeNode);
+
 				m_pFreeNode = tempNode;
 				m_iCapacity--;
 			}
@@ -116,6 +128,9 @@ namespace procademy
 			{
 				st_BLOCK_NODE* newNode = (st_BLOCK_NODE*)malloc(sizeof(st_BLOCK_NODE));
 				newNode->nextNode = m_pFreeNode;
+
+				new(&newNode->d) DATA();
+
 				m_pFreeNode = newNode;
 				m_iCapacity++;
 			}
@@ -125,11 +140,6 @@ namespace procademy
 
 			//스택 가장 위쪽 메모리를 할당해줌.
 			DATA* data = &m_pFreeNode->d;
-			//그리고 객체일 경우 생성자 호출
-			if (m_bPlacementNew)
-			{
-				new(data) DATA();
-			}
 
 			//풀은 다시 다음 메모리 가리킴.
 			st_BLOCK_NODE* temp = m_pFreeNode;
@@ -148,17 +158,17 @@ namespace procademy
 		//////////////////////////////////////////////////////////////////////////
 		bool Free(DATA* pData)
 		{
-			st_BLOCK_NODE* temp = (st_BLOCK_NODE*)pData;
+			if (pData == nullptr) return false;
+
+			// DATA d 멤버의 위치를 이용해 노드의 시작 주소를 계산
+			st_BLOCK_NODE* temp = (st_BLOCK_NODE*)((char*)pData - offsetof(st_BLOCK_NODE, d));
+
 			if (temp->owner != this)
 			{
 				printf("풀에서 다른 객체 감지됨.\n");
 				return false;
 			}
-			//객체라면 소멸자 호출
-			if (m_bPlacementNew)
-			{
-				pData->~DATA();
-			}
+
 			//다시 메모리 풀에 채워주고
 			m_iUseCount--;
 			//데이터를 가리키는 포인터 지점이 다시 넣을 노드

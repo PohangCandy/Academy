@@ -70,6 +70,19 @@ CPacket::~CPacket()
     CPacket::Clear();
 }
 
+void CPacket::onAccept()
+{
+    m_iBufferSize = eBUFFER_DEFAULT;
+    //m_chpBuffer = new char[m_iBufferSize];
+    m_iDataSize = 0;
+    m_iReadPos = 0;
+    m_iWritePos = 0;
+}
+
+void CPacket::onRelease()
+{
+}
+
 void CPacket::Clear(void)
 {
     m_iReadPos = 0;
@@ -106,6 +119,11 @@ int CPacket::MoveReadPos(int iSize)
 
 CPacket& CPacket::operator = (CPacket& src)
 {
+    while (1)
+    {
+        printf("[CPacket::operator] 이게 실행될 일이 있을까?\n");
+    }
+
     if (this == &src) return *this;
 
     // 버퍼 크기 맞추기
@@ -134,6 +152,14 @@ int CPacket::PutData(char* chpSrc, int iSrcSize)
     if (iSrcSize <= 0 || chpSrc == nullptr) return 0;
 
     //_EnsureCapacity(iSrcSize);
+    if (m_iWritePos + iSrcSize > eBUFFER_DEFAULT)
+    {
+        while (1)
+        {
+            printf("[PutData] 패킷이 흘러넘친따잇\n");
+        }
+        return 0;
+    }
     std::memcpy(m_chpBuffer + m_iWritePos, chpSrc, iSrcSize);
     m_iWritePos += iSrcSize;
     m_iDataSize = m_iWritePos - m_iReadPos;

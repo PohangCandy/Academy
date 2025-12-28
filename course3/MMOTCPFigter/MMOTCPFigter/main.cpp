@@ -214,6 +214,7 @@ int main() {
         netIOProcess();
         //ProfileEnd(f1);
 
+
         static int lastTime = timeGetTime();
         int curTime = timeGetTime();
         int difTime = curTime - lastTime;
@@ -224,8 +225,11 @@ int main() {
             lastTime += frame_cnt * LOGIC_FRAME_TO_MS;
         }
 
-        // ProfileBegin(f2);
+
         DeleteDieCharacter();
+
+        // ProfileBegin(f2);
+
         //ProfileEnd(f2);
 
         //ProfileDataOutText(L"Profile.txt");
@@ -322,9 +326,9 @@ void netProc_Accept() {
         setsockopt(clientSock, IPPROTO_TCP, TCP_NODELAY, (const char*)&opt_val, sizeof(opt_val));
 
         // 송수신 버퍼 크기 증가
-        //int bufSize = 65536;  // 64KB
-        //setsockopt(clientSock, SOL_SOCKET, SO_SNDBUF, (char*)&bufSize, sizeof(bufSize));
-        //setsockopt(clientSock, SOL_SOCKET, SO_RCVBUF, (char*)&bufSize, sizeof(bufSize));
+        int bufSize = 65536;  // 64KB
+        setsockopt(clientSock, SOL_SOCKET, SO_SNDBUF, (char*)&bufSize, sizeof(bufSize));
+        setsockopt(clientSock, SOL_SOCKET, SO_RCVBUF, (char*)&bufSize, sizeof(bufSize));
 
         // 논블로킹
         u_long on = 1;
@@ -395,6 +399,7 @@ void netProc_Accept() {
 
 
         c_CHARACTER* character = ChacracterPool.Alloc();
+        character->OnAccept();
         if (character->pSession != nullptr)
         {
             while (1)
@@ -410,6 +415,7 @@ void netProc_Accept() {
         //cout << "Accepted new client (session " << s->session_id << ")\n";
         //신규 클라이언트에게 자기 캐릭터 할당 패킷 전송
         CPacket* pPacket = CPacketPool.Alloc();
+        pPacket->onAccept();
 
         clientPacketProc_CREATE_MY_CHARACTER(s, pPacket);
 
@@ -424,8 +430,8 @@ void netProc_Recv(SOCKETINFO*& pSession) {
     if (!pSession) return;
     
     //버퍼 복사를 하지말고 recv를 2번 한다면?
-    char tmp[BUFSIZE];
-    int ret = recv(pSession->sock, tmp, BUFSIZE, 0);
+    int recvCapacity = pSession->recvBuf.DirectEnqueueSize();
+    int ret = recv(pSession->sock, pSession->recvBuf.GetRearBufferPtr(), recvCapacity, 0);
     if (ret == 0) {
         Disconnect(pSession);
         return;
@@ -448,11 +454,19 @@ void netProc_Recv(SOCKETINFO*& pSession) {
     }
     else {
         // 링버퍼에 저장 (Enqueue)
-        pSession->recvBuf.Enqueue(tmp,ret);
+        int enq = pSession->recvBuf.MoveRear(ret);
+        if (enq != ret)
+        {
+            while (1)
+            {
+                cout << "[netProc_Recv] 링버퍼 수신 실패!\n";
+            }
+        }
         pSession->dwLastRecvTime = timeGetTime();
     }
 
     CPacket* pPacket = CPacketPool.Alloc();
+    pPacket->onAccept();
    
     // 완성된 패킷이 있으면 처리
     while (pSession->recvBuf.GetUseSize() >= (int)sizeof(st_PACKET_HEADER)) {
@@ -857,7 +871,14 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECT
             for (const auto& pair : g_Sector[pSectorRange->Around[i].iY][pSectorRange->Around[i].iX]) {
                 c_CHARACTER* otherCharacter = pair.second;
                 if (otherCharacter->IsDie || otherCharacter ->pSession->Active == false) continue;
-                otherCharacter->pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+                int enq = otherCharacter->pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+                if (enq != pPacket->GetDataSize())
+                {
+                    while (1)
+                    {
+                        cout << "[SendPacket_Around] enq실패!\n";
+                    }
+                }
             }
         }
     }
@@ -870,7 +891,14 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECT
             for (const auto& pair : g_Sector[pSectorRange->Around[i].iY][pSectorRange->Around[i].iX]) {
                 c_CHARACTER* otherCharacter = pair.second;
                 if (otherCharacter->IsDie || otherCharacter->pSession->Active == false|| otherCharacter->pSession == psession) continue;
-                otherCharacter->pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+                int enq = otherCharacter->pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+                if (enq != pPacket->GetDataSize())
+                {
+                    while (1)
+                    {
+                        cout << "[SendPacket_Around] enq실패!\n";
+                    }
+                }
             }
         }
     }
@@ -1281,7 +1309,14 @@ void SendPacket_SectorOne(c_SECTOR_POS* pSector, CPacket* pPacket, SOCKETINFO* p
     for (const auto& pair : g_Sector[iSectorY][iSectorX]) {
         c_CHARACTER* otherCharacter = pair.second;
         if (otherCharacter->IsDie || otherCharacter->pSession->Active == false || otherCharacter->pSession == pExceptSession) continue;
-        otherCharacter->pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+        int enq = otherCharacter->pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+        if (enq != pPacket->GetDataSize())
+        {
+            while (1)
+            {
+                cout << "[SendPacket_Around] enq실패!\n";
+            }
+        }
     }
 }
 
@@ -1295,7 +1330,14 @@ void SendOtherCharaterDeletePacket_Unicast(SOCKETINFO* pSession, CPacket* pPacke
         c_CHARACTER* otherCharacter = pair.second;
         if (otherCharacter->pSession == pSession || otherCharacter->IsDie) continue;
         mpDelete(pPacket, otherCharacter->pSession->session_id);
-        pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+        int enq = pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+        if (enq != pPacket->GetDataSize())
+        {
+            while (1)
+            {
+                cout << "[SendPacket_Around] enq실패!\n";
+            }
+        }
     }
 }
 
@@ -1343,17 +1385,24 @@ void SendCreateCharaterPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket, c_
         int enqdata = pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
         if (enqdata != pPacket->GetDataSize())
         {
-            //while (1)
-            //{
-            //    printf("[SendPacket] 송신 버퍼에 넣기 실패");
-            //}
+            while (1)
+            {
+                printf("[SendPacket] 송신 버퍼에 넣기 실패");
+            }
         }
     }
 }
 
 void SendPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket)
 {
-    pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    int enq = pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    if (enq != pPacket->GetDataSize())
+    {
+        while (1)
+        {
+            cout << "[SendPacket_Unicast] enq 못했음\n";
+        }
+    }
 }
 
 bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& pPacket)
@@ -1643,7 +1692,14 @@ bool netPacketProc_ECHO(SOCKETINFO* pSession, CPacket* pPacket)
 
     pPacket->Clear();
     mpECHO(pPacket, Time);
-    pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    int enq = pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    if (enq != pPacket->GetDataSize())
+    {
+        while (1)
+        {
+            cout << "[SendPacket_Unicast] enq 못했음\n";
+        }
+    }
     return true;
 }
 
@@ -1695,7 +1751,14 @@ bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRa
 bool netPacketProc_Sync(SOCKETINFO* pSession, CPacket* pPacket)
 {
     mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
-    pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    int enq = pSession->sendBuf.Enqueue(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+    if (enq != pPacket->GetDataSize())
+    {
+        while (1)
+        {
+            cout << "[SendPacket_Unicast] enq 못했음\n";
+        }
+    }
     return false;
 }
 

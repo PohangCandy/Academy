@@ -13,6 +13,9 @@ public:
 	SOCKETINFO(int bufsize);
 	~SOCKETINFO();
 
+	void OnAccept();
+	void OnRelease();
+
 	bool Active = true;
 	int Arrayindex = -1;
 	int session_id = -1;
