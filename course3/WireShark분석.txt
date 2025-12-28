@@ -1,12 +1,19 @@
 포트 찾기
-89 0a 00 ed 18 00 00
-[56757]
+89 0a 00 e8 15 00 00
+[49724]
 
 [DamagePacket]
-89 09 1e attckerID 5b 01 00 00 00
+89 09 1e attckerID 38 15 00 00 00
 
 [DeletePlayer]
 89 04 02 01 00 00 00
 
-473
 
+데미지 패킷에 이상한 값 줘도 disconnect 안됨
+니 데미지 맞고 너의 hp가 18이다 했는데 걍 이상없음
+
+
+Disconnect from Server [Session:8][Character HP:20]
+-> 다른 행동을 하는데 close 소켓으로 죽이면 확실히 뜸
+attack1에다 closesoket다니까 떴음
+반면에 데미지 패킷은 믿지 않음. 실제 hp와 다른 값을 줬는데 안믿음.

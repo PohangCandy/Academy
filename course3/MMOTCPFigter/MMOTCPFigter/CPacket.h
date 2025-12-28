@@ -143,6 +143,7 @@ public:
 	int		PutData(char* chpSrc, int iSrcSize);
 
 
+	char* m_chpBuffer;
 
 protected:
 	// 내부 유틸
@@ -150,8 +151,8 @@ protected:
 	void    _CompactIfEmpty(); // 다 읽었으면 포인터 리셋
 
 protected:
-	char m_chpBuffer[eBUFFER_DEFAULT] = {0};
-
+	
+	char* m_pOwnBuffer;
 	// 전체 버퍼 크기
 	int     m_iBufferSize = 0;
 

@@ -3,6 +3,12 @@
 
 class SOCKETINFO;
 
+#define PlayerFirstHP 10
+#define PlayerFirstX ((rand() % (dfRANGE_MOVE_RIGHT - dfRANGE_MOVE_LEFT + 1)) + dfRANGE_MOVE_LEFT)
+//#define PlayerFirstX 100
+#define PlayerFirstY ((rand() % (dfRANGE_MOVE_BOTTOM - dfRANGE_MOVE_TOP + 1)) + dfRANGE_MOVE_TOP)
+//#define PlayerFirstY 100
+
 //----------------------------------------------- 
 // 섹터 하나의 좌표 정보 
 //----------------------------------------------- 

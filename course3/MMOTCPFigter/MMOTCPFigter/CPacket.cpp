@@ -49,7 +49,7 @@ void CPacket::_CompactIfEmpty()
 CPacket::CPacket()
 {
     m_iBufferSize = eBUFFER_DEFAULT;
-    //m_chpBuffer = new char[m_iBufferSize];
+    m_pOwnBuffer = new char[m_iBufferSize];
     m_iDataSize = 0;
     m_iReadPos = 0;
     m_iWritePos = 0;
@@ -59,7 +59,7 @@ CPacket::CPacket(int iBufferSize)
 {
     if (iBufferSize <= 0) iBufferSize = eBUFFER_DEFAULT;
     m_iBufferSize = iBufferSize;
-    //m_chpBuffer = new char[m_iBufferSize];
+    m_pOwnBuffer = new char[m_iBufferSize];
     m_iDataSize = 0;
     m_iReadPos = 0;
     m_iWritePos = 0;
@@ -68,23 +68,25 @@ CPacket::CPacket(int iBufferSize)
 CPacket::~CPacket()
 {
     CPacket::Clear();
+    delete[] m_pOwnBuffer;
+    m_pOwnBuffer = nullptr;
 }
 
 void CPacket::onAccept()
 {
     m_iBufferSize = eBUFFER_DEFAULT;
-    //m_chpBuffer = new char[m_iBufferSize];
-    m_iDataSize = 0;
-    m_iReadPos = 0;
-    m_iWritePos = 0;
+    Clear();
 }
 
 void CPacket::onRelease()
 {
+    m_iBufferSize = eBUFFER_DEFAULT;
+    Clear();
 }
 
 void CPacket::Clear(void)
 {
+    m_chpBuffer = m_pOwnBuffer;
     m_iReadPos = 0;
     m_iWritePos = 0;
     m_iDataSize = 0;

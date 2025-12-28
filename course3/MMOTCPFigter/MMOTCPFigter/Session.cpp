@@ -35,6 +35,9 @@ void SOCKETINFO::OnAccept() {
 	recvBuf.ClearBuffer();
 	pCharacter = nullptr;
 	// 기타 세션 정보 초기화
+
+	Active = true;
+	dwLastRecvTime = timeGetTime();
 }
 
 void SOCKETINFO::OnRelease() {
