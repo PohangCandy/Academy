@@ -40,8 +40,8 @@
 //#define dfRANGE_MOVE_BOTTOM 470
 
 //섹터 길이
-#define dfSECTOR_Y_Length 200
-#define dfSECTOR_X_Length 200
+#define dfSECTOR_Y_Length 300
+#define dfSECTOR_X_Length 300
 
 //섹터 맵 크기
 //+1을 한 이유 : 마지막 6400이 100으로 나눠진 64에 접근-> 맵은 0~63까지라 터짐

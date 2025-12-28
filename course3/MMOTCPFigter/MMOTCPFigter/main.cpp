@@ -106,7 +106,7 @@ bool netPacketProc_Attack1(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_Attack2(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_Attack3(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_ECHO(SOCKETINFO* pSession, CPacket* pPacket);
-bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRange, int Attack_YRange);
+bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRange, int Attack_YRange, BYTE Damage);
 bool netPacketProc_Sync(SOCKETINFO* pSession, CPacket* pPacket);
 
 bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* pPacket);
@@ -152,6 +152,11 @@ void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_S
 
 
 int main() {
+    SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+    SetThreadIdealProcessor(GetCurrentThread(), 0);
+
+    //덤프를 위한 작업
     SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);
 
     timeBeginPeriod(1);
@@ -210,9 +215,9 @@ int main() {
     const double logicInterval = 1.0 / LOGIC_FRAME;
 
     while (!g_bShutdown) {
-        //ProfileBegin(f1);
+        ProfileBegin(f1);
         netIOProcess();
-        //ProfileEnd(f1);
+        ProfileEnd(f1);
 
 
         static int lastTime = timeGetTime();
@@ -221,18 +226,20 @@ int main() {
         if (difTime >= LOGIC_FRAME_TO_MS)
         {
             int frame_cnt = difTime / LOGIC_FRAME_TO_MS;
+            ProfileBegin(f3);
             Update(frame_cnt);
+            ProfileEnd(f3);
             lastTime += frame_cnt * LOGIC_FRAME_TO_MS;
         }
 
 
-        DeleteDieCharacter();
+        
 
-        // ProfileBegin(f2);
+         ProfileBegin(f2);
+         DeleteDieCharacter();
+        ProfileEnd(f2);
 
-        //ProfileEnd(f2);
-
-        //ProfileDataOutText(L"Profile.txt");
+        ProfileDataOutText(L"Profile.txt");
     }
 
     closesocket(g_ListenSocket);
@@ -421,6 +428,7 @@ void netProc_Accept() {
 
         //섹터 맵 추가 > 다른 클라이언트의 캐릭터 생성 > 다른 클라이언트에게 클라이언트의 캐릭터 생성
         AddCharacterToSectorMap(character, pPacket);
+        pPacket->onRelease();
         CPacketPool.Free(pPacket);
     }
 }
@@ -429,7 +437,6 @@ void netProc_Accept() {
 void netProc_Recv(SOCKETINFO*& pSession) {
     if (!pSession) return;
     
-    //버퍼 복사를 하지말고 recv를 2번 한다면?
     int recvCapacity = pSession->recvBuf.DirectEnqueueSize();
     int ret = recv(pSession->sock, pSession->recvBuf.GetRearBufferPtr(), recvCapacity, 0);
     if (ret == 0) {
@@ -485,46 +492,16 @@ void netProc_Recv(SOCKETINFO*& pSession) {
         // 아직 메시지 문장 전체가 도착 안함
         if (pSession->recvBuf.GetUseSize() < (int)sizeof(hdr) + hdr.bySize) break;
 
-        // 전체 패킷을 꺼내서 처리 (Dequeue)
-        if (hdr.bySize + sizeof(st_PACKET_HEADER) > pSession->recvBuf.DirectDequeueSize())
-        {
-            char buf[100];
-            int got = pSession->recvBuf.Dequeue(buf, hdr.bySize + sizeof(st_PACKET_HEADER));
-            if (got != hdr.bySize + sizeof(st_PACKET_HEADER)) {
-                while (1)
-                {
-                    cerr << "[net_Recv] Dequeue size mismatch\n";
-                }
-                Disconnect(pSession);
-                return;
-            }
+        //문장 전체가 도착했을 경우 일단 헤더만큼 제거
+        pSession->recvBuf.MoveFront(sizeof(st_PACKET_HEADER));
 
-            pPacket->Clear();
-            int ret = pPacket->PutData(buf, hdr.bySize + sizeof(st_PACKET_HEADER));
-            if (ret != hdr.bySize + sizeof(st_PACKET_HEADER))
-            {
-                while (1)
-                {
-                    cerr << "[net_Recv] PutData size mismatch\n";
-                }
-            }
-        }
-        else
+        pPacket->Clear();
+        // 한번에 꺼낼 수 있는 경우라면 ZeroCopy를 위해 링버퍼 포인터 넘겨주기
+        if (pSession->recvBuf.DirectDequeueSize() >= hdr.bySize)
         {
-            pPacket->Clear();
-            int ret = pPacket->PutData(pSession->recvBuf.GetFrontBufferPtr(), hdr.bySize + sizeof(st_PACKET_HEADER));
-            if (ret != hdr.bySize + sizeof(st_PACKET_HEADER))
-            {
-                while (1)
-                {
-                    cerr << "[net_Recv] PutData size mismatch\n";
-                }
-            }
-            pSession->recvBuf.MoveFront(hdr.bySize + sizeof(st_PACKET_HEADER));
-
-            //헤더의 길이를 제외한  payload만 넘겨준다.
-            ret = pPacket->MoveReadPos(sizeof(st_PACKET_HEADER));
-            if (ret != sizeof(st_PACKET_HEADER))
+            pPacket->m_chpBuffer =  pSession->recvBuf.GetFrontBufferPtr();
+            ret = pPacket->MoveWritePos(hdr.bySize);
+            if (ret != hdr.bySize)
             {
                 while (1)
                 {
@@ -532,6 +509,29 @@ void netProc_Recv(SOCKETINFO*& pSession) {
                 }
             }
         }
+        //아니라면 패킷에 담기
+        else
+        {
+            int deq = pSession->recvBuf.Dequeue(pPacket->GetBufferPtr(), hdr.bySize);
+            if (deq != hdr.bySize) {
+                while (1)
+                {
+                    cerr << "[net_Recv] Dequeue size mismatch\n";
+                }
+                Disconnect(pSession);
+                return;
+            }
+            ret = pPacket->MoveWritePos(deq);
+            if (ret != deq)
+            {
+                while (1)
+                {
+                    cerr << "[net_Recv] MoveReadPos size mismatch\n";
+                }
+            }
+        }
+        pSession->recvBuf.MoveFront(hdr.bySize);
+
 
         if (!PacketProc(pSession, hdr.byType, pPacket)) {
             while (1)
@@ -542,6 +542,7 @@ void netProc_Recv(SOCKETINFO*& pSession) {
             return;
         }
     }
+    pPacket->onRelease();
     CPacketPool.Free(pPacket);
 }
 
@@ -633,15 +634,16 @@ void DeleteDieCharacter()
         CPacket* pPacket = CPacketPool.Alloc();
         mpDelete(pPacket, DieCharacter->dwSessionID);
         DeleteCharacterFromSectorMap(DieCharacter, pPacket, &DieCharacter->CurSector);
+        pPacket->onRelease();
         CPacketPool.Free(pPacket);
 
         //섹션 삭제
         SOCKETINFO* session = DieCharacter->pSession;
-        if (session)
-        {
-            session->pCharacter = nullptr;
-        }
-        DieCharacter->pSession = nullptr;
+        //if (session)
+        //{
+        //    session->pCharacter = nullptr;
+        //}
+        //DieCharacter->pSession = nullptr;
 
 
         // 2. 세션 인덱스 회수
@@ -663,7 +665,7 @@ void DeleteDieCharacter()
         getpeername(session->sock, (SOCKADDR*)&clientaddr, &addrlen);
         g_sessionMap->deleteSession(session, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 
-
+        DieCharacter->OnRelease();
         ChacracterPool.Free(DieCharacter);
     }
 
@@ -949,7 +951,7 @@ void Update(int frame)
             
             pCharacter->IsDie = true;
             g_DieCharacterID.push(pCharacter);
-           
+            pPacket->onRelease();
             CPacketPool.Free(pPacket);
             // 사망처리. 
             //Disconnect(pCharacter->pSession);
@@ -1126,7 +1128,7 @@ void CharacterSectorUpdatePacket(c_CHARACTER* pCharacter)
     pPacket->Clear();
     //현재 섹터 맵에 추가하기
     AddCharacterToSectorMap(pCharacter, pPacket);
-
+    pPacket->onRelease();
     CPacketPool.Free(pPacket);
     
 }
@@ -1147,13 +1149,6 @@ void AddCharacterToSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket)
     //지금이 첫 생성이라면 현재 모든 섹터에 생성
     if (-1 == pCharacter->OldSector.index)
     {
-        if (pCharacter->shX >= 200 || pCharacter->shY >= 200)
-        {
-            while (1)
-            {
-                cout << "[AddCharacterToSectorMap] 어떻게 이런 이동이 가능했지?1";
-            }
-        }
         //새로운 섹터의 다른 클라이언트 캐릭터 생성
         SOCKETINFO* pSession = pCharacter->pSession;
         clientPacketProc_CREATE_OTHER_CHARACTER(pSession, pPacket);
@@ -1617,7 +1612,7 @@ bool netPacketProc_Attack1(SOCKETINFO* pSession, CPacket* pPacket)
     SendPacket_Around(pSession, pPacket, true, &pSession->pCharacter->CurSectorRange);
     LOG_PACKET("Attack1", pPacket);
 
-    netPacketProc_Damage(pSession, pPacket, dfATTACK1_RANGE_X, dfATTACK1_RANGE_Y);
+    netPacketProc_Damage(pSession, pPacket, dfATTACK1_RANGE_X, dfATTACK1_RANGE_Y, dfATTACK1_DAMAGE);
     //cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
 
     return true;
@@ -1648,7 +1643,7 @@ bool netPacketProc_Attack2(SOCKETINFO* pSession, CPacket* pPacket)
 
 
 
-    netPacketProc_Damage(pSession, pPacket, dfATTACK2_RANGE_X, dfATTACK2_RANGE_Y);
+    netPacketProc_Damage(pSession, pPacket, dfATTACK2_RANGE_X, dfATTACK2_RANGE_Y, dfATTACK2_DAMAGE);
 
     //cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
 
@@ -1675,7 +1670,7 @@ bool netPacketProc_Attack3(SOCKETINFO* pSession, CPacket* pPacket)
     LOG_PACKET("Attack3", pPacket);
 
 
-    netPacketProc_Damage(pSession, pPacket, dfATTACK3_RANGE_X, dfATTACK3_RANGE_Y);
+    netPacketProc_Damage(pSession, pPacket, dfATTACK3_RANGE_X, dfATTACK3_RANGE_Y, dfATTACK3_DAMAGE);
     //cout << " # PACKET_ATTACK : " << "Attack Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
 
     return true;
@@ -1704,7 +1699,7 @@ bool netPacketProc_ECHO(SOCKETINFO* pSession, CPacket* pPacket)
 }
 
 //캐릭터 주위 9섹터에 범위내 플레이어를 가격하는 패킷 전송
-bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRange, int Attack_YRange)
+bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRange, int Attack_YRange, BYTE Damage)
 {
     for (int i = 0; i < 9; i++)
     {
@@ -1733,14 +1728,23 @@ bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRa
                 //방향과 범위가 같은 캐릭터를 대상으로 주위 섹터에 Damage 패킷 전송
                 if (dx <= Attack_XRange && rangeDirection && dy <= Attack_YRange) 
                 {
-                    target->pCharacter->chHP -= 10;
+                    //closesocket(target->sock);
+
+
+                    target->pCharacter->chHP -= Damage;
 
                     pPacket->Clear();
                     //공격 당하는 other의 섹터 주위 플레이어에게 Damage 패킷 전송.
                     mpDamage(pPacket, pSession->session_id, target->session_id, target->pCharacter->chHP);
+                    //mpDamage(pPacket, pSession->session_id, target->session_id, (char)18);
                     SendPacket_Around(target, pPacket, true, &target->pCharacter->CurSectorRange);
-                    LOG_PACKET("Damage", pPacket);
+                    //LOG_PACKET("Damage", pPacket);
                     //cout << "Damged Client Session ID : " << target->session_id << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
+                    if (target->pCharacter->chHP <= 0)
+                    {
+                        target->pCharacter->IsDie = true;
+                        g_DieCharacterID.push(target->pCharacter);
+                    }
                 }
             }
         }
@@ -1780,6 +1784,7 @@ bool clientPacketProc_CREATE_MY_CHARACTER(SOCKETINFO* pSession, CPacket* pPacket
     *pPacket << pSession->pCharacter->shX;
     *pPacket << pSession->pCharacter->shY;
     *pPacket << pSession->pCharacter->chHP;
+    //*pPacket << (char)50;
 
     LOG_PACKET("CreateMyCharacter", pPacket);
     //cout << "Create Client Session ID : " << pSession->session_id << " Client X: " << pSession->shX << " Y: " << pSession->shY << "\n";
