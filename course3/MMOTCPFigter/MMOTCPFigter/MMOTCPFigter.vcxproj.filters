@@ -68,5 +68,8 @@
     <ClInclude Include="Profile.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="PerfCounter.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

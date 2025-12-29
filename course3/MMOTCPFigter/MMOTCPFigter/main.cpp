@@ -34,6 +34,7 @@
 #include "MemoryPool.h"
 #include "Dump.h"
 #include "Profile.h"
+#include "PerfCounter.h"
 using namespace std;
 
 
@@ -48,15 +49,15 @@ bool g_bShutdown = false;
 cSessionMap* g_sessionMap = cSessionMap::GetSessionMap();
 
 //-------------------------------------------
-// 패킷 메모리 풀
+// 메모리 풀
 //-------------------------------------------
-procademy::CMemoryPool<CPacket> CPacketPool(1000, true);
+//procademy::CMemoryPool<CPacket> CPacketPool(1000, true);
 procademy::CMemoryPool<c_CHARACTER> ChacracterPool(20000, true);
 
 //------------------------------------------------------------- 
 // 월드맵 캐릭터 섹터 
 //------------------------------------------------------------- 
-unordered_map<int ,c_CHARACTER*> g_Sector[dfSECTOR_MAPMAX_Y + 1][dfSECTOR_MAPMAX_X + 1];
+unordered_map<int ,c_CHARACTER*> g_Sector[dfSECTOR_MAPMAX_Y][dfSECTOR_MAPMAX_X];
 
 //------------------------------------------------------------- 
 // HP가 0이 된 캐릭터 ID
@@ -98,7 +99,7 @@ void SendCreateCharaterPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket, c_
 // 특정 1명의 클라이언트 에게 메시지 보내기 
 void SendPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket);
 
-bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& Packet);
+bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket* Packet);
 
 bool netPacketProc_MoveStart(SOCKETINFO* pSession, CPacket* pPacket);
 bool netPacketProc_MoveStop(SOCKETINFO* pSession, CPacket* pPacket);
@@ -152,20 +153,23 @@ void DeleteCharacterFromSectorMap(c_CHARACTER* pCharacter, CPacket* pPacket, c_S
 
 
 int main() {
+    
+    //스레드 우선순위 높이기 희망
     SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+    //한 코어에서 돌려서 캐시 미스 줄이기
     SetThreadIdealProcessor(GetCurrentThread(), 0);
 
     //덤프를 위한 작업
     SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);
 
-    timeBeginPeriod(1);
+   
 
-    for (int i = 0; i < dfSECTOR_MAPMAX_Y + 1; i++)
+    for (int i = 0; i < dfSECTOR_MAPMAX_Y; i++)
     {
-        for (int j = 0; j < dfSECTOR_MAPMAX_X + 1; j++)
+        for (int j = 0; j < dfSECTOR_MAPMAX_X; j++)
         {
-            g_Sector[i][j].reserve(15000);
+            g_Sector[i][j].reserve(MAX_CLIENTS);
         }
     }
 
@@ -208,15 +212,14 @@ int main() {
 
     cout << "Server listening on port " << dfNETWORK_PORT << "\n";
 
-    // 메인 루프
-    using clock = std::chrono::high_resolution_clock;
-    auto lastLogic = clock::now();
-    double accumulator = 0.0;
-    const double logicInterval = 1.0 / LOGIC_FRAME;
-
+    timeBeginPeriod(1);
     while (!g_bShutdown) {
+        
+        
         ProfileBegin(f1);
+        PERF_BEGIN(g_netPerf);
         netIOProcess();
+        PERF_END(g_netPerf);
         ProfileEnd(f1);
 
 
@@ -227,17 +230,29 @@ int main() {
         {
             int frame_cnt = difTime / LOGIC_FRAME_TO_MS;
             ProfileBegin(f3);
+            PERF_BEGIN(g_logicPerf);
             Update(frame_cnt);
+            PERF_END(g_logicPerf);
             ProfileEnd(f3);
             lastTime += frame_cnt * LOGIC_FRAME_TO_MS;
+
+            printf(
+                "\r[PERF] NET: %4ums | LOGIC: %4ums | DELETE: %4ums | FRAME: %d   ",
+                g_netPerf.total,
+                g_logicPerf.total,
+                g_deletePerf.total,
+                frame_cnt
+            );
         }
 
 
         
 
          ProfileBegin(f2);
+         PERF_BEGIN(g_deletePerf);
          DeleteDieCharacter();
-        ProfileEnd(f2);
+         PERF_END(g_deletePerf);
+         ProfileEnd(f2);
 
         ProfileDataOutText(L"Profile.txt");
     }
@@ -421,15 +436,11 @@ void netProc_Accept() {
 
         //cout << "Accepted new client (session " << s->session_id << ")\n";
         //신규 클라이언트에게 자기 캐릭터 할당 패킷 전송
-        CPacket* pPacket = CPacketPool.Alloc();
-        pPacket->onAccept();
-
-        clientPacketProc_CREATE_MY_CHARACTER(s, pPacket);
+        static CPacket AcceptPacket;
+        clientPacketProc_CREATE_MY_CHARACTER(s, &AcceptPacket);
 
         //섹터 맵 추가 > 다른 클라이언트의 캐릭터 생성 > 다른 클라이언트에게 클라이언트의 캐릭터 생성
-        AddCharacterToSectorMap(character, pPacket);
-        pPacket->onRelease();
-        CPacketPool.Free(pPacket);
+        AddCharacterToSectorMap(character, &AcceptPacket);
     }
 }
 
@@ -472,8 +483,7 @@ void netProc_Recv(SOCKETINFO*& pSession) {
         pSession->dwLastRecvTime = timeGetTime();
     }
 
-    CPacket* pPacket = CPacketPool.Alloc();
-    pPacket->onAccept();
+    static CPacket recvPacket;
    
     // 완성된 패킷이 있으면 처리
     while (pSession->recvBuf.GetUseSize() >= (int)sizeof(st_PACKET_HEADER)) {
@@ -495,12 +505,12 @@ void netProc_Recv(SOCKETINFO*& pSession) {
         //문장 전체가 도착했을 경우 일단 헤더만큼 제거
         pSession->recvBuf.MoveFront(sizeof(st_PACKET_HEADER));
 
-        pPacket->Clear();
+        recvPacket.Clear();
         // 한번에 꺼낼 수 있는 경우라면 ZeroCopy를 위해 링버퍼 포인터 넘겨주기
         if (pSession->recvBuf.DirectDequeueSize() >= hdr.bySize)
         {
-            pPacket->m_chpBuffer =  pSession->recvBuf.GetFrontBufferPtr();
-            ret = pPacket->MoveWritePos(hdr.bySize);
+            recvPacket.m_chpBuffer =  pSession->recvBuf.GetFrontBufferPtr();
+            ret = recvPacket.MoveWritePos(hdr.bySize);
             if (ret != hdr.bySize)
             {
                 while (1)
@@ -512,7 +522,7 @@ void netProc_Recv(SOCKETINFO*& pSession) {
         //아니라면 패킷에 담기
         else
         {
-            int deq = pSession->recvBuf.Dequeue(pPacket->GetBufferPtr(), hdr.bySize);
+            int deq = pSession->recvBuf.Dequeue(recvPacket.GetBufferPtr(), hdr.bySize);
             if (deq != hdr.bySize) {
                 while (1)
                 {
@@ -521,7 +531,7 @@ void netProc_Recv(SOCKETINFO*& pSession) {
                 Disconnect(pSession);
                 return;
             }
-            ret = pPacket->MoveWritePos(deq);
+            ret = recvPacket.MoveWritePos(deq);
             if (ret != deq)
             {
                 while (1)
@@ -533,7 +543,7 @@ void netProc_Recv(SOCKETINFO*& pSession) {
         pSession->recvBuf.MoveFront(hdr.bySize);
 
 
-        if (!PacketProc(pSession, hdr.byType, pPacket)) {
+        if (!PacketProc(pSession, hdr.byType, &recvPacket)) {
             while (1)
             {
                 cout << "[Send] error\n";
@@ -542,8 +552,6 @@ void netProc_Recv(SOCKETINFO*& pSession) {
             return;
         }
     }
-    pPacket->onRelease();
-    CPacketPool.Free(pPacket);
 }
 
 // send: SendQ -> 실제 send (Peek -> send -> Dequeue(sent))
@@ -619,6 +627,8 @@ void Disconnect(SOCKETINFO* pSession) {
         }
         return;
     }
+    //이미 hp가 감소되어 죽었음 상태이고, 연결 끊기기전 클라가 스스로 끊은 경우
+    if (pSession->pCharacter->IsDie == true) return;
     pSession->pCharacter->IsDie = true;
     g_DieCharacterID.push(pSession->pCharacter);
 }
@@ -631,11 +641,10 @@ void DeleteDieCharacter()
         g_DieCharacterID.pop();
 
         //캐릭터 삭제 패킷 전송
-        CPacket* pPacket = CPacketPool.Alloc();
-        mpDelete(pPacket, DieCharacter->dwSessionID);
-        DeleteCharacterFromSectorMap(DieCharacter, pPacket, &DieCharacter->CurSector);
-        pPacket->onRelease();
-        CPacketPool.Free(pPacket);
+        static CPacket deletePacket;
+        
+        mpDelete(&deletePacket, DieCharacter->dwSessionID);
+        DeleteCharacterFromSectorMap(DieCharacter, &deletePacket, &DieCharacter->CurSector);
 
         //섹션 삭제
         SOCKETINFO* session = DieCharacter->pSession;
@@ -917,8 +926,8 @@ void SendPacket_Around(SOCKETINFO* psession, CPacket* pPacket, bool self, c_SECT
 
 bool CharacterMoveCheck(short NextshX, short NextshY)
 {
-    if (NextshX <= dfRANGE_MOVE_LEFT || NextshX >= dfRANGE_MOVE_RIGHT 
-        || NextshY >= dfRANGE_MOVE_BOTTOM || NextshY <= dfRANGE_MOVE_TOP) return false;
+    if (NextshX < dfRANGE_MOVE_LEFT || NextshX > dfRANGE_MOVE_RIGHT 
+        || NextshY > dfRANGE_MOVE_BOTTOM || NextshY < dfRANGE_MOVE_TOP) return false;
 
     return true;
 }
@@ -946,13 +955,8 @@ void Update(int frame)
 
         if (0 >= pCharacter->chHP)
         {   
-            //이렇게 해야 송신 버퍼에 들어감.
-            CPacket* pPacket = CPacketPool.Alloc();
-            
             pCharacter->IsDie = true;
             g_DieCharacterID.push(pCharacter);
-            pPacket->onRelease();
-            CPacketPool.Free(pPacket);
             // 사망처리. 
             //Disconnect(pCharacter->pSession);
         }
@@ -973,85 +977,74 @@ void Update(int frame)
             //----------------------------------------------------------- 
             int nextX;
             int nextY;
+
+            //bool CharacterMoveCheck(short NextshX, short NextshY)
+            //{
+            //    if (NextshX < dfRANGE_MOVE_LEFT || NextshX > dfRANGE_MOVE_RIGHT
+            //        || NextshY > dfRANGE_MOVE_BOTTOM || NextshY < dfRANGE_MOVE_TOP) return false;
+
+            //    return true;
+            //}
+
             switch (pCharacter->dwAction)
             {
             case dfPACKET_MOVE_DIR_LL:
                 nextX = pCharacter->shX - dfSPEED_PLAYER_X * frame;
-                nextY = pCharacter->shY;
-                if (CharacterMoveCheck(nextX,nextY))
-                {
-                    pCharacter->shX = nextX;
-                    pCharacter->shY = nextY;
-                }
+                pCharacter->shX = max(dfRANGE_MOVE_LEFT, nextX);
                 break;
 
             case dfPACKET_MOVE_DIR_LU:
                  nextX = pCharacter->shX - dfSPEED_PLAYER_X * frame;
                  nextY = pCharacter->shY - dfSPEED_PLAYER_Y * frame;
-                if (CharacterMoveCheck(nextX, nextY))
-                {
-                    pCharacter->shX = nextX;
-                    pCharacter->shY = nextY;
-                }
+                 if (pCharacter->shX > dfRANGE_MOVE_LEFT && pCharacter->shY > dfRANGE_MOVE_TOP)
+                 {
+                     pCharacter->shX = max(dfRANGE_MOVE_LEFT, nextX);
+                     pCharacter->shY = max(dfRANGE_MOVE_TOP, nextY);
+                 }
                 break;
 
             case dfPACKET_MOVE_DIR_UU:
-                 nextX = pCharacter->shX;
                  nextY = pCharacter->shY - dfSPEED_PLAYER_Y * frame;
-                if (CharacterMoveCheck(nextX, nextY))
-                {
-                    pCharacter->shX = nextX;
-                    pCharacter->shY = nextY;
-                }
+                 pCharacter->shY = max(dfRANGE_MOVE_TOP, nextY);
                 break;
             case dfPACKET_MOVE_DIR_RU:
                  nextX = pCharacter->shX + dfSPEED_PLAYER_X * frame;
                  nextY = pCharacter->shY - dfSPEED_PLAYER_Y * frame;
-                if (CharacterMoveCheck(nextX, nextY))
-                {
-                    pCharacter->shX = nextX;
-                    pCharacter->shY = nextY;
-                }
+                 if (pCharacter->shX < dfRANGE_MOVE_RIGHT && pCharacter->shY > dfRANGE_MOVE_TOP)
+                 {
+                     pCharacter->shX = min(dfRANGE_MOVE_RIGHT, nextX);
+                     pCharacter->shY = max(dfRANGE_MOVE_TOP, nextY);
+                 }
                 break;
 
             case dfPACKET_MOVE_DIR_RR:
                  nextX = pCharacter->shX + dfSPEED_PLAYER_X * frame;
-                 nextY = pCharacter->shY;
-                if (CharacterMoveCheck(nextX, nextY))
-                {
-                    pCharacter->shX = nextX;
-                    pCharacter->shY = nextY;
-                }
+                 pCharacter->shX = min(dfRANGE_MOVE_RIGHT, nextX);
                 break;
 
             case dfPACKET_MOVE_DIR_RD:
                  nextX = pCharacter->shX + dfSPEED_PLAYER_X * frame;
                  nextY = pCharacter->shY + dfSPEED_PLAYER_Y * frame;
-                if (CharacterMoveCheck(nextX, nextY))
-                {
-                    pCharacter->shX = nextX;
-                    pCharacter->shY = nextY;
-                }
+                 if (pCharacter->shX < dfRANGE_MOVE_RIGHT && pCharacter->shY < dfRANGE_MOVE_BOTTOM)
+                 {
+                     pCharacter->shX = min(dfRANGE_MOVE_RIGHT, nextX);
+                     pCharacter->shY = min(dfRANGE_MOVE_BOTTOM, nextY);
+                 }
                 break;
 
             case dfPACKET_MOVE_DIR_DD:
-                 nextX = pCharacter->shX;
                  nextY = pCharacter->shY + dfSPEED_PLAYER_Y * frame;
-                if (CharacterMoveCheck(nextX, nextY))
-                {
-                    pCharacter->shX = nextX;
-                    pCharacter->shY = nextY;
-                }
+                 pCharacter->shY = min(dfRANGE_MOVE_BOTTOM, nextY);
                 break;
 
             case dfPACKET_MOVE_DIR_LD:
                  nextX = pCharacter->shX - dfSPEED_PLAYER_X * frame;
                  nextY = pCharacter->shY + dfSPEED_PLAYER_Y * frame;
-                if (CharacterMoveCheck(nextX, nextY))
-                {
-                    pCharacter->shX = nextX;
-                    pCharacter->shY = nextY;
-                }
+                 if (pCharacter->shX > dfRANGE_MOVE_LEFT && pCharacter->shY < dfRANGE_MOVE_BOTTOM)
+                 {
+                     pCharacter->shX = max(dfRANGE_MOVE_LEFT, nextX);
+                     pCharacter->shY = min(dfRANGE_MOVE_BOTTOM, nextY);
+                 }
                 break;
             }
             if (pCharacter->dwAction >= dfPACKET_MOVE_DIR_LL && pCharacter->dwAction <= dfPACKET_MOVE_DIR_LD)
@@ -1059,9 +1052,6 @@ void Update(int frame)
                 //이동인 경우 섹터 업데이트를 함. 
                 if (IsSectorUpdate(pCharacter))
                 {
-                    
-
-
                     //printf("[UpdateSector] sessionid : %d  x : %d y : %d\n", pCharacter->dwSessionID, pCharacter->shX, pCharacter->shY);
                     //printf("[UpdateSectorRange]\n");
                     //for (int i = 0; i < 3; i++)
@@ -1120,16 +1110,13 @@ bool IsSectorUpdate(c_CHARACTER* pCharacter)
 //지금 여기서 섹터 업데이트 순서를 확인해봐야 할 듯
 void CharacterSectorUpdatePacket(c_CHARACTER* pCharacter)
 {
-    CPacket* pPacket = CPacketPool.Alloc();
-    mpDelete(pPacket, pCharacter->dwSessionID);
+    static CPacket UpdateSectorpacket;
+    mpDelete(&UpdateSectorpacket, pCharacter->dwSessionID);
     //과거 섹터에서 플레이어 삭제
-    DeleteCharacterFromSectorMap(pCharacter, pPacket, &pCharacter->OldSector);
+    DeleteCharacterFromSectorMap(pCharacter, &UpdateSectorpacket, &pCharacter->OldSector);
 
-    pPacket->Clear();
     //현재 섹터 맵에 추가하기
-    AddCharacterToSectorMap(pCharacter, pPacket);
-    pPacket->onRelease();
-    CPacketPool.Free(pPacket);
+    AddCharacterToSectorMap(pCharacter, &UpdateSectorpacket);
     
 }
 
@@ -1400,7 +1387,7 @@ void SendPacket_Unicast(SOCKETINFO* pSession, CPacket* pPacket)
     }
 }
 
-bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket*& pPacket)
+bool PacketProc(SOCKETINFO* pSession, unsigned char byPacketType, CPacket* pPacket)
 {
 
     switch (byPacketType)
@@ -1740,11 +1727,11 @@ bool netPacketProc_Damage(SOCKETINFO* pSession, CPacket* pPacket, int Attack_XRa
                     SendPacket_Around(target, pPacket, true, &target->pCharacter->CurSectorRange);
                     //LOG_PACKET("Damage", pPacket);
                     //cout << "Damged Client Session ID : " << target->session_id << " Client X: " << target->shX << " Y: " << target->shY << " HP:" << (int)target->chHP << "\n";
-                    if (target->pCharacter->chHP <= 0)
-                    {
-                        target->pCharacter->IsDie = true;
-                        g_DieCharacterID.push(target->pCharacter);
-                    }
+                    //if (target->pCharacter->IsDie == false && target->pCharacter->chHP <= 0)
+                    //{
+                    //    target->pCharacter->IsDie = true;
+                    //    g_DieCharacterID.push(target->pCharacter);
+                    //}
                 }
             }
         }

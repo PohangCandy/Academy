@@ -8,6 +8,7 @@ CRingBuffer::CRingBuffer(void)
     : m_iBufferSize(RINGBUFSIZE), m_iFront(0), m_iRear(0), m_bIsFull(false)
 {
     m_pBuffer = new char[m_iBufferSize];
+    memset(m_pBuffer, 0, m_iBufferSize);
 }
 
 //CRingBuffer::CRingBuffer(int iBufferSize)
