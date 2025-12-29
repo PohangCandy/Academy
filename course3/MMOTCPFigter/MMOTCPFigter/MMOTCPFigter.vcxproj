@@ -121,7 +121,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <Optimization>Disabled</Optimization>
+      <Optimization>MaxSpeed</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -145,6 +145,7 @@
     <ClInclude Include="cSessionMap.h" />
     <ClInclude Include="Dump.h" />
     <ClInclude Include="MemoryPool.h" />
+    <ClInclude Include="PerfCounter.h" />
     <ClInclude Include="Profile.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="Session.h" />

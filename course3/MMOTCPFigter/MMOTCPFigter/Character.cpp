@@ -9,7 +9,7 @@ c_CHARACTER::c_CHARACTER()
 
 	dwAction = dfPACKET_CS_MOVE_STOP;
 	byDirection = dfPACKET_MOVE_DIR_RR;
-	byMoveDirection = dfPACKET_MOVE_DIR_RR;
+	byMoveDirection = dfPACKET_CS_MOVE_STOP;
 	shX = PlayerFirstX;
 	shY = PlayerFirstY;
 	chHP = PlayerFirstHP;
@@ -42,7 +42,7 @@ void c_CHARACTER::OnAccept()
 
 	dwAction = dfPACKET_CS_MOVE_STOP;
 	byDirection = dfPACKET_MOVE_DIR_RR;
-	byMoveDirection = dfPACKET_MOVE_DIR_RR;
+	byMoveDirection = dfPACKET_CS_MOVE_STOP;
 	shX = PlayerFirstX;
 	shY = PlayerFirstY;
 	chHP = PlayerFirstHP;
@@ -114,8 +114,8 @@ int c_CHARACTER::UpdateCurSectorRange()
 	{
 		int nx = CurSector.iX + dx[i];
 		int ny = CurSector.iY + dy[i];
-		if (nx < 0 || nx > dfSECTOR_MAPMAX_X ||
-			ny < 0 || ny > dfSECTOR_MAPMAX_Y)
+		if (nx < 0 || nx >= dfSECTOR_MAPMAX_X ||
+			ny < 0 || ny >= dfSECTOR_MAPMAX_Y)
 		{
 			CurSectorRange.Around[i].index = -1;
 			continue;

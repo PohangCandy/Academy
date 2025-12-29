@@ -22,9 +22,46 @@
 #define LOGIC_FRAME_TO_MS (1000 / LOGIC_FRAME)
 
 
-// 이동 단위
-#define MOVE_UNIT_X 3
-#define MOVE_UNIT_Y 2
+//-----------------------------------------------------------------
+// 30초 이상이 되도록 아무런 메시지 수신도 없는경우 접속 끊음.
+//-----------------------------------------------------------------
+#define dfNETWORK_PACKET_RECV_TIMEOUT	30000
+
+
+
+
+//---------------------------------------------------------------
+// 공격범위.
+//---------------------------------------------------------------
+#define dfATTACK1_RANGE_X		80
+#define dfATTACK2_RANGE_X		90
+#define dfATTACK3_RANGE_X		100
+#define dfATTACK1_RANGE_Y		10
+#define dfATTACK2_RANGE_Y		10
+#define dfATTACK3_RANGE_Y		20
+
+
+//---------------------------------------------------------------
+// 공격 데미지.
+//---------------------------------------------------------------
+#define dfATTACK1_DAMAGE		1
+#define dfATTACK2_DAMAGE		2
+#define dfATTACK3_DAMAGE		3
+
+
+//-----------------------------------------------------------------
+// 캐릭터 이동 속도   // 25fps 기준 이동속도
+//-----------------------------------------------------------------
+#define dfSPEED_PLAYER_X	6	// 25fps
+#define dfSPEED_PLAYER_Y	4	// 25fps
+//#define dfSPEED_PLAYER_X	3   // 50fps
+//#define dfSPEED_PLAYER_Y	2  // 50fps
+
+
+//-----------------------------------------------------------------
+// 이동 오류체크 범위
+//-----------------------------------------------------------------
+#define dfERROR_RANGE		50
 
 //-----------------------------------------------------------------
 // 화면 이동 범위.
@@ -40,13 +77,13 @@
 //#define dfRANGE_MOVE_BOTTOM 470
 
 //섹터 길이
-#define dfSECTOR_Y_Length 300
-#define dfSECTOR_X_Length 300
+#define dfSECTOR_Y_Length 200
+#define dfSECTOR_X_Length 200
 
 //섹터 맵 크기
 //+1을 한 이유 : 마지막 6400이 100으로 나눠진 64에 접근-> 맵은 0~63까지라 터짐
-#define dfSECTOR_MAPMAX_Y (dfRANGE_MOVE_RIGHT / dfSECTOR_Y_Length)
-#define dfSECTOR_MAPMAX_X (dfRANGE_MOVE_BOTTOM / dfSECTOR_X_Length)
+#define dfSECTOR_MAPMAX_Y ((dfRANGE_MOVE_RIGHT / dfSECTOR_Y_Length) + 1)
+#define dfSECTOR_MAPMAX_X ((dfRANGE_MOVE_BOTTOM / dfSECTOR_X_Length) + 1)
 
 enum e_ChangeDirection
 {
@@ -57,6 +94,13 @@ enum e_ChangeDirection
 
 
 
+#pragma pack(push,1)
+struct st_PACKET_HEADER {
+    uint8_t byCode;// 패킷코드 0x89 고정.
+    uint8_t bySize;// 패킷 사이즈.
+    uint8_t byType;// 패킷타입.
+};
+#pragma pack(pop)
 
 #define	dfPACKET_SC_CREATE_MY_CHARACTER			0
 //---------------------------------------------------------------
@@ -404,63 +448,6 @@ struct st_SC_ECHO {
     uint32_t Time;
 };
 #pragma pack(pop)
-
-//-----------------------------------------------------------------
-// 30초 이상이 되도록 아무런 메시지 수신도 없는경우 접속 끊음.
-//-----------------------------------------------------------------
-#define dfNETWORK_PACKET_RECV_TIMEOUT	30000
-
-
-
-
-//---------------------------------------------------------------
-// 공격범위.
-//---------------------------------------------------------------
-#define dfATTACK1_RANGE_X		80
-#define dfATTACK2_RANGE_X		90
-#define dfATTACK3_RANGE_X		100
-#define dfATTACK1_RANGE_Y		10
-#define dfATTACK2_RANGE_Y		10
-#define dfATTACK3_RANGE_Y		20
-
-
-//---------------------------------------------------------------
-// 공격 데미지.
-//---------------------------------------------------------------
-#define dfATTACK1_DAMAGE		1
-#define dfATTACK2_DAMAGE		2
-#define dfATTACK3_DAMAGE		3
-
-
-//-----------------------------------------------------------------
-// 캐릭터 이동 속도   // 25fps 기준 이동속도
-//-----------------------------------------------------------------
-#define dfSPEED_PLAYER_X	6	// 25fps
-#define dfSPEED_PLAYER_Y	4	// 25fps
-//#define dfSPEED_PLAYER_X	3   // 50fps
-//#define dfSPEED_PLAYER_Y	2  // 50fps
-
-
-//-----------------------------------------------------------------
-// 이동 오류체크 범위
-//-----------------------------------------------------------------
-#define dfERROR_RANGE		50
-
-
-#pragma pack(push,1)
-struct st_PACKET_HEADER {
-    uint8_t byCode;// 패킷코드 0x89 고정.
-    uint8_t bySize;// 패킷 사이즈.
-    uint8_t byType;// 패킷타입.
-};
-#pragma pack(pop)
-
-
-
-
-
-
-
 
 
 

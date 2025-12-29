@@ -50,6 +50,9 @@ CPacket::CPacket()
 {
     m_iBufferSize = eBUFFER_DEFAULT;
     m_pOwnBuffer = new char[m_iBufferSize];
+    memset(m_pOwnBuffer, 0, m_iBufferSize);
+
+    m_chpBuffer = m_pOwnBuffer;
     m_iDataSize = 0;
     m_iReadPos = 0;
     m_iWritePos = 0;
@@ -60,6 +63,9 @@ CPacket::CPacket(int iBufferSize)
     if (iBufferSize <= 0) iBufferSize = eBUFFER_DEFAULT;
     m_iBufferSize = iBufferSize;
     m_pOwnBuffer = new char[m_iBufferSize];
+    memset(m_pOwnBuffer, 0, m_iBufferSize);
+
+    m_chpBuffer = m_pOwnBuffer;
     m_iDataSize = 0;
     m_iReadPos = 0;
     m_iWritePos = 0;
