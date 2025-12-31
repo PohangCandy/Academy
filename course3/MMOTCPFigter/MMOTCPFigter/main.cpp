@@ -15,13 +15,15 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "winmm.lib")
 
+#include <algorithm>  // 필요한 cpp에서만
+#include <chrono>
+#include <iostream>
 #include "stdafx.h"
 
-#include <chrono>
+
 #include "Session.h"
 #include "Protocol.h"
 #include "CRingbuffer.h"
-#include <iostream>
 //#include <vector>
 //#include <map>
 #include <unordered_map>
@@ -125,7 +127,7 @@ void mpSync(CPacket* pPacket, DWORD dwSessionID, short shX, short shY);
 void mpECHO(CPacket* pPacket, uint32_t Time);
 void mpDelete(CPacket* pPacket, DWORD dwSessionID);
 
-void Update(int frame);
+void UpdateLogic();
 void PrintPacket(const string& name, CPacket* pPacket);
 
 //---------------------------------------------------------------------
@@ -213,46 +215,52 @@ int main() {
     cout << "Server listening on port " << dfNETWORK_PORT << "\n";
 
     timeBeginPeriod(1);
+
+    constexpr int TARGET_FRAME = 25;
+    constexpr DWORD FIXED_TIMESTEP = 1000 / TARGET_FRAME;
+    DWORD timeAccum = 0;
+    DWORD g_startupTime = timeGetTime();
+    DWORD lastTime = g_startupTime;
+
     while (!g_bShutdown) {
         
-        
-        ProfileBegin(f1);
-        PERF_BEGIN(g_netPerf);
-        netIOProcess();
-        PERF_END(g_netPerf);
-        ProfileEnd(f1);
+        DWORD currentTime = timeGetTime();
+        DWORD deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
 
+        timeAccum += deltaTime;
 
-        static int lastTime = timeGetTime();
-        int curTime = timeGetTime();
-        int difTime = curTime - lastTime;
-        if (difTime >= LOGIC_FRAME_TO_MS)
+        while (timeAccum >= FIXED_TIMESTEP)
         {
-            int frame_cnt = difTime / LOGIC_FRAME_TO_MS;
-            ProfileBegin(f3);
-            PERF_BEGIN(g_logicPerf);
-            Update(frame_cnt);
-            PERF_END(g_logicPerf);
-            ProfileEnd(f3);
-            lastTime += frame_cnt * LOGIC_FRAME_TO_MS;
+            //ProfileBegin(f3);
+            //PERF_BEGIN(g_logicPerf);
+            UpdateLogic();
+            //PERF_END(g_logicPerf);
+            //ProfileEnd(f3);
 
-            printf(
-                "\r[PERF] NET: %4ums | LOGIC: %4ums | DELETE: %4ums | FRAME: %d   ",
-                g_netPerf.total,
-                g_logicPerf.total,
-                g_deletePerf.total,
-                frame_cnt
-            );
+            timeAccum -= FIXED_TIMESTEP;
+
+            //printf(
+            //    "\r[PERF] NET: %4ums | LOGIC: %4ums | DELETE: %4ums",
+            //    g_netPerf.total,
+            //    g_logicPerf.total,
+            //    g_deletePerf.total
+            //);
         }
 
 
-        
+        //ProfileBegin(f1);
+        //PERF_BEGIN(g_netPerf);
+        netIOProcess();
+        //PERF_END(g_netPerf);
+        //ProfileEnd(f1);
 
-         ProfileBegin(f2);
-         PERF_BEGIN(g_deletePerf);
-         DeleteDieCharacter();
-         PERF_END(g_deletePerf);
-         ProfileEnd(f2);
+        //ProfileBegin(f2);
+        //PERF_BEGIN(g_deletePerf);
+        DeleteDieCharacter();
+        //PERF_END(g_deletePerf);
+        //ProfileEnd(f2);
+        
 
         ProfileDataOutText(L"Profile.txt");
     }
@@ -932,7 +940,7 @@ bool CharacterMoveCheck(short NextshX, short NextshY)
     return true;
 }
 
-void Update(int frame)
+void UpdateLogic()
 {
     //… 적절한 게임 업데이트 처리 타이밍 계산 …  // 25fps 
         //return;
@@ -978,94 +986,154 @@ void Update(int frame)
             int nextX;
             int nextY;
 
-            //bool CharacterMoveCheck(short NextshX, short NextshY)
-            //{
-            //    if (NextshX < dfRANGE_MOVE_LEFT || NextshX > dfRANGE_MOVE_RIGHT
-            //        || NextshY > dfRANGE_MOVE_BOTTOM || NextshY < dfRANGE_MOVE_TOP) return false;
-
-            //    return true;
-            //}
-
-            switch (pCharacter->dwAction)
+    /*        switch (pCharacter->dwAction)
             {
             case dfPACKET_MOVE_DIR_LL:
-                nextX = pCharacter->shX - dfSPEED_PLAYER_X * frame;
+                nextX = pCharacter->shX - dfSPEED_PLAYER_X;
                 pCharacter->shX = max(dfRANGE_MOVE_LEFT, nextX);
                 break;
 
             case dfPACKET_MOVE_DIR_LU:
-                 nextX = pCharacter->shX - dfSPEED_PLAYER_X * frame;
-                 nextY = pCharacter->shY - dfSPEED_PLAYER_Y * frame;
-                 if (pCharacter->shX > dfRANGE_MOVE_LEFT && pCharacter->shY > dfRANGE_MOVE_TOP)
+                 nextX = pCharacter->shX - dfSPEED_PLAYER_X;
+                 nextY = pCharacter->shY - dfSPEED_PLAYER_Y;
+                 if (CharacterMoveCheck(nextX, nextY))
                  {
-                     pCharacter->shX = max(dfRANGE_MOVE_LEFT, nextX);
-                     pCharacter->shY = max(dfRANGE_MOVE_TOP, nextY);
+                     pCharacter->shX = nextX;
+                     pCharacter->shY = nextY;
                  }
                 break;
-
             case dfPACKET_MOVE_DIR_UU:
-                 nextY = pCharacter->shY - dfSPEED_PLAYER_Y * frame;
-                 pCharacter->shY = max(dfRANGE_MOVE_TOP, nextY);
+                 nextY = pCharacter->shY - dfSPEED_PLAYER_Y;
+                 pCharacter->shY = max(nextY, dfRANGE_MOVE_TOP);
                 break;
             case dfPACKET_MOVE_DIR_RU:
-                 nextX = pCharacter->shX + dfSPEED_PLAYER_X * frame;
-                 nextY = pCharacter->shY - dfSPEED_PLAYER_Y * frame;
-                 if (pCharacter->shX < dfRANGE_MOVE_RIGHT && pCharacter->shY > dfRANGE_MOVE_TOP)
+                 nextX = pCharacter->shX + dfSPEED_PLAYER_X;
+                 nextY = pCharacter->shY - dfSPEED_PLAYER_Y;
+                 if (CharacterMoveCheck(nextX, nextY))
                  {
-                     pCharacter->shX = min(dfRANGE_MOVE_RIGHT, nextX);
-                     pCharacter->shY = max(dfRANGE_MOVE_TOP, nextY);
+                     pCharacter->shX = nextX;
+                     pCharacter->shY = nextY;
                  }
                 break;
 
             case dfPACKET_MOVE_DIR_RR:
-                 nextX = pCharacter->shX + dfSPEED_PLAYER_X * frame;
+                 nextX = pCharacter->shX + dfSPEED_PLAYER_X;
                  pCharacter->shX = min(dfRANGE_MOVE_RIGHT, nextX);
                 break;
 
             case dfPACKET_MOVE_DIR_RD:
-                 nextX = pCharacter->shX + dfSPEED_PLAYER_X * frame;
-                 nextY = pCharacter->shY + dfSPEED_PLAYER_Y * frame;
-                 if (pCharacter->shX < dfRANGE_MOVE_RIGHT && pCharacter->shY < dfRANGE_MOVE_BOTTOM)
+                 nextX = pCharacter->shX + dfSPEED_PLAYER_X;
+                 nextY = pCharacter->shY + dfSPEED_PLAYER_Y;
+                 if (CharacterMoveCheck(nextX, nextY))
                  {
-                     pCharacter->shX = min(dfRANGE_MOVE_RIGHT, nextX);
-                     pCharacter->shY = min(dfRANGE_MOVE_BOTTOM, nextY);
+                     pCharacter->shX = nextX;
+                     pCharacter->shY = nextY;
                  }
                 break;
 
             case dfPACKET_MOVE_DIR_DD:
-                 nextY = pCharacter->shY + dfSPEED_PLAYER_Y * frame;
-                 pCharacter->shY = min(dfRANGE_MOVE_BOTTOM, nextY);
+                 nextY = pCharacter->shY + dfSPEED_PLAYER_Y;
+                 pCharacter->shY = min(nextY, dfRANGE_MOVE_BOTTOM);
                 break;
 
             case dfPACKET_MOVE_DIR_LD:
-                 nextX = pCharacter->shX - dfSPEED_PLAYER_X * frame;
-                 nextY = pCharacter->shY + dfSPEED_PLAYER_Y * frame;
-                 if (pCharacter->shX > dfRANGE_MOVE_LEFT && pCharacter->shY < dfRANGE_MOVE_BOTTOM)
+                 nextX = pCharacter->shX - dfSPEED_PLAYER_X;
+                 nextY = pCharacter->shY + dfSPEED_PLAYER_Y;
+                 if (CharacterMoveCheck(nextX, nextY))
                  {
-                     pCharacter->shX = max(dfRANGE_MOVE_LEFT, nextX);
-                     pCharacter->shY = min(dfRANGE_MOVE_BOTTOM, nextY);
+                     pCharacter->shX = nextX;
+                     pCharacter->shY = nextY;
                  }
                 break;
-            }
+            }*/
+
+
+
             if (pCharacter->dwAction >= dfPACKET_MOVE_DIR_LL && pCharacter->dwAction <= dfPACKET_MOVE_DIR_LD)
             {
+                switch (pCharacter->byMoveDirection)
+                {
+                case dfPACKET_MOVE_DIR_LU:
+                    if (pCharacter->shY > dfRANGE_MOVE_TOP)
+                    {
+                        pCharacter->shX -= dfSPEED_PLAYER_X;
+                        pCharacter->byDirection = dfPACKET_MOVE_DIR_LU;
+                    }
+                    break;
+                case dfPACKET_MOVE_DIR_LD:
+                    if (pCharacter->shY < dfRANGE_MOVE_BOTTOM)
+                    {
+                        pCharacter->shX -= dfSPEED_PLAYER_X;
+                        pCharacter->byDirection = dfPACKET_MOVE_DIR_LD;
+                    }
+                    break;
+                case dfPACKET_MOVE_DIR_LL:
+                    pCharacter->shX -= dfSPEED_PLAYER_X;
+                    pCharacter->byDirection = dfPACKET_MOVE_DIR_LL;
+                    break;
+                case dfPACKET_MOVE_DIR_RU:
+                    if (pCharacter->shY > dfRANGE_MOVE_TOP)
+                    {
+                        pCharacter->shX += dfSPEED_PLAYER_X;
+                        pCharacter->byDirection = dfPACKET_MOVE_DIR_RU;
+                    }
+                    break;
+                case dfPACKET_MOVE_DIR_RD:
+                    if (pCharacter->shY < dfRANGE_MOVE_BOTTOM)
+                    {
+                        pCharacter->shX += dfSPEED_PLAYER_X;
+                        pCharacter->byDirection = dfPACKET_MOVE_DIR_RD;
+                    }
+                    break;
+                case dfPACKET_MOVE_DIR_RR:
+                    pCharacter->shX += dfSPEED_PLAYER_X;
+                    pCharacter->byDirection = dfPACKET_MOVE_DIR_RR;
+                    break;
+
+                }
+
+                switch (pCharacter->byMoveDirection)
+                {
+                case dfPACKET_MOVE_DIR_LU:
+                    if (pCharacter->shX > dfRANGE_MOVE_LEFT)
+                    {
+                        pCharacter->shY -= dfSPEED_PLAYER_Y;
+                    }
+                    break;
+                case dfPACKET_MOVE_DIR_RU:
+                    if (pCharacter->shX < dfRANGE_MOVE_RIGHT)
+                    {
+                        pCharacter->shY -= dfSPEED_PLAYER_Y;
+                    }
+                    break;
+                case dfPACKET_MOVE_DIR_UU:
+                    pCharacter->shY -= dfSPEED_PLAYER_Y;
+                    break;
+                case dfPACKET_MOVE_DIR_LD:
+                    if (pCharacter->shX > dfRANGE_MOVE_LEFT)
+                    {
+                        pCharacter->shY += dfSPEED_PLAYER_Y;
+                    }
+                    break;
+                case dfPACKET_MOVE_DIR_RD:
+                    if (pCharacter->shX < dfRANGE_MOVE_RIGHT)
+                    {
+                        pCharacter->shY += dfSPEED_PLAYER_Y;
+                    }
+                    break;
+                case dfPACKET_MOVE_DIR_DD:
+                    pCharacter->shY += dfSPEED_PLAYER_Y;
+                    break;
+                }
+                   
+                pCharacter->shX = std::clamp((int16_t)pCharacter->shX, (int16_t)dfRANGE_MOVE_LEFT, (int16_t)dfRANGE_MOVE_RIGHT);
+                pCharacter->shY = std::clamp((int16_t)pCharacter->shY, (int16_t)dfRANGE_MOVE_TOP, (int16_t)dfRANGE_MOVE_BOTTOM);
+
+
                 //이동인 경우 섹터 업데이트를 함. 
                 if (IsSectorUpdate(pCharacter))
                 {
-                    //printf("[UpdateSector] sessionid : %d  x : %d y : %d\n", pCharacter->dwSessionID, pCharacter->shX, pCharacter->shY);
-                    //printf("[UpdateSectorRange]\n");
-                    //for (int i = 0; i < 3; i++)
-                    //{
-                    //    for (int j = 0; j < 3; j++)
-                    //    {
-                    //        printf(" %d ", pCharacter->CurSectorRange.Around[i * 3 + j].index);
-                    //    }
-                    //    printf("\n");
-                    //}
-                    //printf("\n");
-
                     CharacterSectorUpdatePacket(pCharacter);
-
                 }
             }
         }
@@ -1441,6 +1509,11 @@ bool netPacketProc_MoveStart(SOCKETINFO* pSession, CPacket* pPacket)
     // 위치 오차 검사
     if ((int)abs((int)pSession->pCharacter->shX - (int)shX) > dfERROR_RANGE ||
         (int)abs((int)pSession->pCharacter->shY - (int)shY) > dfERROR_RANGE) {
+        if (pSession->pCharacter->IsDie || pSession->pCharacter->chHP <= 0)
+        {
+            cout << "what the fuck?";
+        }
+
         mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
         SendPacket_Around(pSession, pPacket, true, &pSession->pCharacter->CurSectorRange);
         LOG_PACKET("Sync", pPacket);
@@ -1520,6 +1593,10 @@ bool netPacketProc_MoveStop(SOCKETINFO* pSession, CPacket* pPacket)
    // 위치 오차 검사
     if ((int)abs((int)pSession->pCharacter->shX - (int)shX) > dfERROR_RANGE ||
         (int)abs((int)pSession->pCharacter->shY - (int)shY) > dfERROR_RANGE) {
+        if (pSession->pCharacter->IsDie || pSession->pCharacter->chHP <= 0)
+        {
+            cout << "what the fuck?";
+        }
         mpSync(pPacket, pSession->session_id, pSession->pCharacter->shX, pSession->pCharacter->shY);
         SendPacket_Around(pSession, pPacket, true, &pSession->pCharacter->CurSectorRange);
         LOG_PACKET("Sync", pPacket);

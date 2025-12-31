@@ -66,10 +66,10 @@
 //-----------------------------------------------------------------
 // 화면 이동 범위.
 //-----------------------------------------------------------------
-#define dfRANGE_MOVE_TOP	0
-#define dfRANGE_MOVE_LEFT	0
-#define dfRANGE_MOVE_RIGHT	6400
-#define dfRANGE_MOVE_BOTTOM	6400
+#define dfRANGE_MOVE_TOP	5
+#define dfRANGE_MOVE_LEFT	5
+#define dfRANGE_MOVE_RIGHT	6395
+#define dfRANGE_MOVE_BOTTOM	6395
 // 이동 범위
 //#define dfRANGE_MOVE_TOP    50
 //#define dfRANGE_MOVE_LEFT   10
