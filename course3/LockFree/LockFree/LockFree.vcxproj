@@ -135,8 +135,11 @@
     <ClCompile Include="LockFreeTest.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CLockFreeQueue.h" />
     <ClInclude Include="CLockFreeStack.h" />
     <ClInclude Include="CMemoryViewer.h" />
+    <ClInclude Include="MemoryPool.h" />
+    <ClInclude Include="MemoryPoolForLockFree.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
