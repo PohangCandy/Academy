@@ -38,5 +38,14 @@
     <ClInclude Include="CMemoryViewer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="CLockFreeQueue.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryPoolForLockFree.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryPool.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

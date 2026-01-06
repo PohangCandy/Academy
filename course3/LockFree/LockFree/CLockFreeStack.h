@@ -19,6 +19,7 @@ class CMemoryViewer;
 class Node
 {
 public:
+	Node();
 	Node(int i);
 	~Node() {};
 	Node* nextNode;

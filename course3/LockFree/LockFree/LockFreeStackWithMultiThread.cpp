@@ -99,15 +99,6 @@ unsigned int __stdcall PushPopThread(LPVOID arg)
 			break;
 		}
 
-		//for (int i = 0; i < 10000; i++)
-		//{
-		//	g_myStack.push(makeRandNum(), pMv);
-		//}
-		//for (int i = 0; i < 10000; i++)
-		//{
-		//	g_myStack.pop(pMv);
-		//}
-
 
 	}
 
@@ -122,7 +113,7 @@ int main()
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
 
-	HANDLE hThreads[8];
+	HANDLE hThreads[8] = {0};
 
 
 	for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
@@ -146,7 +137,8 @@ int main()
 	for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
 	//for (int i = 0; i < 1; i++)
 	{
-		CloseHandle(hThreads[i]);
+		if(hThreads[i] != nullptr)
+			CloseHandle(hThreads[i]);
 	}
 
 	return 0;

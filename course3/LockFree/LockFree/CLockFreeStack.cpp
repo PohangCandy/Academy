@@ -1,8 +1,16 @@
 #include "CLockFreeStack.h"
 #include "stdafx.h"
 #include "CMemoryViewer.h"
+#include "MemoryPoolForLockFree.h"
 
 #define USERBIT (0x007fffffffffff)
+
+procademy::CMemoryPool<Node> NodePool(10000, true);
+
+Node::Node() : data(-1), nextNode(nullptr)
+{
+
+}
 
 Node::Node(int i) : data(i), nextNode(nullptr)
 {
@@ -29,14 +37,15 @@ void CLockFreeStack::push(int i,CMemoryViewer* pmv)
 	//1.17비트의 cnt 값 가져오기
 	long long upper_17bit = InterlockedIncrement((long*)&cnt);
 
-
 	//printf("push 진행중\n");
-	Node* newTop = new Node(i);
+	Node* newTop = NodePool.Alloc();
 	Node* ptop;
 
 	//2.newTop의 하위 비트 저장
 	long long lower_47bit = ((long long)newTop & USERBIT);
 	Node* UserBit = (Node*)lower_47bit;
+	UserBit->data = i;
+	UserBit->nextNode = nullptr;
 
 	//3.CAS하기 전에 newTop에 들어갈 주소에 cnt를 나타내는 17비트 세팅
 	newTop = (Node*)((upper_17bit << (64 - 17)) | lower_47bit);
@@ -279,8 +288,10 @@ Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, CMemoryV
 				printf("ABA문제가 발생했다!\n");
 			}
 
-			delete UserBit;
-			UserBit = nullptr;
+			//UserBit = nullptr;
+			NodePool.Free(UserBit);
+			//delete UserBit;
+			
 			InterlockedDecrement((long*)&_size);
 		}
 		return pt;
