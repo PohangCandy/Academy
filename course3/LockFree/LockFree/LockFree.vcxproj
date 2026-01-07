@@ -131,7 +131,7 @@
   <ItemGroup>
     <ClCompile Include="CLockFreeStack.cpp" />
     <ClCompile Include="CMemoryViewer.cpp" />
-    <ClCompile Include="LockFreeStackWithMultiThread.cpp" />
+    <ClCompile Include="LockFreeQueueWithMultiThread.cpp" />
     <ClCompile Include="LockFreeTest.cpp" />
   </ItemGroup>
   <ItemGroup>

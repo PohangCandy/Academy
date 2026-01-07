@@ -24,7 +24,7 @@
     <ClCompile Include="CMemoryViewer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="LockFreeStackWithMultiThread.cpp">
+    <ClCompile Include="LockFreeQueueWithMultiThread.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
