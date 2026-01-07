@@ -55,6 +55,15 @@ void CLockFreeStack::push(int i,CMemoryViewer* pmv)
 		//4.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
 		UserBit->nextNode = ptop;
 
+		lower_47bit = ((long long)ptop & USERBIT);
+		Node* orginTop = (Node*)lower_47bit;
+		if (orginTop == UserBit)
+		{
+			//_pTop의 값을 읽을때 과거의 값을 읽으르모 충분히 가능성 있음..
+			//하지만 interlock에서 걸러지므로 문제갑 발생하지 않아야 정상임
+			printf("[push] 동일한 노드의 중복 삽입 시도 발생!");
+		}
+
 	} while (pushCAS(_pTop, newTop, ptop, pmv) != ptop);
 }
 
@@ -278,11 +287,24 @@ Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, CMemoryV
 		pmv->copy((char*)nNewNode, sizeof(Node*), (char*)ptop, sizeof(Node*), epop);
 		Node* pt = ptop;
 
+
+
 		//아래 작업도 모두 유저비트를 이용해야 함.
 		long long lower_47bit = ((long long)ptop & USERBIT);
 		Node* UserBit = (Node*)lower_47bit;
+
+		lower_47bit = ((long long)nNewNode & USERBIT);
+		Node* nextNode = (Node*)lower_47bit;
+
+
+
 		if (UserBit != nullptr)
 		{
+			if (UserBit == nextNode)
+			{
+				printf("[popCAS] 여기서 동일한 노드가 나왔다고라??");
+			}
+
 			if (nNewNode != UserBit->nextNode)
 			{
 				printf("ABA문제가 발생했다!\n");

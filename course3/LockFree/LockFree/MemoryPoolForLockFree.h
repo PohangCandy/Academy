@@ -148,7 +148,7 @@ namespace procademy
 					newtop = (st_BLOCK_NODE*)malloc(sizeof(st_BLOCK_NODE));
 					if (newtop == nullptr)
 					{
-						printf("[MemotyPool] Alloc에서 메모리 할당 실패 발생!");
+						printf("[MemoryPool] Alloc에서 메모리 할당 실패 발생!");
 						return nullptr;
 					}
 
