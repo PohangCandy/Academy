@@ -133,13 +133,15 @@
     <ClCompile Include="CMemoryViewer.cpp" />
     <ClCompile Include="LockFreeQueueWithMultiThread.cpp" />
     <ClCompile Include="LockFreeTest.cpp" />
+    <ClCompile Include="LockTest.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CLockFreenewVersion.h" />
     <ClInclude Include="CLockFreeQueue.h" />
     <ClInclude Include="CLockFreeStack.h" />
     <ClInclude Include="CMemoryViewer.h" />
-    <ClInclude Include="MemoryPool.h" />
     <ClInclude Include="MemoryPoolForLockFree.h" />
+    <ClInclude Include="MemoryPoolnewVersion.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

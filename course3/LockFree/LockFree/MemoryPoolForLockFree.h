@@ -111,6 +111,7 @@ namespace procademy
 					m_pTopNode->d.~DATA();
 				}
 
+				//여기서 해제하는 노드가 d가 되야 하는거 아닌가?
 				free(m_pTopNode);
 
 				m_pTopNode = tempNode;
@@ -132,7 +133,10 @@ namespace procademy
 			st_BLOCK_NODE* UserBit;
 			do {
 
-				ptop = m_pTopNode;
+				ptop = (st_BLOCK_NODE*)InterlockedCompareExchange64(
+					(long long*)&m_pTopNode,
+					0, 0
+				);
 				//1.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
 				long long lower_47bit = ((long long)ptop & USERBIT);
 				UserBit = (st_BLOCK_NODE*)lower_47bit;
@@ -184,6 +188,13 @@ namespace procademy
 				st_BLOCK_NODE* UserBit = (st_BLOCK_NODE*)lower_47bit;
 				if (UserBit != nullptr)
 				{
+					long long v1 = (long long)nNewNode;
+					long long v2 = (long long)UserBit->nextNode;
+					if (v1 != v2) {
+						// 여기서 v1과 v2의 값을 16진수로 출력해서 비트 하나하나가 일치하는지 확인
+						printf("Diff: %016llx vs %016llx\n", v1, v2);
+					}
+
 					if (nNewNode != UserBit->nextNode)
 					{
 						printf("ABA문제가 발생했다!\n");
@@ -198,7 +209,8 @@ namespace procademy
 		}
 
 		//////////////////////////////////////////////////////////////////////////
-		// 사용중이던 블럭을 해제한다.
+		// 사용중이던 블럭을 풀에 반환
+		// 동적 해제는 여기서 이뤄지지 않고 소멸자에서 실행
 		//
 		// Parameters: (DATA *) 블럭 포인터.
 		// Return: (BOOL) TRUE, FALSE.
@@ -207,9 +219,7 @@ namespace procademy
 		{
 			if (pData == nullptr) return false;
 
-			// 여기서 반환받은 주소로 노드의 시작 주소를 어떻게 계산함?
-			// 걍 Owner만 확인하고 맞으면 스탬프 찍고 스택에 담는다?
-
+			//맴버 d의 오프셋으로 메모리 풀 노드의 시작 주소 계산
 			st_BLOCK_NODE* temp = (st_BLOCK_NODE*)((char*)pData - offsetof(st_BLOCK_NODE, d));
 
 			if (temp->owner != this)
@@ -217,13 +227,11 @@ namespace procademy
 				printf("풀에서 다른 객체 감지됨.\n");
 				return false;
 			}
-			
-			//데이터를 가리키는 포인터 지점이 다시 넣을 노드
-			//현재 탑을 가리키는 노드의 탑에 넣음.
 
-			//1.17비트의 cnt 값 가져오기
-			long long upper_17bit = InterlockedIncrement((long*)&cnt);
+			//락프리 구조를 위해 메모리 풀에 반환하기 전 stamp찍어서 담아두기
 			
+			//1.stamp로 사용할 cnt 값 가져오기
+			long long upper_17bit = InterlockedIncrement((long*)&cnt);
 
 			//printf("push 진행중\n");
 			st_BLOCK_NODE* newTop = temp;
@@ -284,7 +292,7 @@ namespace procademy
 		int		GetUseCount(void) { return m_iUseCount; }
 
 	private:
-				int cnt;
+				int cnt = 0;
 	};
 }
 
