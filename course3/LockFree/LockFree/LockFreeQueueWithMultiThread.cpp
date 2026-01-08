@@ -13,7 +13,8 @@
 // 
 //---------------------------------------------------------------------------------------------
 #include "stdafx.h"
-#include "CLockFreeQueue.h"
+//#include "CLockFreeQueue.h"
+#include "CLockFreenewVersion.h"
 #include "CMemoryViewer.h"
 #include <time.h>
 
@@ -43,10 +44,11 @@ unsigned int __stdcall EnqDeqThread(LPVOID arg)
 	srand(time(NULL));
 
 
-
+	long long count = 0;
 	while (1)
 	{
-		printf("진행중\n");
+		count++;
+		printf("진행중 %d\n",count);
 		//bool push = false;
 		//int cnt = POPPUSHCOUNT;
 		//while (cnt--)

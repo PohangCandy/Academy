@@ -27,6 +27,9 @@
     <ClCompile Include="LockFreeQueueWithMultiThread.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="LockTest.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CLockFreeStack.h">
@@ -44,7 +47,10 @@
     <ClInclude Include="MemoryPoolForLockFree.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="MemoryPool.h">
+    <ClInclude Include="MemoryPoolnewVersion.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CLockFreenewVersion.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
