@@ -171,6 +171,9 @@ bool CLanServer::Start()
 				if (WSAGetLastError() != ERROR_IO_PENDING) {
 					err_display("WSARECV()");
 
+					//여기서 IOCount의 최상위 비트를 SessionReleaseFlag로 사용한다면??
+					//IOCount가 0이면 비트에 1넣기
+
 					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
 					{
 						ReleaseSession(clientaddr, ptr);
@@ -281,6 +284,17 @@ int CLanServer::getSendMessageTPS()
 
 void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 {
+	long ReleaseFlag = 1 << 31;
+	long oldIOCount = ptr->IOCount | ~ReleaseFlag;
+	//Flag를 제거한 IOCount가 0이 아니면 return
+	if (0 != oldIOCount) return;
+
+	long CountwithFlagBit = (ReleaseFlag & oldIOCount);
+	if (InterlockedCompareExchange((long*)&ptr->IOCount, CountwithFlagBit, oldIOCount) != oldIOCount)
+	{
+		return;
+	}
+
 	cSessionMap* psm = cSessionMap::GetSessionMap();
 
 
