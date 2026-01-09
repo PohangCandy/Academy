@@ -30,7 +30,7 @@ public:
 	MessageQueue* messageQueue;
 	long long session_id = 0;
 	LONG IsSending = 0;
-	int IOCount = 0;
+	long IOCount = 0;
 	OVERLAPPED_CONTEXT* sendOverlapped;
 	OVERLAPPED_CONTEXT* recvOverlapped;
 	//OVERLAPPED_CONTEXT contentsOverlapped{ EContents };
