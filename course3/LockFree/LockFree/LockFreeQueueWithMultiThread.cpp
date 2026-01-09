@@ -13,8 +13,8 @@
 // 
 //---------------------------------------------------------------------------------------------
 #include "stdafx.h"
-//#include "CLockFreeQueue.h"
-#include "CLockFreenewVersion.h"
+#include "CLockFreeQueue.h"
+//#include "CLockFreenewVersion.h"
 #include "CMemoryViewer.h"
 #include <time.h>
 

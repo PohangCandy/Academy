@@ -43,7 +43,9 @@ public:
         while (true)
         {
             Node* tail = _tail;
-            Node* next = tail->next;
+            lower_47bit = ((long long)tail & USERBIT);
+            UserBit = (Node*)lower_47bit;
+            Node* next = UserBit->next;
 
             if (next == NULL)
             {
@@ -60,8 +62,11 @@ public:
 
     int Dequeue(T& t)
     {
-        if (_size == 0)
+        if (InterlockedDecrement(&_size) <= 0)
+        {
+            InterlockedIncrement(&_size);
             return -1;
+        }
 
         while (true)
         {
