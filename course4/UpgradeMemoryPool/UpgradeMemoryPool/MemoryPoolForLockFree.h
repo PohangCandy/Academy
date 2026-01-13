@@ -40,23 +40,23 @@ namespace procademy
 		//////////////////////////////////////////////////////////////////////////
 
 		//(bool) Alloc 시 생성자 / Free 시 파괴자 호출 여부
-		bool m_bPlacementNew;
+		bool _bPlacementNew;
 
 		//메모리 풀 내부 전체 개수
-		int m_iCapacity;
+		int _iCapacity;
 
 		//사용중인 블럭 개수
-		int m_iUseCount;
+		int _iUseCount;
 
 
-		struct st_BLOCK_NODE
+		struct st_STACK_NODE
 		{
 			//구조체나 객체와 같은 경우 크기가 크면 포인터로 나타내는게 정석임.
 			//하지만 포인터를 사용하면 메모리는 주는 대신 노드 추가 생성시 포인터에 대해 다시 동적할당 해줘야 함.
 			//-> 이렇게 되면 결국 메모리 풀을 쓰는 의미가 없어짐. 성능이 떨어지게 됨.
 			//그러니 메모리를 좀 먹더라도 그냥 데이터형을 그대로 선언해줌.
 			DATA d;
-			st_BLOCK_NODE* nextNode;
+			st_STACK_NODE* nextNode;
 
 			//다른 인스턴스가 현재 메모리 풀에 반환되는 상황 방지
 			CMemoryPool<DATA>* owner;
@@ -64,24 +64,24 @@ namespace procademy
 
 		// 스택 방식으로 반환된 (미사용) 오브젝트 블럭을 관리.
 		//스택의 가장 top에 있는 노드
-		st_BLOCK_NODE* m_pTopNode;
+		st_STACK_NODE* _pTopNode;
 
 
 		CMemoryPool(int iBlockNum, bool bPlacementNew = false)
 		{
-			m_iCapacity = iBlockNum;
-			m_bPlacementNew = bPlacementNew;
-			m_iUseCount = 0;
-			m_pTopNode = nullptr;
+			_iCapacity = iBlockNum;
+			_bPlacementNew = bPlacementNew;
+			_iUseCount = 0;
+			_pTopNode = nullptr;
 
 			//노드를 개수만큼 확보
 			for (int i = 0; i < iBlockNum; i++)
 			{
 				//메모리만 확보
-				st_BLOCK_NODE* newNode = (st_BLOCK_NODE*)malloc(sizeof(st_BLOCK_NODE));
+				st_STACK_NODE* newNode = (st_STACK_NODE*)malloc(sizeof(st_STACK_NODE));
 
 				//printf("%d\n",i);
-				memset(newNode, 0, sizeof(st_BLOCK_NODE));
+				memset(newNode, 0, sizeof(st_STACK_NODE));
 
 				//객체인 경우 생성자 호출
 				if (bPlacementNew)
@@ -89,9 +89,9 @@ namespace procademy
 					new(&newNode->d) DATA();
 				}
 
-				newNode->nextNode = m_pTopNode;
+				newNode->nextNode = _pTopNode;
 				newNode->owner = this;
-				m_pTopNode = newNode;
+				_pTopNode = newNode;
 			}
 		}
 
@@ -100,22 +100,22 @@ namespace procademy
 		{
 			//m_iUseCount > 0 사용 중인데 해제하는게 괜찮을까?
 
-			st_BLOCK_NODE* tempNode = nullptr;
+			st_STACK_NODE* tempNode = nullptr;
 
-			while (m_pTopNode != nullptr)
+			while (_pTopNode != nullptr)
 			{
-				tempNode = m_pTopNode->nextNode;
+				tempNode = _pTopNode->nextNode;
 
-				if (m_bPlacementNew)
+				if (_bPlacementNew)
 				{
-					m_pTopNode->d.~DATA();
+					_pTopNode->d.~DATA();
 				}
 
 				//여기서 해제하는 노드가 d가 되야 하는거 아닌가?
-				free(m_pTopNode);
+				free(_pTopNode);
 
-				m_pTopNode = tempNode;
-				m_iCapacity--;
+				_pTopNode = tempNode;
+				_iCapacity--;
 			}
 		}
 
@@ -125,21 +125,21 @@ namespace procademy
 		// Parameters: 없음.
 		// Return: (DATA *) 데이타 블럭 포인터.
 		//////////////////////////////////////////////////////////////////////////
-		DATA* Alloc(void)
+		DATA* pop(void)
 		{
 			//멀티스레드를 대비하여 pop을 원자적으로 진행
-			st_BLOCK_NODE* ptop;
-			st_BLOCK_NODE* newtop;
-			st_BLOCK_NODE* UserBit;
+			st_STACK_NODE* ptop;
+			st_STACK_NODE* newtop;
+			st_STACK_NODE* UserBit;
 			do {
 
-				ptop = (st_BLOCK_NODE*)InterlockedCompareExchange64(
-					(long long*)&m_pTopNode,
+				ptop = (st_STACK_NODE*)InterlockedCompareExchange64(
+					(long long*)&_pTopNode,
 					0, 0
 				);
 				//1.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
 				long long lower_47bit = ((long long)ptop & USERBIT);
-				UserBit = (st_BLOCK_NODE*)lower_47bit;
+				UserBit = (st_STACK_NODE*)lower_47bit;
 
 				if (UserBit != nullptr)
 				{
@@ -149,17 +149,17 @@ namespace procademy
 				//아예 새로운 노드 할당
 				else
 				{
-					newtop = (st_BLOCK_NODE*)malloc(sizeof(st_BLOCK_NODE));
+					newtop = (st_STACK_NODE*)malloc(sizeof(st_STACK_NODE));
 					if (newtop == nullptr)
 					{
 						printf("[MemoryPool] Alloc에서 메모리 할당 실패 발생!");
 						return nullptr;
 					}
 
-					memset(newtop, 0, sizeof(st_BLOCK_NODE));
+					memset(newtop, 0, sizeof(st_STACK_NODE));
 
 					//객체인 경우 생성자 호출
-					if (m_bPlacementNew)
+					if (_bPlacementNew)
 					{
 						new(&newtop->d) DATA();
 					}
@@ -169,23 +169,23 @@ namespace procademy
 					return &newtop->d;
 				}
 
-			} while (popCAS(m_pTopNode, newtop, ptop) != ptop);
+			} while (popCAS(_pTopNode, newtop, ptop) != ptop);
 
-			InterlockedIncrement((long*)&m_iUseCount);
+			InterlockedIncrement((long*)&_iUseCount);
 
 			//메모리 풀에서 pop한 top의 데이터 값을 반환
 			return &UserBit->d;
 		}
 
-		st_BLOCK_NODE* popCAS(st_BLOCK_NODE*& nTop, st_BLOCK_NODE*& nNewNode, st_BLOCK_NODE*& ptop)
+		st_STACK_NODE* popCAS(st_STACK_NODE*& nTop, st_STACK_NODE*& nNewNode, st_STACK_NODE*& ptop)
 		{
-			if (ptop == (st_BLOCK_NODE*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ptop))
+			if (ptop == (st_STACK_NODE*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ptop))
 			{
-				st_BLOCK_NODE* pt = ptop;
+				st_STACK_NODE* pt = ptop;
 
 				//아래 작업도 모두 유저비트를 이용해야 함.
 				long long lower_47bit = ((long long)ptop & USERBIT);
-				st_BLOCK_NODE* UserBit = (st_BLOCK_NODE*)lower_47bit;
+				st_STACK_NODE* UserBit = (st_STACK_NODE*)lower_47bit;
 				if (UserBit != nullptr)
 				{
 					long long v1 = (long long)nNewNode;
@@ -215,12 +215,12 @@ namespace procademy
 		// Parameters: (DATA *) 블럭 포인터.
 		// Return: (BOOL) TRUE, FALSE.
 		//////////////////////////////////////////////////////////////////////////
-		bool Free(DATA* pData)
+		bool push(DATA* pData)
 		{
 			if (pData == nullptr) return false;
 
 			//맴버 d의 오프셋으로 메모리 풀 노드의 시작 주소 계산
-			st_BLOCK_NODE* temp = (st_BLOCK_NODE*)((char*)pData - offsetof(st_BLOCK_NODE, d));
+			st_STACK_NODE* temp = (st_STACK_NODE*)((char*)pData - offsetof(st_STACK_NODE, d));
 
 			if (temp->owner != this)
 			{
@@ -234,22 +234,22 @@ namespace procademy
 			long long upper_17bit = InterlockedIncrement((long*)&cnt);
 
 			//printf("push 진행중\n");
-			st_BLOCK_NODE* newTop = temp;
+			st_STACK_NODE* newTop = temp;
 
 			//2.newTop의 하위 비트 저장
 			long long lower_47bit = ((long long)newTop & USERBIT);
-			st_BLOCK_NODE* UserBit = (st_BLOCK_NODE*)lower_47bit;
-			st_BLOCK_NODE* ptop;
+			st_STACK_NODE* UserBit = (st_STACK_NODE*)lower_47bit;
+			st_STACK_NODE* ptop;
 
 			//3.CAS하기 전에 newTop에 들어갈 주소에 cnt를 나타내는 17비트 세팅
-			newTop = (st_BLOCK_NODE*)((upper_17bit << (64 - 17)) | lower_47bit);
+			newTop = (st_STACK_NODE*)((upper_17bit << (64 - 17)) | lower_47bit);
 
 			do {
-				ptop = m_pTopNode;
+				ptop = _pTopNode;
 				//4.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
 				UserBit->nextNode = ptop;
 
-			} while (pushCAS(m_pTopNode, newTop, ptop) != ptop);
+			} while (pushCAS(_pTopNode, newTop, ptop) != ptop);
 			//ptop가 nullptr이고, m_pTopNode이 nullptr이 아닌 경우에도 성립할 수 있음.
 			//ptop가 nullptr이고, m_pTopNode이 nullptr이 아니면 interlock으로 걸리지 않나?
 
@@ -257,14 +257,14 @@ namespace procademy
 
 
 			//다시 메모리 풀에 채워주고
-			InterlockedDecrement((long*)&m_iUseCount);
+			InterlockedDecrement((long*)&_iUseCount);
 
 			return true;
 		}
 
-		st_BLOCK_NODE* pushCAS(st_BLOCK_NODE*& nTop, st_BLOCK_NODE*& nNewNode, st_BLOCK_NODE*& ptop)
+		st_STACK_NODE* pushCAS(st_STACK_NODE*& nTop, st_STACK_NODE*& nNewNode, st_STACK_NODE*& ptop)
 		{
-			if (ptop == (st_BLOCK_NODE*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ptop))
+			if (ptop == (st_STACK_NODE*)InterlockedCompareExchange64((long long*)&nTop, (long long)nNewNode, (long long)ptop))
 			{
 				return ptop;
 			}
@@ -281,7 +281,7 @@ namespace procademy
 		// Parameters: 없음.
 		// Return: (int) 메모리 풀 내부 전체 개수
 		//////////////////////////////////////////////////////////////////////////
-		int		GetCapacityCount(void) { return m_iCapacity; }
+		int		GetCapacityCount(void) { return _iCapacity; }
 
 		//////////////////////////////////////////////////////////////////////////
 		// 현재 사용중인 블럭 개수를 얻는다.
@@ -289,7 +289,7 @@ namespace procademy
 		// Parameters: 없음.
 		// Return: (int) 사용중인 블럭 개수.
 		//////////////////////////////////////////////////////////////////////////
-		int		GetUseCount(void) { return m_iUseCount; }
+		int		GetUseCount(void) { return _iUseCount; }
 
 	private:
 				int cnt = 0;

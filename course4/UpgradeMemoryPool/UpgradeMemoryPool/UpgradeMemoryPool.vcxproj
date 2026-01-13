@@ -127,10 +127,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CLockFreeStack.cpp" />
+    <ClCompile Include="CMemoryViewer.cpp" />
     <ClCompile Include="TestMemoryPoolSpeedy.cpp" />
+    <ClCompile Include="tls.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="PublicMemoryPoolForLockFree.h" />
+    <ClInclude Include="CLockFreeStack.h" />
+    <ClInclude Include="CMemoryViewer.h" />
+    <ClInclude Include="c_MyStack.h" />
+    <ClInclude Include="CMemoryPoolTLS.h" />
+    <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
