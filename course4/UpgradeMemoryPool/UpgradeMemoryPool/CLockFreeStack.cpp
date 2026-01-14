@@ -106,17 +106,18 @@ void CLockFreeStack::push(int i,CMemoryViewer* pmv)
 
 
 //ABA해결한 pop
-void CLockFreeStack::pop(CMemoryViewer* pmv)
+int* CLockFreeStack::pop(CMemoryViewer* pmv)
 {
 	//printf("pop 진행중\n");
 	Node* ptop;
 	Node* newtop;
+	Node* UserBit;
 
 	do {
 		ptop = _pTop;
 		//1.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
 		long long lower_47bit = ((long long)ptop & USERBIT);
-		Node* UserBit = (Node*)lower_47bit;
+		UserBit = (Node*)lower_47bit;
 
 		if (UserBit != nullptr)
 		{
@@ -134,6 +135,15 @@ void CLockFreeStack::pop(CMemoryViewer* pmv)
 		}
 
 	} while (popCAS(_pTop, newtop, ptop, pmv) != ptop);
+
+	if (UserBit == nullptr)
+	{
+		return nullptr;
+	}
+	else
+	{
+		return &UserBit->data;
+	}
 }
 
 

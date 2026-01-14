@@ -60,7 +60,7 @@ namespace procademy
 		int _iUseCount;
 
 		//tls 풀에 들어갈 노드의 개수
-		const int _iStackNodeNum;
+		int _iStackNodeNum;
 
 		
 
@@ -97,9 +97,10 @@ namespace procademy
 
 			void pop() 
 			{
-				st_STACK_NODE* next = _topNode->nextNode;
+				st_STACK_NODE* next = nullptr;
+				next = _topNode->nextNode;
 				_topNode = next;
-				Count--;
+				//Count--;
 			}
 
 			int size() { return Count; }
@@ -112,11 +113,11 @@ namespace procademy
 
 			bool empty() 
 			{
-				return Count == 0;
+				return _topNode == nullptr;
 			}
 
 			//Free에서 사용할때 말고는 사실 필요없음.
-			int Count;
+			int Count = 0;
 
 			//스택의 top 포인터
 			st_STACK_NODE* _topNode;
@@ -160,15 +161,23 @@ namespace procademy
 			{
 				// alloc 스택 반환
 				if (!StackForAlloc.empty())
-					push(StackForAlloc._topNode);
+				{
+					CMemoryPoolTLS<DATA>* owner = StackForAlloc._topNode->owner;
+					owner->push(StackForAlloc._topNode);
+				}
+					
 
 				// free 스택 반환
 				if (!StackForFree.empty())
-					push(StackForFree._topNode);
+				{
+					CMemoryPoolTLS<DATA>* owner = StackForAlloc._topNode->owner;
+					owner->push(StackForFree._topNode);
+				}
+					
 			}
 		};
 		//인스턴스와 스레드별로 구분되기 위한 tls맵 
-		static thread_local std::map<CMemoryPoolTLS*, StackForTLS> tlsMap;
+		static inline thread_local std::map<CMemoryPoolTLS*, StackForTLS> tlsMap;
 
 		StackForTLS* getTlsStack()
 		{
@@ -230,7 +239,7 @@ namespace procademy
 		// 소멸자에서 해제해줘야 하는 메모리는 2가지
 		// 1. 스택 노드 안에 담긴 모든 노드
 		// 2. 공용 풀의 스택 포인터 노드
-		// 3. tls 맵에서 현재 인스턴스의 공간 삭제
+		// 3. alloc된 메모리 풀의 노드 삭제
 		//-------------------------------------------------
 		virtual	~CMemoryPoolTLS()
 		{
@@ -275,16 +284,18 @@ namespace procademy
 		//----------------------------------------------------------------------------
 		DATA* Alloc(void)
 		{
-			c_MyStack* allocstack = getTlsStack()->StackForAlloc;
+			c_MyStack* allocstack = &getTlsStack()->StackForAlloc;
 
 			//1.
 			if (allocstack->empty())
 			{
 				allocstack->_topNode = pop();
+				//allocstack->Count = 
 			}
 
 			//2.
 			st_STACK_NODE* stNode = allocstack->_topNode;
+			
 			allocstack->pop();
 			return &stNode->d;
 		}
@@ -400,12 +411,12 @@ namespace procademy
 		//---------------------------------------------------
 		bool Free(DATA* pData)
 		{
-			c_MyStack* freestack = getTlsStack()->StackForFree;
+			c_MyStack* freestack = &getTlsStack()->StackForFree;
 			//Data를 오프셋을 통해 st_Stack_Node 로 변환
 			st_STACK_NODE* temp = (st_STACK_NODE*)((char*)pData - offsetof(st_STACK_NODE, d));
 			
 			//owner가 같은지 스레드 풀에서 확인
-			if (temp->owner != this) return;
+			if (temp->owner != this) return false;
 
 			//1.
 			freestack->push(temp);
@@ -416,6 +427,8 @@ namespace procademy
 				push(freestack->_topNode);
 				freestack->clear();
 			}
+
+			return true;
 		}
 
 		//-------------------------------------------------------------------------
