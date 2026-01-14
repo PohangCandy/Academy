@@ -31,7 +31,7 @@ public:
 	void push(int i);
 	void push(int i,CMemoryViewer* pmv);
 	//void pop();
-	void pop(CMemoryViewer* pmv);
+	int* pop(CMemoryViewer* pmv);
 	void pop(int& popData);
 	int size();
 	bool empty();
