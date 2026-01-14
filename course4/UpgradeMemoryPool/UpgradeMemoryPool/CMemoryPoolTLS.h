@@ -24,6 +24,7 @@
 #include "stdafx.h"
 #include <iostream>
 #include <map>
+#include <vector>
 //#include "c_MyStack.h"
 
 #define USERBIT (0x007fffffffffff)
@@ -91,12 +92,14 @@ namespace procademy
 			{
 				sNode->nextNode = _topNode;
 				_topNode = sNode;
+				Count++;
 			}
 
 			void pop() 
 			{
 				st_STACK_NODE* next = _topNode->nextNode;
 				_topNode = next;
+				Count--;
 			}
 
 			int size() { return Count; }
@@ -125,12 +128,14 @@ namespace procademy
 		//---------------------------------------
 		struct st_POOL_NODE
 		{
-			//스택의 top 포인터
-			c_MyStack* _pStack;
+			st_STACK_NODE* _poolNodeStackTop;
 				
 			//pool의 next노드
 			st_POOL_NODE* _pnNode;
 		};
+
+		CRITICAL_SECTION templock;
+		std::vector<st_POOL_NODE*> v_allocPoolNode;
 
 		//메모리 풀의 가장 top에 있는 스택 노드
 		st_POOL_NODE* _pTopNode;
@@ -148,16 +153,26 @@ namespace procademy
 		{
 			c_MyStack StackForAlloc;
 			c_MyStack StackForFree;
+
+			//스레드 소멸시 모든 노드를 공용 풀에 반환
+			//=> 다음 번에 공용 풀에서 할당받는 스레드의 노드의 개수는 _iStackNodeNum이 아닐 수 있다!
+			~StackForTLS()
+			{
+				// alloc 스택 반환
+				if (!StackForAlloc.empty())
+					push(StackForAlloc._topNode);
+
+				// free 스택 반환
+				if (!StackForFree.empty())
+					push(StackForFree._topNode);
+			}
 		};
 
 		static thread_local std::map<CMemoryPoolTLS*, StackForTLS> tlsMap;
 
 		StackForTLS* getTlsStack()
 		{
-			// 1. 현재 스레드의 TLS 맵에서 이 인스턴스(this)의 저장 공간을 찾거나 생성합니다.
-			StackForTLS* stackEntry = tlsMap[this];
-
-			return stackEntry;
+			return &tlsMap[this];
 		}
 
 		//--------------------------------------------------
@@ -167,6 +182,8 @@ namespace procademy
 		//--------------------------------------------------
 		CMemoryPoolTLS(int iPoolNum, int iStackNum, bool bPlacementNew = false)
 		{
+			InitializeCriticalSection(&templock);
+
 			_iCapacity = iPoolNum;
 			_bPlacementNew = bPlacementNew;
 			_iUseCount = 0;
@@ -176,8 +193,7 @@ namespace procademy
 			//노드를 개수만큼 확보
 			for (int i = 0; i < iPoolNum; i++)
 			{
-				st_POOL_NODE* npNode = (st_POOL_NODE*)malloc(sizeof(st_POOL_NODE));
-				memset(npNode, 0, sizeof(st_POOL_NODE));
+				st_POOL_NODE* npNode = new st_POOL_NODE;
 
 				st_STACK_NODE* stNode = nullptr;
 				for (int j = 0; j < iStackNum; j++)
@@ -203,10 +219,7 @@ namespace procademy
 
 				//메모리 풀 노드가 가리키는 스택의 top에 생성한 스택의 top 넣기
 				//-> 일일이 push할 필요없음.
-				c_MyStack* pstack = npNode->_pStack;
-				pstack->clear();
-				pstack->_topNode = stNode;
-				pstack->Count = iStackNum;
+				npNode->_poolNodeStackTop = stNode;
 
 				npNode->_pnNode = _pTopNode;
 				_pTopNode = npNode;
@@ -228,8 +241,7 @@ namespace procademy
 				tempPoolNode = _pTopNode->_pnNode;
 
 				//스택에 있는 모든 노드 해제
-				c_MyStack* pstack = tempPoolNode->_pStack;
-				st_STACK_NODE* StackTopNode = pstack->_topNode;
+				st_STACK_NODE* StackTopNode = tempPoolNode->_poolNodeStackTop;
 				st_STACK_NODE* tempStackNode = nullptr;
 				while (StackTopNode != nullptr)
 				{
@@ -244,13 +256,16 @@ namespace procademy
 				}
 
 				//메모리 풀의 노드 해제
-				free(_pTopNode);
+				delete(_pTopNode);
+
+				//alloc된 메모리풀 노드 해제(임시)
+				for (auto& a : v_allocPoolNode)
+				{
+					delete a;
+				}
 
 				_pTopNode = tempPoolNode;
 			}
-
-			//tls 맵에서 할당받은 공간 삭제
-			tlsMap.erase(this);
 		}
 
 		//----------------------------------------------------------------------------
@@ -260,7 +275,7 @@ namespace procademy
 		//----------------------------------------------------------------------------
 		DATA* Alloc(void)
 		{
-			c_MyStack* allocstack = getTlsStack().StackForAlloc;
+			c_MyStack* allocstack = getTlsStack()->StackForAlloc;
 
 			//1.
 			if (allocstack->empty())
@@ -271,7 +286,7 @@ namespace procademy
 			//2.
 			st_STACK_NODE* stNode = allocstack->_topNode;
 			allocstack->pop();
-			return stNode->d;
+			return &stNode->d;
 		}
 
 
@@ -292,10 +307,7 @@ namespace procademy
 			st_POOL_NODE* UserBit;
 			do {
 
-				ptop = (st_POOL_NODE*)InterlockedCompareExchange64(
-					(long long*)&_pTopNode,
-					0, 0
-				);
+				ptop = _pTopNode;
 
 				//1.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
 				long long lower_47bit = ((long long)ptop & USERBIT);
@@ -335,10 +347,16 @@ namespace procademy
 
 			InterlockedIncrement((long*)&_iUseCount);
 
-			st_STACK_NODE* stNode = UserBit->_pStack;
+			st_STACK_NODE* stNode = UserBit->_poolNodeStackTop;
 
-			//메모리 풀의 노드는 삭제
-			delete UserBit;
+			//메모리 풀 노드 삭제
+			//여기서 삭제가 일어나면 ABA 문제가 발생할 수 있다...
+			//그렇다고 삭제를 안하면 누수가 날텐데...
+			//결국 여기에 락을 거는 방법 밖에 없나?
+			//delete(UserBit);
+			EnterCriticalSection(&templock);
+			v_allocPoolNode.push_back(UserBit);
+			LeaveCriticalSection(&templock);
 
 			//메모리 풀에서 pop한 top의 데이터 값을 반환
 			return stNode;
@@ -382,7 +400,7 @@ namespace procademy
 		//---------------------------------------------------
 		bool Free(DATA* pData)
 		{
-			c_MyStack* freestack = getTlsStack().StackForFree;
+			c_MyStack* freestack = getTlsStack()->StackForFree;
 			//Data를 오프셋을 통해 st_Stack_Node 로 변환
 			st_STACK_NODE* temp = (st_STACK_NODE*)((char*)pData - offsetof(st_STACK_NODE, d));
 			
@@ -401,7 +419,8 @@ namespace procademy
 		}
 
 		//-------------------------------------------------------------------------
-		// 1. 새로운 공용 풀 노드인 스택 포인터를 할당한다.
+		// 공용 풀로 새로운 스택 포인터 push
+		// 1. 새로운 공용 풀 노드(스택 포인터) 할당
 		// 2. 해당 스택의 top노드 주소를 스레드가 반환한 노드로 세팅한다.
 		// 3. 락프리 과정을 거쳐 push한다.
 		//-------------------------------------------------------------------------
@@ -409,31 +428,30 @@ namespace procademy
 		{
 			//락프리 구조를 위해 메모리 풀에 반환하기 전 stamp찍어서 담아두기
 			
-			//1.stamp로 사용할 cnt 값 가져오기
+			//ABA_1.stamp로 사용할 cnt 값 가져오기
 			long long upper_17bit = InterlockedIncrement((long*)&cnt);
 
-			//printf("push 진행중\n");
+			//1.
+			//새로운 풀 노드의 스택의 탑 노드를 push받은 노드로 설정
 			st_POOL_NODE* newTop = new st_POOL_NODE;
-			st_STACK_NODE* pstack = newTop->_pStack;
-			pstack->nextNode = pstNode;
+			newTop->_poolNodeStackTop = pstNode;
 
-			//2.newTop의 하위 비트 저장
+			//ABA_2.newTop의 하위 비트 저장
 			long long lower_47bit = ((long long)newTop & USERBIT);
 			st_POOL_NODE* UserBit = (st_POOL_NODE*)lower_47bit;
 			st_POOL_NODE* ptop;
 
-			//3.CAS하기 전에 newTop에 들어갈 주소에 cnt를 나타내는 17비트 세팅
+			//ABA_3.CAS하기 전에 newTop에 들어갈 주소에 cnt를 나타내는 17비트 세팅
 			newTop = (st_POOL_NODE*)((upper_17bit << (64 - 17)) | lower_47bit);
 
 			do {
 				ptop = _pTopNode;
-				//4.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
-				UserBit->nextNode = ptop;
+				//ABA_4.맴버 참조는 유저영역 주소(하위 47bit)를 통해 한다.
+				UserBit->_pnNode = ptop;
 
 			} while (pushCAS(_pTopNode, newTop, ptop) != ptop);
 
 
-			//다시 메모리 풀에 채워주고
 			InterlockedDecrement((long*)&_iUseCount);
 
 			return true;
