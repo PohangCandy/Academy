@@ -167,7 +167,7 @@ namespace procademy
 					push(StackForFree._topNode);
 			}
 		};
-
+		//인스턴스와 스레드별로 구분되기 위한 tls맵 
 		static thread_local std::map<CMemoryPoolTLS*, StackForTLS> tlsMap;
 
 		StackForTLS* getTlsStack()
