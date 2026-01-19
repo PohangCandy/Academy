@@ -14,6 +14,9 @@ public:
 
 	static void Destroy();
 
+	//return newSessionptr
+	SOCKETINFO* MakeNewSession(SOCKET sock);
+
 	//return SessionId
 	long long InsertSessionptrToSessionMap(SOCKETINFO* psession);
 
@@ -30,6 +33,7 @@ public:
 	long long GetSize();
 
 private:
+
 	//ΩÃ±€≈Ê ¿ŒΩ∫≈œΩ∫
 	static cSessionMap* sessionMapInstance;
 
