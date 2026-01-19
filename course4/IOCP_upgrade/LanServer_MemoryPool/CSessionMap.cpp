@@ -1,5 +1,8 @@
 #include "cSessionMap.h"
 #include "Session.h"
+#include "MemoryPoolForLockFree.h"
+
+#define BUFSIZE (1024 * 1024)
 
 cSessionMap* cSessionMap::sessionMapInstance = nullptr;
 
@@ -17,6 +20,15 @@ void cSessionMap::Destroy()
 {
 	delete sessionMapInstance;
 	sessionMapInstance = nullptr;
+}
+
+SOCKETINFO* cSessionMap::MakeNewSession(SOCKET sock)
+{
+	SOCKETINFO* nSession = new SOCKETINFO(BUFSIZE);
+	long long id = InsertSessionptrToSessionMap(nSession);
+	nSession->Inintialize(sock, id);
+
+	return nSession;
 }
 
 
@@ -42,9 +54,9 @@ long long cSessionMap::InsertSessionptrToSessionMap(SOCKETINFO* psession)
 	}
 	else
 	{
-		LeaveCriticalSection(&_sessionMap_cs);
 		id = _InterlockedIncrement64(&_mapSize);
 		_sessionMap[id] = psession;
+		LeaveCriticalSection(&_sessionMap_cs);
 	}
 	return id;
 }
@@ -55,8 +67,8 @@ void cSessionMap::deleteSessionptrFromSessionMap(SOCKETINFO*& psession, char* s_
 	
 	_sessionMap[id] = nullptr;
 
-	closesocket(psession->sock);
-	//printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
+	closesocket(psession->_sock);
+	printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
 	delete psession;
 	psession = nullptr;
 

@@ -128,33 +128,21 @@ bool CLanServer::Start()
 				break;
 			}
 
-			//지금 접곡한 클라이언트에 대한 차단
+			//클라이언트 IP 차단
 			if (!OnConnectionRequest(inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port)))
 			{
 				closesocket(client_sock);
 			}
 
 			
-			//소켓 정보 구조체 할당
-			SOCKETINFO* ptr = new SOCKETINFO(BUFSIZE);
+			SOCKETINFO* ptr = sessionMap->MakeNewSession(client_sock);
 
-			if (ptr == NULL) break;
-			//overlap의 op값을 살리기위해서 overlap 구조체 크기만크만 지운다.
-			ZeroMemory(ptr->recvOverlapped, sizeof(OVERLAPPED));
-			ptr->sock = client_sock;
-			ptr->recvBuf->ClearBuffer();
-			ptr->sendBuf->ClearBuffer();
+			long long id = ptr->session_id;
 			WSABUF wsabuf;
 			wsabuf.buf = ptr->recvBuf->GetFrontBufferPtr();
 			wsabuf.len = ptr->recvBuf->GetFreeSize();
 
-			//세션을 맵에 저장
-			InterlockedIncrement((long*)&_sessionCount);
-			long long id = sessionMap->InsertSessionptrToSessionMap(ptr);
-			ptr->session_id = id;
-			
-
-			//printf("[TCP 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+			printf("[TCP 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 			OnClientJoin(clientaddr, id);
 
 			//소켓과 입출력 완료 포트 연결
@@ -209,7 +197,7 @@ bool CLanServer::Disconnect(SessionID sessionId)
 	{
 		return false;
 	}
-	if (shutdown(ptr->sock, SD_BOTH) != 0)
+	if (shutdown(ptr->_sock, SD_BOTH) != 0)
 	{
 		return false;
 	}
@@ -254,7 +242,7 @@ bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
 	//클라이언트 정보 얻기
 	SOCKADDR_IN clientaddr;
 	int addrlen = sizeof(clientaddr);
-	getpeername(ptr->sock, (SOCKADDR*)&clientaddr, &addrlen);
+	getpeername(ptr->_sock, (SOCKADDR*)&clientaddr, &addrlen);
 	//송신 링버퍼에 남은 데이터를 Send
 	if (!WsaSendSession(clientaddr, ptr))
 	{
@@ -337,7 +325,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		//클라이언트 정보 얻기
 		SOCKADDR_IN clientaddr;
 		int addrlen = sizeof(clientaddr);
-		getpeername(ptr->sock, (SOCKADDR*)&clientaddr, &addrlen);
+		getpeername(ptr->_sock, (SOCKADDR*)&clientaddr, &addrlen);
 
 		//비동기 입출력 결과 확인
 		if (cbTransferred == 0)
@@ -369,7 +357,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		else if (retval == 0)
 		{
 			DWORD lpcbTransfer, temp2;
-			bool isIOSuccess = WSAGetOverlappedResult(ptr->sock, (LPWSAOVERLAPPED)&lpOverlapped, &lpcbTransfer, false, &temp2);
+			bool isIOSuccess = WSAGetOverlappedResult(ptr->_sock, (LPWSAOVERLAPPED)&lpOverlapped, &lpcbTransfer, false, &temp2);
 			if (isIOSuccess && lpcbTransfer > 0)
 			{
 				//GQCS 실패
@@ -584,7 +572,7 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 		DWORD recvbytes;
 		DWORD flags = 0;
 		InterlockedIncrement((long*)&ptr->IOCount);
-		retval = WSARecv(ptr->sock, wsabuf, 2, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->recvOverlapped, NULL);
+		retval = WSARecv(ptr->_sock, wsabuf, 2, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->recvOverlapped, NULL);
 
 		if (retval == SOCKET_ERROR)
 		{
@@ -609,7 +597,7 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 		DWORD recvbytes;
 		DWORD flags = 0;
 		InterlockedIncrement((long*)&ptr->IOCount);
-		retval = WSARecv(ptr->sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->recvOverlapped, NULL);
+		retval = WSARecv(ptr->_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->recvOverlapped, NULL);
 
 		if (retval == SOCKET_ERROR)
 		{
@@ -713,7 +701,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 				//nterlockedIncrement((long*)&i_send);
 			}
 			//printf("[Network] 데이터 송신  포트번호 = %d\n", ntohs(clientaddr.sin_port));
-			retval = WSASend(ptr->sock, wsabuf, 2, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
+			retval = WSASend(ptr->_sock, wsabuf, 2, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
 
 
 			if (retval == SOCKET_ERROR)
@@ -755,7 +743,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 				/*InterlockedIncrement((long*)&i_send);*/
 			}
 			//printf("[Network] 데이터 송신  포트번호 = %d\n", ntohs(clientaddr.sin_port));
-			retval = WSASend(ptr->sock, &wsabuf, 1, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
+			retval = WSASend(ptr->_sock, &wsabuf, 1, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
 
 
 			if (retval == SOCKET_ERROR)
