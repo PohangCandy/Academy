@@ -7,6 +7,12 @@
 #define BUFSIZE (1024 * 1024)
 #define MSG_SIZE (8)
 
+//채팅 서버에 로그인한 캐릭터를 저장해둔 맵
+std::unordered_map<INT64, Character*> umapCharacter;
+
+//캐릭터 리스트를 담아둔 섹터 맵
+std::unordered_map<INT64, Character*> umapCharcterSector[50][50];
+
 //------------------------------------
 //메시지 프로토콜
 // 헤더 2Byte (길이)
@@ -86,59 +92,16 @@ void ChattingServer::OnClientLeave(SessionID s)
 //해당 스레드는 깨어나서 메시지 종류에 따라 switch-case로 채팅 로직을 처리하면 될 것.
 void ChattingServer::OnRecv(SessionID sessionID, CPacket* pPacket)
 {
-	//네트워크에서 넘긴 길이만큼 추출
-	//Msg recvMsg; 굳이 동적할당 해야할까? 어차피 송신 링버퍼에 복사가 되었다면 문제 없는게 정상임.
-	Msg* recvMsg = new Msg;
-
-	//이런식으로 GetData가 아니라 패킷에서 긁어서 넣어줘야 할 것 같은데..
-	int len = pPacket->GetDataSize();
-	int ret = pPacket->GetData(recvMsg->payload, len);
-	if (ret == 0)
+	if (!PostQueuedCompletionStatus(contentHcp, pPacket->GetDataSize(), sessionID, (LPWSAOVERLAPPED)pPacket))
 	{
 		while (1)
 		{
-			printf("[Contents] 패킷에 남은 메시지 없는데 추출 시도함.\n");
+			printf("[OnRecv] 컨텐츠 IOCP에 PQCS실패!\n");
+			//---------이때 뭐하지?
+			//---------1. 메시지 재전송
+			//---------2. 그냥 뻑 내고 죽기
 		}
 	}
-	else if (len != sizeof(recvMsg->payload))
-	{
-		while (1)
-		{
-			//악의적인 클라로 간주하고 끊는게 맞음. Disconnect하면 될 듯
-			printf("[Contents] 메시지와 패킷의 양식이 다름, 메시지  : %d , 패킷 : %d \n", sizeof(recvMsg->payload), len);
-		}
-	}
-	else if(len != ret)
-	{
-		while (1)
-		{
-			//악의적인 클라로 간주하고 끊는게 맞음. Disconnect하면 될 듯
-			printf("[Contents] 패킷에서 추출한 크기가 예상과 다름. 요청  : %d , 실제 : %d \n", len, ret);
-		}
-	}
-
-	//printf("[Contents] : 수신 메시지 내용 %lld\n", (long long)recvMsg->payload);
-
-	//추출한 메시지에 헤더를 붙여서 SendPakcet
-	recvMsg->header = sizeof(recvMsg->payload);
-
-	CPacket* pSendPacket = new CPacket(sizeof(Msg));
-	pSendPacket->operator<<(recvMsg->header);
-	pSendPacket->PutData(recvMsg->payload, recvMsg->header);
-
-	int sendret = SendPacket(sessionID, pSendPacket);
-	delete pSendPacket;
-
-	//세션이 이제 여기서 삭제되는 경우는 없음.
-	if (sendret == 0)
-	{
-		while (1)
-		{
-			printf("[Contents] 네트워크 송신 버퍼가 꽉 참\n");
-		}
-	}
-
-	delete recvMsg;
 }
 
 void ChattingServer::OnError(int errorcode, char*)
@@ -146,7 +109,7 @@ void ChattingServer::OnError(int errorcode, char*)
 
 }
 
-//작업자 스레드 함수
+//컨텐츠 스레드 함수
 unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 {
 	int retval;
@@ -162,9 +125,9 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		//비동기 입출력 완료 기다리기
 		DWORD cbTransferred;
 		SOCKET client_sock;
-		long long session_id;
+		long long sessionId;
 		CPacket* pPacket;
-		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&session_id, (LPOVERLAPPED*)&pPacket, INFINITE);
+		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&sessionId, (LPOVERLAPPED*)&pPacket, INFINITE);
 
 		//비동기 입출력 결과 확인
 		if (cbTransferred == 0)
@@ -213,11 +176,13 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			pPacket->GetData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));// null 포함
 			pPacket->GetData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));// null 포함
 			pPacket->GetData(pcharacter->_SessionKey, sizeof(pcharacter->_SessionKey));// 인증토큰
-
+			pcharacter->_sessionId = sessionId;
 
 			BYTE	Status;			// 채팅서버 로그인 응답 0:실패	1:성공
 			//1.
-			if (mapCharacter[pcharacter->_AccountNo] != nullptr)
+			auto a = umapCharacter.find(pcharacter->_AccountNo);
+
+			if (a != umapCharacter.end())
 			{
 				printf("[en_PACKET_CS_CHAT_REQ_LOGIN] 중복 로그인 감지\n");
 				Status = 0;
@@ -225,7 +190,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			else
 			{
 				// 2.
-				mapCharacter[pcharacter->_AccountNo] = pcharacter;
+				umapCharacter[pcharacter->_AccountNo] = pcharacter;
 				Status = 1;
 			}
 
@@ -233,8 +198,13 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			// 3. 
 			packetToSend.PutData((char*)en_PACKET_SC_CHAT_RES_LOGIN, sizeof(WORD));
 			packetToSend.PutData((char*)Status, sizeof(BYTE));
-			packetToSend.PutData((char*)AccountNo, sizeof(INT64));
+			packetToSend.PutData((char*)pcharacter->_AccountNo, sizeof(INT64));
 
+			bool ret = pServer->SendPacket(pcharacter->_sessionId, &packetToSend);
+			if (!ret)
+			{
+				//SendPacket실패 세션이 이미 삭제된 경우
+			}
 			break;
 		}
 
@@ -245,33 +215,48 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		// 2. 섹터 결과 대입
 		//   a. 원래 있던 섹터에서 플레이어 삭제
 		//   b. 새로운 섹터에 플레이어 대입
-		// 3. 결과 반환
+		// 3. 섹터 이동 결과 송신 패킷에 삽입
 		//------------------------------------------------------------
 		case en_PACKET_CS_CHAT_REQ_SECTOR_MOVE:
 		{
 			INT64	AccountNo;
-			WORD	SectorX;
-			WORD	SectorY;
+
+			*pPacket >> AccountNo;
 
 			//1.
-			if (mapCharacter[AccountNo] != nullptr)
+			auto a = umapCharacter.find(AccountNo);
+			if (a != umapCharacter.end())
 			{
 				// 2. 
-				Character* pcharacter = mapCharacter[AccountNo];
-				//a.
-				auto a = umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].find(pcharacter->_AccountNo);
-				//------------------------하는 일------------------------
-				// 제일 처음 생성된 플레이어는 섹터 좌표를 받고있지 않은데 어떻게 삭제하지?
-				// 
-				//b.
-				pPacket->GetData((char*)pcharacter->_SectorX, sizeof(SectorX));
-				pPacket->GetData((char*)pcharacter->_SectorY, sizeof(SectorY));
+				Character* pcharacter = umapCharacter[AccountNo];
+				// 제일 처음 생성된 플레이어인 경우 섹터 리스트 제외 건너뛰기
+				if (pcharacter->_SectorX != -1)
+				{
+					//a.
+					auto a = umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].find(pcharacter->_AccountNo);
+					if (a != umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].end())
+					{
+						umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].erase(a);
+					}
+					//b.
+					pPacket->GetData((char*)pcharacter->_SectorX, sizeof(pcharacter->_SectorX));
+					pPacket->GetData((char*)pcharacter->_SectorY, sizeof(pcharacter->_SectorY));
+					umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].emplace(pcharacter->_AccountNo, pcharacter);
 
-				// 3.
-				packetToSend.PutData((char*)en_PACKET_SC_CHAT_RES_SECTOR_MOVE, sizeof(WORD));
-				packetToSend.PutData((char*)AccountNo, sizeof(AccountNo));
-				packetToSend.PutData((char*)pcharacter->_SectorX, sizeof(SectorX));
-				packetToSend.PutData((char*)pcharacter->_SectorY, sizeof(SectorY));
+					// 3.
+					packetToSend.PutData((char*)en_PACKET_SC_CHAT_RES_SECTOR_MOVE, sizeof(WORD));
+					packetToSend.PutData((char*)pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
+					packetToSend.PutData((char*)pcharacter->_SectorX, sizeof(pcharacter->_SectorX));
+					packetToSend.PutData((char*)pcharacter->_SectorY, sizeof(pcharacter->_SectorY));
+
+					bool ret = pServer->SendPacket(pcharacter->_sessionId, &packetToSend);
+					if (!ret)
+					{
+						//SendPacket실패 세션이 이미 삭제된 경우
+					}
+
+				}
+
 		   }
 		   else
 		   {
@@ -288,35 +273,45 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		case en_PACKET_CS_CHAT_REQ_MESSAGE:
 		{
 			INT64	AccountNo;
-			WORD	MessageLen;
-			WCHAR	Message[MessageLen / 2];		// null 미포함
-			break;
-		}
 
+			*pPacket >> AccountNo;
+			auto a = umapCharacter.find(AccountNo);
+			//1.
+			if (a != umapCharacter.end())
+			{
+				Character* pcharacter = a->second;
+				//2.
+				packetToSend.PutData((char*)en_PACKET_SC_CHAT_RES_MESSAGE, sizeof(WORD));
+				packetToSend.PutData((char*)pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
+				packetToSend.PutData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));
+				packetToSend.PutData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));
+				packetToSend.PutData(pPacket->GetBufferPtr(), pPacket->GetDataSize());
 
-		//------------------------------------------------------------
-		// 채팅서버 채팅보내기 응답  (다른 클라가 보낸 채팅도 이걸로 받음)
-		//------------------------------------------------------------
-		case en_PACKET_SC_CHAT_RES_MESSAGE:
-		{
-			INT64	AccountNo;
-			WCHAR	ID[20];					// null 포함
-			WCHAR	Nickname[20];				// null 포함
-		
-			WORD	MessageLen;
-			WCHAR	Message[MessageLen / 2];		// null 미포함
+				int dx[9] = { -1,0,1,-1,0,1,-1,0,1 };
+				int dy[9] = { -1,-1,-1,0,0,0,1,1,1 };
+				for (int i = 0; i < 9; i++)
+				{
+					for (auto& a : umapCharcterSector[pcharacter->_SectorY + dy[i]][pcharacter->_SectorX + dx[i]])
+					{
+						bool ret = pServer->SendPacket(a.second->_sessionId, &packetToSend);
+						if (!ret)
+						{
+							//SendPacket실패 세션이 이미 삭제된 경우
+						}
+					}
+					
+				}
+			}
 			break;
 		}
 			
 
 		//------------------------------------------------------------
 		// 하트비트
-		// 클라이언트는 이를 30초마다 보내줌.
-		// 서버는 40초 이상동안 메시지 수신이 없는 클라이언트를 강제로 끊어줘야 함.
+		//do nothing
 		//------------------------------------------------------------	
-		case en_PACKET_SC_CHAT_REQ_HEARTBEAT:
-		{
-			WORD	Type;
+		case en_PACKET_CS_CHAT_REQ_HEARTBEAT:
+		{			
 			break;
 		}
 
@@ -324,34 +319,18 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			break;
 		}
 
-		
 
-		//printf("[Contents] : 수신 메시지 내용 %lld\n", (long long)recvMsg->payload);
-
-		//추출한 메시지에 헤더를 붙여서 SendPakcet
-		recvMsg->header = sizeof(recvMsg->payload);
-		int sendret = SendPacket(SessionID, (char*)recvMsg, sizeof(Msg));
-		if (sendret == 0)
-		{
-			while (1)
-			{
-				printf("[Contents] 네트워크 송신 버퍼가 꽉 참\n");
-			}
-		}
-		else if (sendret == -1)
-		{
-			//printf("[Contents] 세션이 이미 삭제됨.\n");
-		}
-		else if (sendret != sizeof(Msg))
-		{
-			while (1)
-			{
-				printf("[Contents] 메시지 버퍼 추출 길이와 송신 버퍼에 넣은 길이가 다름\n");
-			}
-		}
-
-		delete recvMsg;
 	}
 
+	return 0;
+}
+
+//특정 주기마다 컨텐츠 스레드를 깨우는 메시지를 발생시키기 위한 스레드
+unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
+{
+	while (1)
+	{
+
+	}
 	return 0;
 }

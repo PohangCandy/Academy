@@ -130,9 +130,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CPacket.cpp" />
     <ClCompile Include="shortTest.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CPacket.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

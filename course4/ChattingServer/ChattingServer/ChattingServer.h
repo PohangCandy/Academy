@@ -9,12 +9,6 @@ enum EServerMode {
 	QA
 };
 
-//채팅 서버에 로그인한 캐릭터를 저장해둔 맵
-std::map<INT64, Character> mapCharacter;
-
-//캐릭터 리스트를 담아둔 섹터 맵
-std::unordered_map<INT64,Character*> umapCharcterSector[50][50];
-
 class Character {
 public:
 	INT64	_AccountNo;
@@ -22,9 +16,12 @@ public:
 	WCHAR	_Nickname[20];	// null 포함
 	char	_SessionKey[64];		// 인증토큰
 
-	WORD	_SectorX;
-	WORD	_SectorY;
+	WORD	_SectorX = -1;
+	WORD	_SectorY = -1;
+	long long _sessionId;
 };
+
+
 
 class ChattingServer : public CNetServer
 {
@@ -60,7 +57,8 @@ private:
 	//컨텐츠 스레드 함수
 	static unsigned int __stdcall ContentsThread(LPVOID arg);
 
-
+	//타이머 스레드 함수
+	static unsigned int __stdcall TimerThread(LPVOID arg);
 
 	HANDLE contentHcp = {};
 
