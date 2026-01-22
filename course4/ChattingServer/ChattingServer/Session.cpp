@@ -7,7 +7,7 @@
 SOCKETINFO::SOCKETINFO()
 {
 	//InitializeCriticalSection(&session_cs);
-	_sock = INVALID_SOCKET;
+	sock = INVALID_SOCKET;
 	recvBuf = nullptr;
 	sendBuf = nullptr;
 	messageQueue = nullptr;
@@ -18,7 +18,7 @@ SOCKETINFO::SOCKETINFO()
 SOCKETINFO::SOCKETINFO(int bufsize)
 {
 	//InitializeCriticalSection(&session_cs);
-	_sock = INVALID_SOCKET;
+	sock = INVALID_SOCKET;
 	recvBuf = new CRingBuffer(bufsize + 1);
 	sendBuf = new CRingBuffer(bufsize + 1);
 	messageQueue = new MessageQueue(bufsize);
@@ -44,25 +44,6 @@ SOCKETINFO::~SOCKETINFO()
 
 	delete recvOverlapped;
 	recvOverlapped = nullptr;
-}
-
-void SOCKETINFO::Inintialize(SOCKET sock, long long sessionID)
-{
-	_sock = sock;
-	session_id = sessionID;
-	IsSending = 0;
-	IOCount = 0;
-
-	//OVERLAPPED의 맴버가 초기화 되지 않도록 해준다.
-	//nullptr을 참조하는 상황이 나오지 않게하기위해 순서를 조절한다.
-	//recvOverlapped->op = ERecv;
-	ZeroMemory(&recvOverlapped, sizeof(OVERLAPPED));
-
-	//sendOverlapped->op = ESend;
-	ZeroMemory(&sendOverlapped, sizeof(OVERLAPPED));
-	
-	recvBuf->ClearBuffer();
-	sendBuf->ClearBuffer();
 }
 
 void SOCKETINFO::GetSessionLock()

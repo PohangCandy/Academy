@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{b67a615e-3309-4307-bc47-c52478b1e1e3}</ProjectGuid>
-    <RootNamespace>TestPJ</RootNamespace>
+    <ProjectGuid>{323817ec-28cb-44f1-9e79-244a59383bea}</ProjectGuid>
+    <RootNamespace>ChattingServer</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -90,8 +90,6 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <Optimization>Disabled</Optimization>
-      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -120,7 +118,6 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <Optimization>Disabled</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -130,9 +127,30 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="shortTest.cpp" />
+    <ClCompile Include="ChattingServer.cpp" />
+    <ClCompile Include="CNetServer.cpp" />
+    <ClCompile Include="CPacket.cpp" />
+    <ClCompile Include="CRingBuffer.cpp" />
+    <ClCompile Include="CSessionMap.cpp" />
+    <ClCompile Include="errlog.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="MessageQueue.cpp" />
+    <ClCompile Include="OVERLAPPED_CONTEXT.cpp" />
+    <ClCompile Include="Session.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ChattingServer.h" />
+    <ClInclude Include="CIOCPHandle.h" />
+    <ClInclude Include="CNetClient.h" />
+    <ClInclude Include="CNetServer.h" />
+    <ClInclude Include="CommonProtocol.h" />
+    <ClInclude Include="CPacket.h" />
+    <ClInclude Include="CRingBuffer.h" />
+    <ClInclude Include="cSessionMap.h" />
+    <ClInclude Include="errlog.h" />
+    <ClInclude Include="MessageQueue.h" />
+    <ClInclude Include="OVERLAPPED_CONTEXT.h" />
+    <ClInclude Include="Session.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
