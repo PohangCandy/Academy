@@ -637,9 +637,6 @@ bool CNetServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 		}
 	}
 
-
-
-
 	int retval;
 	//Send 중이 아니라면
 	//Send 링버퍼에 있는 있는 내용 전부 Send
