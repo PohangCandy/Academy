@@ -34,7 +34,7 @@
 //CMemoryPoolTLS<int> p2;
 
 
-namespace procademy
+namespace myMemorypool
 {
 
 	template <class DATA>

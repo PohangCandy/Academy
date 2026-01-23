@@ -11,6 +11,9 @@ enum EServerMode {
 
 class Character {
 public:
+
+	void OnReuse();
+
 	INT64	_AccountNo;
 	WCHAR	_ID[20];	// null 포함
 	WCHAR	_Nickname[20];	// null 포함
@@ -32,9 +35,21 @@ public:
 	ChattingServer();
 	~ChattingServer();
 
-	bool _bIsTimerThreadRuning() { return _btimerRunning; }
+	bool _bIsTimerThreadRuning() { return _bIsTimerThreadAlive; }
 
 private:
+
+	//컨텐츠 스레드 함수
+	static unsigned int __stdcall ContentsThread(LPVOID arg);
+
+	//타이머 스레드 함수
+	static unsigned int __stdcall TimerThread(LPVOID arg);
+
+	HANDLE hContentCompletionPort = {};
+	HANDLE hContentThread = {};
+	HANDLE hTimerThread = {};
+
+	bool _bIsTimerThreadAlive = true;
 
 	virtual bool OnConnectionRequest(std::string IP, int Port) override;
 	//< accept 직후
@@ -52,25 +67,13 @@ private:
 	virtual void 	OnRecv(SessionID s, CPacket* pPacket)  override;
 	//< 패킷 수신 완료 후
 	//OnMessage(..)
-
 	//	virtual void OnSend(g_SessionCounter, int sendsize) = 0;           < 패킷 송신 완료 후
-
 	//	virtual void OnWorkerThreadBegin() = 0;                    < 워커스레드 GQCS 바로 하단에서 호출
 	//	virtual void OnWorkerThreadEnd() = 0;                      < 워커스레드 1루프 종료 후
 
 	virtual void OnError(int errorcode, char*) override;
 
-	//컨텐츠 스레드 함수
-	static unsigned int __stdcall ContentsThread(LPVOID arg);
 
-	//타이머 스레드 함수
-	static unsigned int __stdcall TimerThread(LPVOID arg);
-
-	HANDLE hContentCompletionPort = {};
-	HANDLE hContentThread = {};
-	HANDLE hTimerThread = {};
-
-	bool _btimerRunning;
 
 	EServerMode _serverMode = None;
 };
