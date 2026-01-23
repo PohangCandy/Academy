@@ -26,19 +26,21 @@ struct Msg {
 ChattingServer::ChattingServer()
 {
 	//네트워크, 컨텐츠 스레드 입출력 완료 포트 생성
-	contentHcp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-	if (contentHcp == NULL)
+	hContentCompletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+	if (hContentCompletionPort == NULL)
 	{
 		printf("[ChattingServer] 컨텐츠 스레드 IOCP 생성 실패");
+		__debugbreak();
 		return;
 	}
 
 	ServerAndHandle* sah = new ServerAndHandle;
-	sah->handle = contentHcp;
+	sah->handle = hContentCompletionPort;
 	sah->thisptr = this;
 
+	//컨텐츠 스레드 생성
 	unsigned int uiThreadID;
-	HANDLE hThread = (HANDLE)_beginthreadex(
+	hContentThread = (HANDLE)_beginthreadex(
 		NULL,          
 		0,              
 		ContentsThread,   
@@ -47,18 +49,56 @@ ChattingServer::ChattingServer()
 		&uiThreadID    
 		);
 
-		if (hThread == NULL) 
+		if (hContentThread == NULL)
 		{
 			printf("[ChattingServer] 컨텐츠 스레드 생성 실패");
+			__debugbreak();
 			return;
 		}
 
-		CloseHandle(hThread);
+		//타이머 스레드 생성
+		hTimerThread = (HANDLE)_beginthreadex(
+			NULL,
+			0,
+			TimerThread,
+			sah,    // 스레드에게 this포인터와 컨텐츠 스레드의 IOCP핸들 인자로 전달
+			0,
+			&uiThreadID
+		);
+
+		if (hTimerThread == NULL)
+		{
+			printf("[ChattingServer] 타이머 스레드 생성 실패");
+			__debugbreak();
+			return;
+		}
+
+		_btimerRunning = true;
 }
 
 ChattingServer::~ChattingServer()
 {
+	//컨텐츠 스레드 종료 유도
+	PostQueuedCompletionStatus(
+		hContentCompletionPort,
+		0,
+		0,
+		nullptr
+	);
 
+	//컨텐츠 스레드 종료 대기
+	WaitForSingleObject(hContentThread, INFINITE);
+	CloseHandle(hContentThread);
+
+	//컨텐츠 IOCP 핸들 반납
+	CloseHandle(hContentCompletionPort);
+
+	//타이머 스레드 종료 유도
+	_btimerRunning = false;
+
+	//타이머 스레드 종료 대기
+	WaitForSingleObject(hTimerThread, INFINITE);
+	CloseHandle(hTimerThread);
 }
 
 //----------------------
@@ -92,7 +132,7 @@ void ChattingServer::OnClientLeave(SessionID s)
 //해당 스레드는 깨어나서 메시지 종류에 따라 switch-case로 채팅 로직을 처리하면 될 것.
 void ChattingServer::OnRecv(SessionID sessionID, CPacket* pPacket)
 {
-	if (!PostQueuedCompletionStatus(contentHcp, pPacket->GetDataSize(), sessionID, (LPWSAOVERLAPPED)pPacket))
+	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), sessionID, (LPWSAOVERLAPPED)pPacket))
 	{
 		while (1)
 		{
@@ -147,13 +187,13 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			}
 		}
 
-		if (pPacket->GetDataSize() <= 0)
-		{
-			while (1)
-			{
-				printf("[Contents] 아무것도 없는 패킷이 넘어옴\n");
-			}
-		}
+		//if (pPacket->GetDataSize() <= 0)
+		//{
+		//	while (1)
+		//	{
+		//		printf("[Contents] 아무것도 없는 패킷이 넘어옴\n");
+		//	}
+		//}
 
 		WORD type;
 		*pPacket >> type;
@@ -196,7 +236,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			INT64	AccountNo = pcharacter->_AccountNo;
 			// 3. 
-			packetToSend.PutData((char*)en_PACKET_SC_CHAT_RES_LOGIN, sizeof(WORD));
+			packetToSend << (short)en_PACKET_SC_CHAT_RES_LOGIN;
 			packetToSend.PutData((char*)Status, sizeof(BYTE));
 			packetToSend.PutData((char*)pcharacter->_AccountNo, sizeof(INT64));
 
@@ -244,7 +284,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 					umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].emplace(pcharacter->_AccountNo, pcharacter);
 
 					// 3.
-					packetToSend.PutData((char*)en_PACKET_SC_CHAT_RES_SECTOR_MOVE, sizeof(WORD));
+					packetToSend << (short)en_PACKET_SC_CHAT_RES_SECTOR_MOVE;
 					packetToSend.PutData((char*)pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
 					packetToSend.PutData((char*)pcharacter->_SectorX, sizeof(pcharacter->_SectorX));
 					packetToSend.PutData((char*)pcharacter->_SectorY, sizeof(pcharacter->_SectorY));
@@ -281,7 +321,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			{
 				Character* pcharacter = a->second;
 				//2.
-				packetToSend.PutData((char*)en_PACKET_SC_CHAT_RES_MESSAGE, sizeof(WORD));
+				packetToSend << (short)en_PACKET_SC_CHAT_RES_MESSAGE;
 				packetToSend.PutData((char*)pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
 				packetToSend.PutData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));
 				packetToSend.PutData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));
@@ -315,6 +355,17 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			break;
 		}
 
+		//-----------------------------------------------------------
+		// 타이머 처리
+		// 플레이어 맵을 살핀 후 40초 이상 경과되 플레이어 disconnect
+		//-----------------------------------------------------------
+		case en_PACKET_SS_TIMER_TICK:
+		{
+			printf("타이머 도착");
+			
+			break;
+		}
+
 		default:
 			break;
 		}
@@ -328,9 +379,26 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 //특정 주기마다 컨텐츠 스레드를 깨우는 메시지를 발생시키기 위한 스레드
 unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 {
-	while (1)
-	{
+	ServerAndHandle* sah = (ServerAndHandle*)arg;
 
+	ChattingServer* pServer = (ChattingServer*)sah->thisptr;
+	HANDLE hContentscp = sah->handle;
+	CPacket* ppacket = new CPacket;
+	
+	*ppacket << (short)en_PACKET_SS_TIMER_TICK;
+
+	while (pServer->_btimerRunning)
+	{
+		Sleep(1000); // 1초 주기
+
+		PostQueuedCompletionStatus(
+			hContentscp,
+			1,//byte
+			-1,//id
+			(LPOVERLAPPED)ppacket
+		);
 	}
+
+	delete ppacket;
 	return 0;
 }
