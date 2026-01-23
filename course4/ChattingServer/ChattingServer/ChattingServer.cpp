@@ -37,9 +37,9 @@ ChattingServer::ChattingServer()
 		return;
 	}
 
-	ServerAndHandle* sah = new ServerAndHandle;
-	sah->handle = hContentCompletionPort;
-	sah->thisptr = this;
+	//ServerAndHandle* sah = new ServerAndHandle;
+	//sah->handle = hContentCompletionPort;
+	//sah->thisptr = this;
 
 	//컨텐츠 스레드 생성
 	unsigned int uiThreadID;
@@ -47,7 +47,7 @@ ChattingServer::ChattingServer()
 		NULL,          
 		0,              
 		ContentsThread,   
-		sah,    // 스레드에게 this포인터와 IOCP핸들 인자로 전달
+		this,    // 스레드에게 this포인터와 IOCP핸들 인자로 전달
 		0,              
 		&uiThreadID    
 		);
@@ -64,7 +64,7 @@ ChattingServer::ChattingServer()
 			NULL,
 			0,
 			TimerThread,
-			sah,    // 스레드에게 this포인터와 컨텐츠 스레드의 IOCP핸들 인자로 전달
+			this,    // 스레드에게 this포인터와 컨텐츠 스레드의 IOCP핸들 인자로 전달
 			0,
 			&uiThreadID
 		);
@@ -134,11 +134,9 @@ void ChattingServer::OnClientLeave(SessionID s)
 //컨텐츠 스레드 깨우기
 void ChattingServer::OnRecv(SessionID sessionID, CPacket* pPacket)
 {
-	CPacket* contentPacket = CPacket::Alloc();
-	int size = pPacket->GetDataSize();
-	contentPacket->PutData(pPacket->GetBufferPtr(), size);
+	pPacket->AddRef();
 
-	if (!PostQueuedCompletionStatus(hContentCompletionPort, contentPacket->GetDataSize(), sessionID, (LPWSAOVERLAPPED)contentPacket))
+	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), sessionID, (LPWSAOVERLAPPED)pPacket))
 	{
 		printf("[OnRecv] 컨텐츠 IOCP에 PQCS실패!\n");
 		__debugbreak();
@@ -155,12 +153,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 {
 	int retval;
 
-	ServerAndHandle* sah = (ServerAndHandle*)arg;
-
-	CNetServer* pServer = sah->thisptr;
-	HANDLE hcp = sah->handle;
-
-	//IOCPHandle* iocpHandle = (IOCPHandle*)arg;
+	ChattingServer* pServer = (ChattingServer*)arg;
 
 	bool bremoveDieCharacter = false;
 
@@ -172,7 +165,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		SOCKET client_sock;
 		long long sessionId;
 		CPacket* pPacket;
-		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&sessionId, (LPOVERLAPPED*)&pPacket, INFINITE);
+		retval = GetQueuedCompletionStatus(pServer->hContentCompletionPort, &cbTransferred, (PULONG_PTR)&sessionId, (LPOVERLAPPED*)&pPacket, INFINITE);
 
 		//비동기 입출력 결과 확인
 		if (cbTransferred == 0 && sessionId == 0 && pPacket == nullptr)
@@ -233,19 +226,35 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			Character* pcharacter = characterpool.Alloc();
 			pcharacter->OnReuse();
 
-			*pPacket >> pcharacter->_AccountNo;
-			pPacket->GetData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));// null 포함
-			pPacket->GetData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));// null 포함
-			pPacket->GetData(pcharacter->_SessionKey, sizeof(pcharacter->_SessionKey));// 인증토큰
+			*pPacket >> pcharacter->_AccountNo; 
+			pPacket->GetData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));
+			pPacket->GetData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));
+			pPacket->GetData(pcharacter->_SessionKey, sizeof(pcharacter->_SessionKey));
 			pcharacter->_sessionId = sessionId;
 
+			
 			BYTE	Status;			// 채팅서버 로그인 응답 0:실패	1:성공
 			auto a = umapCharacter.find(pcharacter->_sessionId);
 
 			// 2. 캐릭터 맵에 추가
 			if (a != umapCharacter.end())
 			{
-				//새로운 로그인 접속
+				// 로그인을 했는데 이미 캐릭터가 있다?
+				// 걍 말이 안되네..-> 세션 ID를 ++ 로 조회중, 아니지 삭제된 세션 ID를 새로 받긴 하잖슴.
+				// 삭제된 세션 ID가 새롭게 부여되었고, 클라가 해당 세션 ID로 조회했는데 하트비트 이뤄지지않았으면?
+				// 이러면 ID에 여전히 캐릭터가 있을 수 있는데??
+				// 
+				// 이 경우 남아있는 플레이어를 삭제하고 새로운 플레이어를 대입하는게 맞아보인다.
+				// 
+				// 게임 중간에 나갔다 바로 접속하면 게임 중이라고 뜨는 이유
+				// 로그인 / 로그아웃에서 비동기로 DB에 접근함
+				// 로그아웃이 되었다가 다시 로그인한게 회원 DB에 반영이 안된거면,
+				// 게임 중이 아니라 이미 로그인 중이라고 뜨는게 맞는거고, 
+				// 게임 중이라고 뜨는건 게임 서버 DB에 반영되지 않았다는거 아님?
+				// 
+				// 중복 로그인을 한다면? -> 애초에 로그아웃을 했다 = 세션의 삭제도 이루어졌다는 의미임.
+				// 캐릭터도 삭제되야 함.
+				// 새로운 로그인 접속
 				umapCharacter[pcharacter->_sessionId] = pcharacter;
 				Status = 1;
 			}
@@ -445,10 +454,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 //얘가 그냥 플레이어 죽었는지 체크하고 Flag세운 다음에 깨워도 되겠는데?
 unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 {
-	ServerAndHandle* sah = (ServerAndHandle*)arg;
-
-	ChattingServer* pServer = (ChattingServer*)sah->thisptr;
-	HANDLE hContentscp = sah->handle;
+	ChattingServer* pServer = (ChattingServer*)arg;
 	CPacket* ppacket = CPacket::Alloc();
 	
 	*ppacket << (short)en_PACKET_SS_TIMER_TICK;
@@ -472,7 +478,7 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 		if (bWakeContentsThread)
 		{
 			PostQueuedCompletionStatus(
-				hContentscp,
+				pServer->hContentCompletionPort,
 				1,//byte
 				-1,//id
 				(LPOVERLAPPED)ppacket
