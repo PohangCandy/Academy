@@ -1,7 +1,15 @@
 //#ifndef __GODDAMNBUG_ONLINE_PROTOCOL__
 //#define __GODDAMNBUG_ONLINE_PROTOCOL__
 
-
+#pragma pack(push, 1)
+struct PacketHeader
+{
+	char Code;//
+	short Len;
+	char RandKey;
+	char CheckSum;
+};
+#pragma pack(pop)
 
 enum en_PACKET_TYPE
 {

@@ -1,7 +1,4 @@
 #include "CPacket.h"
-#include <cstring>   // std::memcpy
-#include <algorithm> // std::max
-#include <new>       // std::nothrow
 
 // ============================== 내부 유틸 ==============================
 
@@ -11,7 +8,7 @@ void CPacket::_EnsureCapacity(int requireBytes)
     // 필요 총량 = m_iWritePos + requireBytes
     if (m_iWritePos + requireBytes <= m_iBufferSize) return;
 
-    int newSize = std::max(m_iBufferSize, 1);
+    int newSize = max(m_iBufferSize, 1);
     while (newSize < m_iWritePos + requireBytes)
         newSize <<= 1; // 2배씩 확장
 
@@ -113,7 +110,7 @@ CPacket& CPacket::operator = (CPacket& src)
     if (m_iBufferSize < src.m_iWritePos)
     {
         delete[] m_chpBuffer;
-        m_iBufferSize = std::max(src.m_iBufferSize, src.m_iWritePos);
+        m_iBufferSize = max(src.m_iBufferSize, src.m_iWritePos);
         m_chpBuffer = new char[m_iBufferSize];
     }
 

@@ -81,9 +81,31 @@
 #ifndef  __PACKET__
 #define  __PACKET__
 
+#include"MemoryPoolForLockFree.h"
+
 class CPacket
 {
+	friend class myMemorypool::CMemoryPool<CPacket>;
+
 public:
+
+	static CPacket* Alloc()
+	{
+		return packetPool.Alloc();
+	}
+
+	void AddRef()
+	{
+		InterlockedIncrement64(&mRefCount);
+	}
+
+	void SubRef()
+	{
+		if (InterlockedDecrement64(&mRefCount) == 0)
+		{
+			packetPool.Free(this);
+		}
+	}
 
 	/*---------------------------------------------------------------
 	Packet Enum.
@@ -94,15 +116,7 @@ public:
 		eBUFFER_DEFAULT = 1400		// 패킷의 기본 버퍼 사이즈.
 	};
 
-	//////////////////////////////////////////////////////////////////////////
-	// 생성자, 파괴자.
-	//
-	// Return:
-	//////////////////////////////////////////////////////////////////////////
-	CPacket();
-	CPacket(int iBufferSize);
 
-	virtual	~CPacket();
 
 
 	//////////////////////////////////////////////////////////////////////////
@@ -211,14 +225,23 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 	int		PutData(char* chpSrc, int iSrcSize);
 
-
+	inline static myMemorypool::CMemoryPool<CPacket> packetPool = myMemorypool::CMemoryPool<CPacket>(1024, true);
 
 protected:
+	//////////////////////////////////////////////////////////////////////////
+	// 생성자, 파괴자.
+	//
+	// Return:
+	//////////////////////////////////////////////////////////////////////////
+	CPacket();
+	CPacket(int iBufferSize);
+
+	virtual	~CPacket();
+
 	// 내부 유틸
 	void    _EnsureCapacity(int requireBytes);
 	void    _CompactIfEmpty(); // 다 읽었으면 포인터 리셋
 
-protected:
 	char* m_chpBuffer = nullptr;
 
 	// 전체 버퍼 크기
@@ -230,6 +253,8 @@ protected:
 	// 읽기/쓰기 위치
 	int     m_iReadPos = 0;
 	int     m_iWritePos = 0;
+
+	long long mRefCount = 0;
 };
 
 

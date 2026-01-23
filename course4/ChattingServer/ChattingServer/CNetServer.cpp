@@ -212,6 +212,7 @@ bool CNetServer::Disconnect(SessionID sessionId)
 	{
 		return false;
 	}
+	ptr->DecreaseIOCount();
     return true;
 }
 
@@ -221,6 +222,7 @@ bool CNetServer::SendPacket(SessionID sessionId, CPacket* cp)
 	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
 
 	//네트워크 헤더를 삽입한다.
+	
 	//헤더에 삽입할 크기
 	short netHeaderData = cp->GetDataSize() - sizeof(Msg::header);
 	//패킷의 네트워크 헤더 부에 삽입
@@ -433,7 +435,7 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 
 							//메시지 버퍼에 추출한 메시지를 넣기.
 
-							CPacket* pContentsSendPacket = new CPacket(sizeof(Msg));
+							CPacket* pContentsSendPacket = CPacket::Alloc();
 							int ret = pContentsSendPacket->PutData((char*)&recvMsg.payload, recvMsg.header);
 
 							if (ret == 0)
@@ -453,7 +455,7 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 
 							//컨텐츠의 수신 로직 실행
 							pServer->OnRecv(ptr->session_id, pContentsSendPacket);
-							delete pContentsSendPacket;
+							pContentsSendPacket->SubRef();
 						}
 						else
 						{
@@ -513,6 +515,7 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 			//ptr->GetSessionLock();
 			ptr->sendBuf->GetLockBuffer();
 			ptr->sendBuf->MoveFront(cbTransferred);
+			//패킷 포인터 크기만큼 돌면서 subref를 하면 되지 않을까?
 			ptr->sendBuf->UnLockBuffer();
 			//ptr->UnLockSession();
 			
