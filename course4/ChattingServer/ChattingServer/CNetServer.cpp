@@ -47,8 +47,8 @@ bool CNetServer::Start()
 		if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
 
 		//네트워크, 컨텐츠 스레드 입출력 완료 포트 생성
-		WorkerThreadIOCPhandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-		if (WorkerThreadIOCPhandle == NULL) return false;
+		_hWorkerThreadIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+		if (_hWorkerThreadIOCP == NULL) return false;
 		//pIOCPHandle->contentHcp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 		//if (pIOCPHandle->contentHcp == NULL) return false;
 
@@ -60,20 +60,16 @@ bool CNetServer::Start()
 		HANDLE hThread;
 		unsigned int uiThreadID;
 
-		ServerAndHandle* sah = new ServerAndHandle;
-		sah->handle = WorkerThreadIOCPhandle;
-		sah->thisptr = this;
-
 		for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
 			//for (int i = 0; i < 1; i++)
 		{
 			hThread = (HANDLE)_beginthreadex(
-				NULL,           // Security attributes (NULL = 디폴트)
-				0,              // Stack size (0 = 디폴트)
-				WorkerThread,   // Thread function
-				sah,    // Argument list to be passed to thread function
-				0,              // Initial state (0 = 즉시 실행)
-				&uiThreadID     // Pointer to thread ID
+				NULL,          
+				0,              
+				WorkerThread,   
+				this,   
+				0,              
+				&uiThreadID     
 			);
 
 			if (hThread == NULL) return false;
@@ -157,7 +153,7 @@ bool CNetServer::Start()
 			OnClientJoin(clientaddr, id);
 
 			//소켓과 입출력 완료 포트 연결
-			CreateIoCompletionPort((HANDLE)client_sock, WorkerThreadIOCPhandle, (ULONG_PTR)ptr, 0);
+			CreateIoCompletionPort((HANDLE)client_sock, _hWorkerThreadIOCP, (ULONG_PTR)ptr, 0);
 
 			//비동기 입출력 시작
 			flags = 0;
@@ -212,7 +208,7 @@ bool CNetServer::Disconnect(SessionID sessionId)
 	{
 		return false;
 	}
-	ptr->DecreaseIOCount();
+	//ptr->DecreaseIOCount();
     return true;
 }
 
@@ -315,10 +311,7 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 	int retval;
 
 
-	ServerAndHandle* sah = (ServerAndHandle*)arg;
-
-	CNetServer* pServer = sah->thisptr;
-	HANDLE hcp = sah->handle;
+	CNetServer* pServer = (CNetServer*)arg;
 
 	//IOCPHandle* iocpHandle = (IOCPHandle*)arg;
 
@@ -328,7 +321,7 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 		SOCKET client_sock;
 		SOCKETINFO* ptr;
 		OVERLAPPED_CONTEXT* lpOverlapped;
-		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
+		retval = GetQueuedCompletionStatus(pServer->_hWorkerThreadIOCP, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
 
 		//삭제된 세션에 대한 완료 통지가 온다면 무시하도록 한다.
 		if (ptr == nullptr) continue;

@@ -28,13 +28,6 @@ typedef long long SessionID;
 class CNetServer;
 class IOCPHandle;
 
-struct ServerAndHandle
-{
-	CNetServer* thisptr;
-	//IOCPHandle* phandle;
-	HANDLE handle;
-};
-
 class CNetServer
 {
 
@@ -98,7 +91,7 @@ public:
 	int getRecvMessageTPS();
 	int getSendMessageTPS();
 
-	HANDLE WorkerThreadIOCPhandle;
+	HANDLE _hWorkerThreadIOCP;
 
 	int _sessionCount;
 
