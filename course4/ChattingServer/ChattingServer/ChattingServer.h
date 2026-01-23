@@ -19,6 +19,9 @@ public:
 	WORD	_SectorX = -1;
 	WORD	_SectorY = -1;
 	long long _sessionId;
+
+	long long _lastRecvTime;
+	bool _bDie;
 };
 
 

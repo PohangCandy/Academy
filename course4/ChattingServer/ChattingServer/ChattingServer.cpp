@@ -161,6 +161,8 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 	//IOCPHandle* iocpHandle = (IOCPHandle*)arg;
 
+	bool bremoveDieCharacter = false;
+
 	while (1) {
 		//비동기 입출력 완료 기다리기
 		DWORD cbTransferred;
@@ -204,8 +206,8 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		{
 		//------------------------------------------------------------
 		// 채팅서버 로그인 요청
-		// 1. 중복 로그인 확인
-		// 2. 플레이어 맵에 추가
+		// 1. 캐릭터 생성
+		// 2. 캐릭터 맵에 추가
 		// 3. 로그인 확인 메시지 전송
 		//------------------------------------------------------------
 		case en_PACKET_CS_CHAT_REQ_LOGIN:
@@ -220,17 +222,19 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			BYTE	Status;			// 채팅서버 로그인 응답 0:실패	1:성공
 			//1.
-			auto a = umapCharacter.find(pcharacter->_AccountNo);
+			auto a = umapCharacter.find(pcharacter->_sessionId);
 
 			if (a != umapCharacter.end())
 			{
-				printf("[en_PACKET_CS_CHAT_REQ_LOGIN] 중복 로그인 감지\n");
+				//새로운 로그인 접속
+				umapCharacter[pcharacter->_sessionId] = pcharacter;
+				Status = 1;
 				Status = 0;
 			}
 			else
 			{
 				// 2.
-				umapCharacter[pcharacter->_AccountNo] = pcharacter;
+				umapCharacter[pcharacter->_sessionId] = pcharacter;
 				Status = 1;
 			}
 
@@ -244,6 +248,8 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			if (!ret)
 			{
 				//SendPacket실패 세션이 이미 삭제된 경우
+				pcharacter->_bDie = true;
+				bremoveDieCharacter = true;
 			}
 			break;
 		}
@@ -260,15 +266,16 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		case en_PACKET_CS_CHAT_REQ_SECTOR_MOVE:
 		{
 			INT64	AccountNo;
-
 			*pPacket >> AccountNo;
 
 			//1.
-			auto a = umapCharacter.find(AccountNo);
+			auto a = umapCharacter.find(sessionId);
 			if (a != umapCharacter.end())
 			{
 				// 2. 
-				Character* pcharacter = umapCharacter[AccountNo];
+				Character* pcharacter = umapCharacter[sessionId];
+				pcharacter->_lastRecvTime = GetTickCount64();
+
 				// 제일 처음 생성된 플레이어인 경우 섹터 리스트 제외 건너뛰기
 				if (pcharacter->_SectorX != -1)
 				{
@@ -293,6 +300,8 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 					if (!ret)
 					{
 						//SendPacket실패 세션이 이미 삭제된 경우
+						pcharacter->_bDie = true;
+						bremoveDieCharacter = true;
 					}
 
 				}
@@ -300,7 +309,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		   }
 		   else
 		   {
-				printf("[en_PACKET_CS_CHAT_REQ_SECTOR_MOVE] 맵에 없는 플레이어에 대해 섹터 이동 요청\n");
+				printf("[Contents] 맵에 없는 플레이어에 대해 섹터 이동 요청\n");
 		   }
 
 			break;
@@ -313,13 +322,16 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		case en_PACKET_CS_CHAT_REQ_MESSAGE:
 		{
 			INT64	AccountNo;
-
 			*pPacket >> AccountNo;
-			auto a = umapCharacter.find(AccountNo);
+
+			auto a = umapCharacter.find(sessionId);
 			//1.
 			if (a != umapCharacter.end())
 			{
+
 				Character* pcharacter = a->second;
+				pcharacter->_lastRecvTime = GetTickCount64();
+
 				//2.
 				packetToSend << (short)en_PACKET_SC_CHAT_RES_MESSAGE;
 				packetToSend.PutData((char*)pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
@@ -333,10 +345,15 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 				{
 					for (auto& a : umapCharcterSector[pcharacter->_SectorY + dy[i]][pcharacter->_SectorX + dx[i]])
 					{
-						bool ret = pServer->SendPacket(a.second->_sessionId, &packetToSend);
-						if (!ret)
+						if (!a.second->_bDie)
 						{
-							//SendPacket실패 세션이 이미 삭제된 경우
+							bool ret = pServer->SendPacket(a.second->_sessionId, &packetToSend);
+							if (!ret)
+							{
+								//SendPacket실패 세션이 이미 삭제된 경우
+								pcharacter->_bDie = true;
+								bremoveDieCharacter = true;
+							}
 						}
 					}
 					
@@ -348,21 +365,31 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 		//------------------------------------------------------------
 		// 하트비트
-		//do nothing
+		// 1.마지막 메시지 시간 갱신
 		//------------------------------------------------------------	
 		case en_PACKET_CS_CHAT_REQ_HEARTBEAT:
-		{			
-			break;
+		{
+			auto a = umapCharacter.find(sessionId);
+			//1.
+			if (a != umapCharacter.end())
+			{
+				a->second->_lastRecvTime = GetTickCount64();
+				break;
+			}
+			else
+			{
+				printf("[Contents] 없는 플레이어를 대상으로 하트 비트 감지\n");
+				__debugbreak();
+			}
 		}
 
 		//-----------------------------------------------------------
-		// 타이머 처리
-		// 플레이어 맵을 살핀 후 40초 이상 경과되 플레이어 disconnect
+		// 타이머 스레드가 
+		// 플레이어 맵을 살핀 후 40초 이상 경과되어 플레이어 감지
 		//-----------------------------------------------------------
 		case en_PACKET_SS_TIMER_TICK:
 		{
-			printf("타이머 도착");
-			
+			bremoveDieCharacter = true;
 			break;
 		}
 
@@ -370,13 +397,28 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			break;
 		}
 
-
+		if (bremoveDieCharacter)
+		{
+			for (auto it = umapCharacter.begin(); it != umapCharacter.end(); )
+			{
+				if (it->second->_bDie)
+				{
+					it = umapCharacter.erase(it);
+				}
+				else
+				{
+					++it;
+				}
+			}
+			bremoveDieCharacter = false;
+		}
 	}
 
 	return 0;
 }
 
 //특정 주기마다 컨텐츠 스레드를 깨우는 메시지를 발생시키기 위한 스레드
+//얘가 그냥 플레이어 죽었는지 체크하고 Flag세운 다음에 깨워도 되겠는데?
 unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 {
 	ServerAndHandle* sah = (ServerAndHandle*)arg;
@@ -387,16 +429,33 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 	
 	*ppacket << (short)en_PACKET_SS_TIMER_TICK;
 
+	bool bWakeContentsThread = false;
+
 	while (pServer->_btimerRunning)
 	{
 		Sleep(1000); // 1초 주기
+		uint64_t now = GetTickCount64();
 
-		PostQueuedCompletionStatus(
-			hContentscp,
-			1,//byte
-			-1,//id
-			(LPOVERLAPPED)ppacket
-		);
+		for (auto& a : umapCharacter)
+		{
+			if (now - a.second->_lastRecvTime > 40000)
+			{
+				a.second->_bDie = true;
+				bWakeContentsThread = true;
+			}
+		}
+
+		if (bWakeContentsThread)
+		{
+			PostQueuedCompletionStatus(
+				hContentscp,
+				1,//byte
+				-1,//id
+				(LPOVERLAPPED)ppacket
+			);
+			bWakeContentsThread = false;
+		}
+
 	}
 
 	delete ppacket;
