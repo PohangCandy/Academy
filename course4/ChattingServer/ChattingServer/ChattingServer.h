@@ -28,6 +28,9 @@ class ChattingServer : public CNetServer
 public:
 	ChattingServer();
 	~ChattingServer();
+
+	bool _bIsTimerThreadRuning() { return _btimerRunning; }
+
 private:
 
 	virtual bool OnConnectionRequest(std::string IP, int Port) override;
@@ -60,7 +63,11 @@ private:
 	//타이머 스레드 함수
 	static unsigned int __stdcall TimerThread(LPVOID arg);
 
-	HANDLE contentHcp = {};
+	HANDLE hContentCompletionPort = {};
+	HANDLE hContentThread = {};
+	HANDLE hTimerThread = {};
+
+	bool _btimerRunning;
 
 	EServerMode _serverMode = None;
 };
