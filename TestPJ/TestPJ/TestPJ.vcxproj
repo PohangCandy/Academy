@@ -131,10 +131,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CPacket.cpp" />
-    <ClCompile Include="shortTest.cpp" />
+    <ClCompile Include="errlog.cpp" />
+    <ClCompile Include="TCPServer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CPacket.h" />
+    <ClInclude Include="errlog.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
