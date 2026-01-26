@@ -102,12 +102,12 @@ int main(int argc, char *argv[])
 			
 			if (countDownShut-- == 0)
 			{
-				LINGER optval;
-				optval.l_onoff = 1;
-				optval.l_linger = 0;
-				bool bEnable = TRUE;
-				int ret = setsockopt(client_sock, SOL_SOCKET, SO_LINGER, (char*)&optval, sizeof(optval));
-				if (ret == SOCKET_ERROR) err_quit("setsockopt()");
+				//LINGER optval;
+				//optval.l_onoff = 1;
+				//optval.l_linger = 0;
+				//bool bEnable = TRUE;
+				//int ret = setsockopt(client_sock, SOL_SOCKET, SO_LINGER, (char*)&optval, sizeof(optval));
+				//if (ret == SOCKET_ERROR) err_quit("setsockopt()");
 				
 				//shutdown(client_sock, SD_SEND);
 				shutdown(client_sock, SD_RECEIVE);
@@ -123,7 +123,6 @@ int main(int argc, char *argv[])
 					(char*)&optVal,
 					&optLen) != SOCKET_ERROR)
 					printf("SockOpt Value: %ld\n", optVal);
-
 
 			}
 
@@ -144,10 +143,11 @@ int main(int argc, char *argv[])
 
 		printf("[TCP Server] Client Exit: IP address = %s, Port num = %d\n", 
 			szClientIP, ntohs(clientaddr.sin_port));
-
+		break;
 	}
 
-	//closesocket()
+	//closesocket()                              
+	//closesocket(client_sock);
 	closesocket(listen_sock);
 
 	//윈속 종료

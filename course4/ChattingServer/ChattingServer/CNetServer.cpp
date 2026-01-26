@@ -204,7 +204,7 @@ bool CNetServer::Disconnect(SessionID sessionId)
 	{
 		return false;
 	}
-	if (shutdown(ptr->sock, SD_BOTH) != 0)
+	if (shutdown(ptr->sock, SD_RECEIVE) != 0)
 	{
 		return false;
 	}
