@@ -56,10 +56,10 @@ void SOCKETINFO::Inintialize(SOCKET sock, long long sessionID)
 	//OVERLAPPED의 맴버가 초기화 되지 않도록 해준다.
 	//nullptr을 참조하는 상황이 나오지 않게하기위해 순서를 조절한다.
 	//recvOverlapped->op = ERecv;
-	ZeroMemory(&recvOverlapped, sizeof(OVERLAPPED));
+	ZeroMemory(recvOverlapped, sizeof(OVERLAPPED));
 
 	//sendOverlapped->op = ESend;
-	ZeroMemory(&sendOverlapped, sizeof(OVERLAPPED));
+	ZeroMemory(sendOverlapped, sizeof(OVERLAPPED));
 	
 	recvBuf->ClearBuffer();
 	sendBuf->ClearBuffer();
