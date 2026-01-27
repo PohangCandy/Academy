@@ -5,11 +5,11 @@
 #include "CIOCPHandle.h"
 #include "cSessionMap.h"
 #include "Session.h"
-#include "CRingBuffer.h"
+#include "CRingBufferForPacket.h"
 #include "OVERLAPPED_CONTEXT.h"
 #include "MessageQueue.h"
 #include "errlog.h"
-#include "CPacket.h"
+#include "CPacketForMultiThread.h"
 
 #define SERVERPORT (6000)
 #define BUFSIZE (1024 * 1024)
@@ -222,6 +222,7 @@ bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
 		return false;
 	}
 	ptr->sendBuf->GetLockBuffer();
+	cp->AddRef();
 	int ret = ptr->sendBuf->Enqueue(cp->GetBufferPtr(), cp->GetDataSize());
 	ptr->sendBuf->UnLockBuffer();
 	if (ret == 0)
@@ -424,7 +425,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 
 							//메시지 버퍼에 추출한 메시지를 넣기.
 
-							CPacket* pContentsSendPacket = new CPacket(sizeof(Msg));
+							CPacket* pContentsSendPacket = CPacket::Alloc();
 							int ret = pContentsSendPacket->PutData((char*)&recvMsg.payload, recvMsg.header);
 
 							if (ret == 0)
@@ -443,8 +444,9 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 							}
 
 							//컨텐츠의 수신 로직 실행
+							pContentsSendPacket->AddRef();
 							pServer->OnRecv(ptr->session_id, pContentsSendPacket);
-							delete pContentsSendPacket;
+							pContentsSendPacket->SubRef();
 						}
 						else
 						{
