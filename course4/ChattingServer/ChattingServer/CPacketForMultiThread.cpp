@@ -1,4 +1,4 @@
-#include "CPacket.h"
+#include "CPacketForMultiThread.h"
 
 // ============================== 내부 유틸 ==============================
 

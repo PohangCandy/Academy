@@ -131,7 +131,7 @@
   <ItemGroup>
     <ClCompile Include="ChattingServer.cpp" />
     <ClCompile Include="CNetServer.cpp" />
-    <ClCompile Include="CPacket.cpp" />
+    <ClCompile Include="CPacketForMultiThread.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="CSessionMap.cpp" />
     <ClCompile Include="errlog.cpp" />
@@ -146,7 +146,7 @@
     <ClInclude Include="CNetClient.h" />
     <ClInclude Include="CNetServer.h" />
     <ClInclude Include="CommonProtocol.h" />
-    <ClInclude Include="CPacket.h" />
+    <ClInclude Include="CPacketForMultiThread.h" />
     <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="cSessionMap.h" />
     <ClInclude Include="errlog.h" />

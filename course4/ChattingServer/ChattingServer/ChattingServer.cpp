@@ -1,6 +1,6 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include "ChattingServer.h"
-#include "CPacket.h"
+#include "CPacketForMultiThread.h"
 #include "CommonProtocol.h"
 #include "MemoryPoolForLockFree.h"
 

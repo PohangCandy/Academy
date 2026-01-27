@@ -21,9 +21,6 @@
     <ClCompile Include="CNetServer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="CPacket.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="CRingBuffer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -45,6 +42,9 @@
     <ClCompile Include="Session.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="CPacketForMultiThread.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ChattingServer.h">
@@ -57,9 +57,6 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="CNetServer.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="CPacket.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="CRingBuffer.h">
@@ -87,6 +84,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="MemoryPoolForLockFree.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CPacketForMultiThread.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

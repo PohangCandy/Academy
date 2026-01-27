@@ -9,7 +9,7 @@
 #include "OVERLAPPED_CONTEXT.h"
 #include "MessageQueue.h"
 #include "errlog.h"
-#include "CPacket.h"
+#include "CPacketForMultiThread.h"
 
 #define SERVERPORT (6000)
 #define BUFSIZE (1024 * 1024)
