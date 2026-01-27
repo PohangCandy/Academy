@@ -17,13 +17,11 @@
 //---------------------------------------------------------------------------------------------
 #ifndef  __PROCADEMY_MEMORY_POOL__
 #define  __PROCADEMY_MEMORY_POOL__
-#include <new.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include "stdafx.h"
 
 #define USERBIT (0x007fffffffffff)
 
-namespace procademy
+namespace myMemorypool
 {
 
 	template <class DATA>
@@ -125,7 +123,7 @@ namespace procademy
 		// Parameters: 없음.
 		// Return: (DATA *) 데이타 블럭 포인터.
 		//////////////////////////////////////////////////////////////////////////
-		DATA* pop(void)
+		DATA* Alloc(void)
 		{
 			//멀티스레드를 대비하여 pop을 원자적으로 진행
 			st_STACK_NODE* ptop;
@@ -215,7 +213,7 @@ namespace procademy
 		// Parameters: (DATA *) 블럭 포인터.
 		// Return: (BOOL) TRUE, FALSE.
 		//////////////////////////////////////////////////////////////////////////
-		bool push(DATA* pData)
+		bool Free(DATA* pData)
 		{
 			if (pData == nullptr) return false;
 

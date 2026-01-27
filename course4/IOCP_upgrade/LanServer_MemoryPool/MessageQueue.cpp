@@ -1,6 +1,6 @@
 #include "MessageQueue.h"
 
-#include "CRingBuffer.h"
+#include "CRingBufferForPacket.h"
 
 MessageQueue::MessageQueue()
 {
