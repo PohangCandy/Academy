@@ -132,8 +132,9 @@
   <ItemGroup>
     <ClCompile Include="CEchoServer.cpp" />
     <ClCompile Include="CLanServer.cpp" />
-    <ClCompile Include="CPacketForMultiThread.cpp" />
-    <ClCompile Include="CRingBufferForPacket.cpp" />
+    <ClCompile Include="CPacket.cpp" />
+    <ClCompile Include="CPacketRingBuffer.cpp" />
+    <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="CSessionMap.cpp" />
     <ClCompile Include="errlog.cpp" />
     <ClCompile Include="main.cpp" />
@@ -146,8 +147,9 @@
     <ClInclude Include="CIOCPHandle.h" />
     <ClInclude Include="CLanClient.h" />
     <ClInclude Include="CLanServer.h" />
-    <ClInclude Include="CPacketForMultiThread.h" />
-    <ClInclude Include="CRingBufferForPacket.h" />
+    <ClInclude Include="CPacket.h" />
+    <ClInclude Include="CPacketRingBuffer.h" />
+    <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="cSessionMap.h" />
     <ClInclude Include="errlog.h" />
     <ClInclude Include="MemoryPoolForLockFree.h" />
