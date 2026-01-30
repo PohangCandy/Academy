@@ -110,7 +110,7 @@ bool CPacketRingBuffer::Enqueue(CPacket* pPacket)
 bool CPacketRingBuffer::Dequeue(CPacket*& pPacket)
 {
     EnterCriticalSection(&m_csRingbuffer);
-    if (pPacket == nullptr || m_iBufferSize == 0)
+    if (m_iBufferSize == 0)
     {
         LeaveCriticalSection(&m_csRingbuffer);
         return false;
