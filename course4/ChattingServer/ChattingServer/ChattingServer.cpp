@@ -266,6 +266,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			INT64	AccountNo = pcharacter->_AccountNo;
 			// 3. 
+			packetToSend->_MsgheaderSize = sizeof(PacketHeader);
 			packetToSend->PutData((char*)&header, sizeof(PacketHeader));
 			*packetToSend << (short)en_PACKET_SC_CHAT_RES_LOGIN;
 			*packetToSend << (BYTE)Status;
@@ -319,6 +320,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 				umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].emplace(pcharacter->_AccountNo, pcharacter);
 
 				// 3.섹터 이동 결과 송신 패킷에 삽입
+				packetToSend->_MsgheaderSize = sizeof(PacketHeader);
 				packetToSend->PutData((char*)&header, sizeof(PacketHeader));
 				*packetToSend << (short)en_PACKET_SC_CHAT_RES_SECTOR_MOVE;
 				*packetToSend << (INT64)pcharacter->_AccountNo;
@@ -359,6 +361,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 				pcharacter->_lastRecvTime = GetTickCount64();
 
 				// 2. 메시지를 주위 섹터 플레이어에게 보내기
+				packetToSend->_MsgheaderSize = sizeof(PacketHeader);
 				*packetToSend << (short)en_PACKET_SC_CHAT_RES_MESSAGE;
 				packetToSend->PutData((char*)pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
 				pcharacter->_ID[19] = '\0';
