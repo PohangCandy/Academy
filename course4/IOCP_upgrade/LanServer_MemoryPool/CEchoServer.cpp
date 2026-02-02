@@ -1,6 +1,6 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include "CEchoServer.h"
-#include "CPacket.h"
+#include "CPacketForMultiThread.h"
 
 #define SERVERPORT (6000)
 #define BUFSIZE (1024 * 1024)
@@ -81,12 +81,10 @@ void CEchoServer::OnRecv(SessionID sessionID, CPacket* pPacket)
 	//추출한 메시지에 헤더를 붙여서 SendPakcet
 	recvMsg->header = sizeof(recvMsg->payload);
 
-	CPacket* pSendPacket = new CPacket(sizeof(Msg));
+	CPacket* pSendPacket = CPacket::Alloc();
 	pSendPacket->operator<<(recvMsg->header);
 	pSendPacket->PutData(recvMsg->payload, recvMsg->header);
-
 	int sendret = SendPacket(sessionID, pSendPacket);
-	delete pSendPacket;
 
 	//세션이 이제 여기서 삭제되는 경우는 없음.
 	if (sendret == 0)
