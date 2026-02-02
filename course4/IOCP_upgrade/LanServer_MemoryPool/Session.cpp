@@ -1,6 +1,6 @@
 #include "Session.h"
 
-#include "CRingBuffer.h"
+#include "CRingBufferForPacket.h"
 #include "MessageQueue.h"
 #include "OVERLAPPED_CONTEXT.h"
 
