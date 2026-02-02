@@ -16,16 +16,6 @@ std::unordered_map<INT64, Character*> umapCharcterSector[50][50];
 
 myMemorypool::CMemoryPool<Character> characterpool(10000,true);
 
-//------------------------------------
-//메시지 프로토콜
-// 헤더 2Byte (길이)
-// 데이터 8Byte(에코)
-//------------------------------------
-struct Msg {
-    short header = 0;
-    char payload[MSG_SIZE] = {};
-};
-
 ChattingServer::ChattingServer()
 {
 	//네트워크, 컨텐츠 스레드 입출력 완료 포트 생성

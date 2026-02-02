@@ -1,6 +1,8 @@
 //#ifndef __GODDAMNBUG_ONLINE_PROTOCOL__
 //#define __GODDAMNBUG_ONLINE_PROTOCOL__
 
+#define CODEKEY (0x77)
+
 #pragma pack(push, 1)
 struct PacketHeader
 {

@@ -10,22 +10,11 @@
 #include "MessageQueue.h"
 #include "errlog.h"
 #include "CPacketForMultiThread.h"
+#include "CommonProtocol.h"
 
 #define SERVERPORT (12001)
 #define BUFSIZE (1024 * 1024)
 #define MSG_SIZE (8)
-
-//------------------------------------
-//메시지 프로토콜
-// 헤더 2Byte (길이)
-// 데이터 8Byte(에코)
-//------------------------------------
-struct Msg {
-	short header = 0;
-	char payload[MSG_SIZE] = {};
-};
-
-
 
 bool CNetServer::Start()
 {
@@ -216,22 +205,14 @@ bool CNetServer::SendPacket(SessionID sessionId, CPacket* cp)
 {
 	SOCKETINFO* ptr;
 	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
-
-	//네트워크 헤더를 삽입한다.
-	
-	//헤더에 삽입할 크기
-	short netHeaderData = cp->GetDataSize() - sizeof(Msg::header);
-	//패킷의 네트워크 헤더 부에 삽입
-	short* phearder = (short*)cp->GetBufferPtr();
-	*phearder = netHeaderData;
-
 	pSessionMap->GetSessionptr(sessionId, ptr);
 	if (ptr == nullptr)
 	{
 		return false;
 	}
+
 	ptr->sendBuf->GetLockBuffer();
-	cp->Encode(0xa9);
+	cp->Encode();
 	int ret = ptr->sendBuf->Enqueue(cp->GetBufferPtr(), cp->GetDataSize());
 	ptr->sendBuf->UnLockBuffer();
 	if (ret == 0)
@@ -306,7 +287,8 @@ void CNetServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 	//}
 }
 
-bool CNetServer::Decode(MsgHeader* pHeader, char* pc)
+
+bool CNetServer::Decode(PacketHeader* pHeader, char* pc)
 {
 	unsigned char checksum = 0;
 	unsigned char beforeparaP = 0;
@@ -314,10 +296,14 @@ bool CNetServer::Decode(MsgHeader* pHeader, char* pc)
 	unsigned char beforeDecodeP = 0;
 	unsigned char afterDecodeP = 0;
 
+
 	int payLoadSize = pHeader->Len;
-	for (int i = 0; i < payLoadSize; i++)
+
+	int checkSumSize = sizeof(PacketHeader::CheckSum);
+	bool checksumFlag = false;
+	for (int i = 0; i < payLoadSize + checkSumSize; i++)
 	{
-		char* pPacketChar = &pc[sizeof(MsgHeader) + i];
+		char* pPacketChar = &pc[sizeof(PacketHeader) + i - checkSumSize];
 		afterDecodeP = *pPacketChar;
 
 		afterparaP = *pPacketChar ^ (beforeDecodeP + pHeader->Code + (i + 1));
@@ -325,8 +311,11 @@ bool CNetServer::Decode(MsgHeader* pHeader, char* pc)
 
 		*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + (i + 1));
 		beforeparaP = afterparaP;
-
-		checksum += *pPacketChar % 256;
+		if (!checksumFlag)
+		{
+			checksum += *pPacketChar % 256;
+			checksumFlag = true;
+		}
 	}
 
 	//복호화가 제대로 이루어졌는지 확인
@@ -443,26 +432,26 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 				while (1)
 				{
 					//메시지 헤더 먼저 읽기
-					if (rb->GetUseSize() >= sizeof(MsgHeader))
+					if (rb->GetUseSize() >= sizeof(PacketHeader))
 					{
-						MsgHeader header;
-						rb->Peek((char*)&header, sizeof(MsgHeader));
+						PacketHeader* header = (PacketHeader*)rb->GetFrontBufferPtr();
+
 						//메시지 페이로드 길이 읽기
-						if (rb->GetUseSize() >= sizeof(MsgHeader) + header.Len)
+						if (rb->GetUseSize() >= sizeof(PacketHeader) + header->Len)
 						{
 							//디코딩
-							if (pServer->Decode(&header, rb->GetFrontBufferPtr()))
+							if (pServer->Decode(header, rb->GetFrontBufferPtr()))
 							{
 								//네트워크 헤더 제거한 나머지 컨텐츠에게 패킷에 담아서 넘겨주기
 								CPacket* contentPacket = CPacket::Alloc();
-								int ret = contentPacket->PutData(rb->GetFrontBufferPtr() + sizeof(MsgHeader), header.Len);
-								if (ret != header.Len)
+								int ret = contentPacket->PutData(rb->GetFrontBufferPtr() + sizeof(PacketHeader), header->Len);
+								if (ret != header->Len)
 								{
-									printf("[Network] 직렬화 버퍼 삽입 오류: 요청 %d, 실제 %d\n", header.Len, ret);
+									printf("[Network] 직렬화 버퍼 삽입 오류: 요청 %d, 실제 %d\n", header->Len, ret);
 									__debugbreak();
 								}
 
-								rb->MoveFront(sizeof(MsgHeader) + header.Len);
+								rb->MoveFront(header->Len);
 								
 								contentPacket->AddRef();
 								pServer->OnRecv(ptr->session_id, contentPacket);
