@@ -1,7 +1,4 @@
-#include "CPacket.h"
-#include <cstring>   // std::memcpy
-#include <algorithm> // std::max
-#include <new>       // std::nothrow
+#include "CPacketForMultiThread.h"
 
 // ============================== 내부 유틸 ==============================
 
