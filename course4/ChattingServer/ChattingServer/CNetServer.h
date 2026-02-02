@@ -27,6 +27,8 @@ class SOCKETINFO;
 typedef long long SessionID;
 class CNetServer;
 class IOCPHandle;
+class PacketHeader;
+
 
 class CNetServer
 {
@@ -58,6 +60,11 @@ public:
 	//-----------------------------------------
 	void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr);
 
+	//-----------------------------------------
+	// 디코딩
+	//-----------------------------------------
+	bool Decode(PacketHeader* pHeader, char* pc);
+
 	//작업자 스레드 함수
 	static unsigned int __stdcall WorkerThread(LPVOID arg);
 	
@@ -84,6 +91,8 @@ public:
 
 	//	virtual void OnWorkerThreadBegin() = 0;                    < 워커스레드 GQCS 바로 하단에서 호출
 	//	virtual void OnWorkerThreadEnd() = 0;                      < 워커스레드 1루프 종료 후
+
+
 
 	virtual void OnError(int errorcode, char*) = 0;
 

@@ -1,5 +1,5 @@
 #include "CPacketForMultiThread.h"
-
+#include"CommonProtocol.h"
 // ============================== 내부 유틸 ==============================
 
 void CPacket::_EnsureCapacity(int requireBytes)
@@ -66,6 +66,46 @@ CPacket::~CPacket()
 {
     delete[] m_chpBuffer;
     m_chpBuffer = nullptr;
+}
+
+void CPacket::Encode()
+{
+    unsigned char checksum = 0;
+
+    if (_MsgheaderSize == -1)
+    {
+        printf("[CPacket/Encode] 메시지 헤더 크기가 없는데 이거 맞아?\n");
+    }
+
+    unsigned char randkey = rand() % 100;
+
+    unsigned char paraP = 0;
+    unsigned char encodeP = 0;
+
+
+    int payLoadSize = m_iDataSize - _MsgheaderSize;
+
+    for (int i = 0; i < payLoadSize; i++)
+    {
+        char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i];
+        checksum += *pPacketChar % 256;
+    }
+    m_chpBuffer[4] = checksum % 256;
+
+    for (int i = 0; i < payLoadSize + sizeof(checksum); i++)
+    {
+        char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i - sizeof(checksum)];
+        paraP = *pPacketChar ^ (paraP + randkey + (i + 1));
+
+        *pPacketChar = paraP ^ (encodeP + dfPACKET_KEY + (i + 1));
+        encodeP = *pPacketChar;
+    }
+
+    //메시지 헤더 세팅
+    memset(m_chpBuffer, 0, 4);
+    m_chpBuffer[0] = dfPACKET_CODE;
+    m_chpBuffer[1] = (short)payLoadSize;
+    m_chpBuffer[3] = randkey;
 }
 
 void CPacket::Clear(void)

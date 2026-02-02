@@ -34,17 +34,17 @@ int main()
 		//메시지 헤더 먼저 읽기
 		if (rb.GetUseSize() >= sizeof(MsgHeader))
 		{
-			MsgHeader header;
-			rb.Peek((char*) &header, sizeof(MsgHeader));
+			MsgHeader* header = (MsgHeader*)rb.GetFrontBufferPtr();
+			rb.Peek((char*) header, sizeof(MsgHeader));
 			//메시지 페이로드 길이 읽기
-			if (rb.GetUseSize() >= sizeof(MsgHeader) + header.Len)
+			if (rb.GetUseSize() >= sizeof(MsgHeader) + header->Len)
 			{
 				//디코딩
-				if (Decode(&header, rb.GetFrontBufferPtr()))
+				if (Decode(header, rb.GetFrontBufferPtr()))
 				{
 					//네트워크 헤더 제거한 나머지 컨텐츠에게 패킷에 담아서 넘겨주기
 					CPacket* contentPacket = CPacket::Alloc();
-					contentPacket->PutData(rb.GetFrontBufferPtr() + sizeof(MsgHeader), header.Len);
+					contentPacket->PutData(rb.GetFrontBufferPtr() + sizeof(MsgHeader), header->Len);
 					contentPacket->AddRef();
 					//OnRecv에 해당 패킷 넘겨주기
 				}
@@ -68,26 +68,38 @@ int main()
 bool Decode(MsgHeader* pHeader, char* pc) 
 {
 
-	unsigned char checksum = 0;
+	int checksum = 0;
 	unsigned char beforeparaP = 0;
 	unsigned char afterparaP = 0;
-	unsigned char beforeDecodeP = 0;
-	unsigned char afterDecodeP = 0;
+	unsigned char encodeP = 0;
+
 
 	int payLoadSize = pHeader->Len;
+
+	int checkSumSize = sizeof(MsgHeader::CheckSum);
+	char* pPacketChar = &pc[sizeof(MsgHeader) - checkSumSize];
+
+	afterparaP = *pPacketChar ^ (encodeP + pHeader->Code + 1);
+	encodeP = *pPacketChar;
+
+	*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + 1);
+	beforeparaP = afterparaP;
+
 	for (int i = 0; i < payLoadSize; i++)
 	{
 		char* pPacketChar = &pc[sizeof(MsgHeader) + i];
-		afterDecodeP = *pPacketChar;
 
-		afterparaP = *pPacketChar ^ (beforeDecodeP + pHeader->Code + (i + 1));
-		beforeDecodeP = afterDecodeP;
+		afterparaP = *pPacketChar ^ (encodeP + pHeader->Code + (i + 2));
+		encodeP = *pPacketChar;
 
-		*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey  + (i + 1));
+		*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + (i + 2));
 		beforeparaP = afterparaP;
-		
+
 		checksum += *pPacketChar % 256;
+		checksum %= 256;
 	}
+
+
 
 	//복호화가 제대로 이루어졌는지 확인
 	if (pHeader->CheckSum != checksum)

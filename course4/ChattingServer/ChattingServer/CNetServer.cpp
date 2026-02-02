@@ -10,22 +10,11 @@
 #include "MessageQueue.h"
 #include "errlog.h"
 #include "CPacketForMultiThread.h"
+#include "CommonProtocol.h"
 
-#define SERVERPORT (6000)
+#define SERVERPORT (12001)
 #define BUFSIZE (1024 * 1024)
 #define MSG_SIZE (8)
-
-//------------------------------------
-//메시지 프로토콜
-// 헤더 2Byte (길이)
-// 데이터 8Byte(에코)
-//------------------------------------
-struct Msg {
-	short header = 0;
-	char payload[MSG_SIZE] = {};
-};
-
-
 
 bool CNetServer::Start()
 {
@@ -216,21 +205,14 @@ bool CNetServer::SendPacket(SessionID sessionId, CPacket* cp)
 {
 	SOCKETINFO* ptr;
 	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
-
-	//네트워크 헤더를 삽입한다.
-	
-	//헤더에 삽입할 크기
-	short netHeaderData = cp->GetDataSize() - sizeof(Msg::header);
-	//패킷의 네트워크 헤더 부에 삽입
-	short* phearder = (short*)cp->GetBufferPtr();
-	*phearder = netHeaderData;
-
 	pSessionMap->GetSessionptr(sessionId, ptr);
 	if (ptr == nullptr)
 	{
 		return false;
 	}
+
 	ptr->sendBuf->GetLockBuffer();
+	cp->Encode();
 	int ret = ptr->sendBuf->Enqueue(cp->GetBufferPtr(), cp->GetDataSize());
 	ptr->sendBuf->UnLockBuffer();
 	if (ret == 0)
@@ -303,6 +285,51 @@ void CNetServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 	//	printf("[Network] Accept 횟수와 Delete횟수가 일치했음.");
 	//	_CrtDumpMemoryLeaks();
 	//}
+}
+
+
+bool CNetServer::Decode(PacketHeader* pHeader, char* pc)
+{
+	unsigned int checksum = 0;
+	unsigned char beforeparaP = 0;
+	unsigned char afterparaP = 0;
+	unsigned char encodeP = 0;
+
+
+	int payLoadSize = pHeader->Len;
+
+	int checkSumSize = sizeof(PacketHeader::CheckSum);
+	char* pPacketChar = &pc[sizeof(PacketHeader) - checkSumSize];
+
+	afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + 1);
+	encodeP = *pPacketChar;
+
+	*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + 1);
+	beforeparaP = afterparaP;
+
+	for (int i = 0; i < payLoadSize; i++)
+	{
+		char* pPacketChar = &pc[sizeof(PacketHeader) + i];
+
+		afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + (i + 2));
+		encodeP = *pPacketChar;
+
+		*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + (i + 2));
+		beforeparaP = afterparaP;
+
+		checksum += *pPacketChar % 256;
+		checksum %= 256;
+	}
+
+	
+
+	//복호화가 제대로 이루어졌는지 확인
+	if (pHeader->CheckSum != checksum)
+	{
+		printf("[Decode] checksum이 일치하지 않음. 복호화가 제대로 이루어지지 않음.\n");
+		return false;
+	}
+	return true;
 }
 
 //작업자 스레드 함수
@@ -394,11 +421,11 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 		{
 			//printf("[Network] 클라이언트 수신, 포트번호 = %d\n", ntohs(clientaddr.sin_port));
 
-
-			if (ptr->recvBuf->MoveRear(cbTransferred) != 0)
+			CRingBuffer* rb = ptr->recvBuf;
+			if (rb->MoveRear(cbTransferred) != 0)
 			{
 				//Recv 버퍼에 있는 내용 읽어서, send링버퍼에 담기
-				Msg recvMsg;
+				
 
 				//이제 메시지 길이 단위로 읽어서 컨텐츠 스레드에 넘겨야 한다.
 				//그래야 메시지 순서가 보장됨.
@@ -409,59 +436,54 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 				//------------------------------------------------------
 				while (1)
 				{
-					short Header_size = ptr->recvBuf->Peek((char*)&recvMsg.header, sizeof(recvMsg.header));
-					if (Header_size == sizeof(recvMsg.header) && recvMsg.header != 0)
+					//메시지 헤더 먼저 읽기
+					if (rb->GetUseSize() >= sizeof(PacketHeader))
 					{
-						if (ptr->recvBuf->GetUseSize() >= recvMsg.header + sizeof(recvMsg.header))
+						PacketHeader* header = (PacketHeader*)rb->GetFrontBufferPtr();
+						if (header->Code != dfPACKET_CODE)
 						{
-							//이미 읽은 헤더는 제외하고 읽게 만들자.
-							ptr->recvBuf->MoveFront(sizeof(recvMsg.header));
-
-							int dequeued_size = ptr->recvBuf->Dequeue((char*)&recvMsg.payload, recvMsg.header);
-							if (dequeued_size != recvMsg.header)
+							//잘못된 패킷이니까 죽이자.
+							__debugbreak();
+						}
+						//메시지 페이로드 길이 읽기
+						if (rb->GetUseSize() >= sizeof(PacketHeader) + header->Len)
+						{
+							//디코딩
+							if (pServer->Decode(header, rb->GetFrontBufferPtr()))
 							{
-								while (1)
+								//네트워크 헤더 제거한 나머지 컨텐츠에게 패킷에 담아서 넘겨주기
+								CPacket* contentPacket = CPacket::Alloc();
+								int ret = contentPacket->PutData(rb->GetFrontBufferPtr() + sizeof(PacketHeader), header->Len);
+								if (ret != header->Len)
 								{
-									printf("[Network] 링버퍼 Dequeue 오류: 요청 %d, 실제 %d\n", recvMsg.header, dequeued_size);
+									printf("[Network] 직렬화 버퍼 삽입 오류: 요청 %d, 실제 %d\n", header->Len, ret);
+									__debugbreak();
 								}
+
+								rb->MoveFront(sizeof(PacketHeader) + header->Len);
+								
+								contentPacket->AddRef();
+								pServer->OnRecv(ptr->session_id, contentPacket);
+								contentPacket->SubRef();
 							}
-
-							//메시지 버퍼에 추출한 메시지를 넣기.
-
-							CPacket* pContentsSendPacket = CPacket::Alloc();
-							int ret = pContentsSendPacket->PutData((char*)&recvMsg.payload, recvMsg.header);
-
-							if (ret == 0)
+							else
 							{
-								while (1)
-								{
-									printf("[Network] 직렬화 버퍼 삽입 결과가 0\n");
-								}
+								//디코딩이 실패했다면? 해당 메시지를 그냥 폐기하는게 맞을 것으로 생각함.
+								//폐기하고 세션 종료까지 해주는게 맞다고 생각함.
+								__debugbreak();
 							}
-							else if (ret != recvMsg.header)
-							{
-								while (1)
-								{
-									printf("[Network] 직렬화 버퍼 삽입 오류: 요청 %d, 실제 %d\n", recvMsg.header, ret);
-								}
-							}
-
-							//컨텐츠의 수신 로직 실행
-							pServer->OnRecv(ptr->session_id, pContentsSendPacket);
-							pContentsSendPacket->SubRef();
 						}
 						else
 						{
-							//수신 링버퍼가 가득차서 더이상 데이터를 받을 수 없는 상황
-							//printf("[Network] payload가 아직 다 안 들어왔음\n");
 							break;
 						}
 					}
 					else
 					{
-						//printf("[Network] 헤더가 아직 다 안 들어왔음\n");
 						break;
 					}
+
+					
 				}
 
 			}
