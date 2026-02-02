@@ -27,16 +27,8 @@ class SOCKETINFO;
 typedef long long SessionID;
 class CNetServer;
 class IOCPHandle;
+class PacketHeader;
 
-#pragma pack(push,1)
-struct MsgHeader
-{
-	char Code; //(1byte)
-	short Len; //(2byte)
-	char RandKey; //(1byte)
-	char CheckSum; //(1byte)
-};
-#pragma pack(pop)
 
 class CNetServer
 {
@@ -71,7 +63,7 @@ public:
 	//-----------------------------------------
 	// 디코딩
 	//-----------------------------------------
-	bool Decode(MsgHeader* pHeader, char* pc);
+	bool Decode(PacketHeader* pHeader, char* pc);
 
 	//작업자 스레드 함수
 	static unsigned int __stdcall WorkerThread(LPVOID arg);
