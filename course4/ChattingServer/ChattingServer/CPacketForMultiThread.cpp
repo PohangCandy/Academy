@@ -68,6 +68,39 @@ CPacket::~CPacket()
     m_chpBuffer = nullptr;
 }
 
+void CPacket::Encode(unsigned char key)
+{
+    unsigned char checksum = 0;
+
+    if (_MsgheaderSize == -1)
+    {
+        printf("[CPacket/Encode] 메시지 헤더 크기가 없는데 이거 맞아?\n");
+    }
+
+    unsigned char randkey = rand() % 100;
+
+    unsigned char paraP = 0;
+    unsigned char encodeP = 0;
+
+    int payLoadSize = m_iDataSize - _MsgheaderSize;
+    for (int i = 0; i < payLoadSize; i++)
+    {
+        char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i];
+        checksum += *pPacketChar % 256;
+        paraP = *pPacketChar ^ (paraP + randkey + (i + 1));
+
+        *pPacketChar = paraP ^ (encodeP + key + (i + 1));
+        encodeP = *pPacketChar;
+    }
+
+    //메시지 헤더 세팅
+    memset(m_chpBuffer, 0, 5);
+    m_chpBuffer[0] = key;
+    m_chpBuffer[1] = (short)payLoadSize;
+    m_chpBuffer[3] = randkey;
+    m_chpBuffer[4] = checksum % 256;
+}
+
 void CPacket::Clear(void)
 {
     m_iReadPos = 0;

@@ -94,11 +94,7 @@ public:
 	// 패킷을 한번만 인코딩 시키고, 이미 인코딩 된 경우에만 반환
 	// -> 다른 스레드가 인코딩 중일 경우 위에서 대기하도록 만들어야 함.
 	//--------------------------------------------------------------
-	void Encode()
-	{
-
-	}
-
+	void Encode(unsigned char key);
 
 	static CPacket* Alloc()
 	{
@@ -237,6 +233,9 @@ public:
 	int		PutData(char* chpSrc, int iSrcSize);
 
 	inline static myMemorypool::CMemoryPool<CPacket> packetPool = myMemorypool::CMemoryPool<CPacket>(1024, true);
+
+	//메시지 헤더 크기
+	int _MsgheaderSize = -1;
 
 protected:
 	//////////////////////////////////////////////////////////////////////////
