@@ -123,23 +123,31 @@ public:
 		unsigned char paraP = 0;
 		unsigned char encodeP = 0;
 
+
 		int payLoadSize = m_iDataSize - _MsgheaderSize;
+
 		for (int i = 0; i < payLoadSize; i++)
 		{
 			char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i];
 			checksum += *pPacketChar % 256;
+			checksum %= 256;
+		}
+		m_chpBuffer[4] = checksum;
+
+		for (int i = 0; i < payLoadSize + sizeof(checksum); i++)
+		{
+			char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i - sizeof(checksum)];
 			paraP = *pPacketChar ^ (paraP + randkey + (i + 1));
 
-			*pPacketChar = paraP ^ (encodeP + key + (i + 1));
+			*pPacketChar = paraP ^ (encodeP + 0xa9 + (i + 1));
 			encodeP = *pPacketChar;
 		}
 
 		//메시지 헤더 세팅
-		memset(m_chpBuffer, 0, 5);
-		m_chpBuffer[0] = key;
+		memset(m_chpBuffer, 0, 4);
+		m_chpBuffer[0] = 0xa9;
 		m_chpBuffer[1] = (short)payLoadSize;
 		m_chpBuffer[3] = randkey;
-		m_chpBuffer[4] = checksum % 256;
 	}
 
 

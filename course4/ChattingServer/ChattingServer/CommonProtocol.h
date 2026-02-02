@@ -1,13 +1,17 @@
 //#ifndef __GODDAMNBUG_ONLINE_PROTOCOL__
 //#define __GODDAMNBUG_ONLINE_PROTOCOL__
 
+//#define CODEKEY (0x77)
+#define dfPACKET_CODE		(0x77)
+#define dfPACKET_KEY		(0x32)
+
 #pragma pack(push, 1)
 struct PacketHeader
 {
-	char Code;//
-	short Len;
-	char RandKey;
-	char CheckSum;
+	unsigned char Code;//
+	unsigned short Len;
+	unsigned char RandKey;
+	unsigned char CheckSum;
 };
 #pragma pack(pop)
 
