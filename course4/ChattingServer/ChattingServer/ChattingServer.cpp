@@ -154,7 +154,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		DWORD cbTransferred;
 		SOCKET client_sock;
 		long long sessionId;
-		CPacket* pPacket;
+		CPacket* pPacket = nullptr;
 		retval = GetQueuedCompletionStatus(pServer->hContentCompletionPort, &cbTransferred, (PULONG_PTR)&sessionId, (LPOVERLAPPED*)&pPacket, INFINITE);
 
 		//비동기 입출력 결과 확인
@@ -295,7 +295,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 				pcharacter->_lastRecvTime = GetTickCount64();
 
 				// 제일 처음 생성된 플레이어인 경우 섹터 리스트 제외 건너뛰기
-				if (pcharacter->_SectorX != -1)
+				if (pcharacter->_SectorX != 0xffff)
 				{
 					//2-a. 원래 있던 섹터에서 플레이어 삭제
 					auto a = umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].find(pcharacter->_AccountNo);
@@ -353,10 +353,10 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 				// 2. 메시지를 주위 섹터 플레이어에게 보내기
 				packetToSend->_MsgheaderSize = sizeof(PacketHeader);
 				*packetToSend << (short)en_PACKET_SC_CHAT_RES_MESSAGE;
-				packetToSend->PutData((char*)pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
-				pcharacter->_ID[19] = '\0';
+				packetToSend->PutData((char*)&pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
+				//pcharacter->_ID[19] = '\0';
 				packetToSend->PutData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));
-				pcharacter->_Nickname[19] = '\0';
+				//pcharacter->_Nickname[19] = '\0';
 				packetToSend->PutData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));
 				packetToSend->PutData(pPacket->GetBufferPtr(), pPacket->GetDataSize());
 

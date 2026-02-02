@@ -290,33 +290,38 @@ void CNetServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 
 bool CNetServer::Decode(PacketHeader* pHeader, char* pc)
 {
-	unsigned char checksum = 0;
+	unsigned int checksum = 0;
 	unsigned char beforeparaP = 0;
 	unsigned char afterparaP = 0;
-	unsigned char beforeDecodeP = 0;
-	unsigned char afterDecodeP = 0;
+	unsigned char encodeP = 0;
 
 
 	int payLoadSize = pHeader->Len;
 
 	int checkSumSize = sizeof(PacketHeader::CheckSum);
-	bool checksumFlag = false;
-	for (int i = 0; i < payLoadSize + checkSumSize; i++)
+	char* pPacketChar = &pc[sizeof(PacketHeader) - checkSumSize];
+
+	afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + 1);
+	encodeP = *pPacketChar;
+
+	*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + 1);
+	beforeparaP = afterparaP;
+
+	for (int i = 0; i < payLoadSize; i++)
 	{
-		char* pPacketChar = &pc[sizeof(PacketHeader) + i - checkSumSize];
-		afterDecodeP = *pPacketChar;
+		char* pPacketChar = &pc[sizeof(PacketHeader) + i];
 
-		afterparaP = *pPacketChar ^ (beforeDecodeP + pHeader->Code + (i + 1));
-		beforeDecodeP = afterDecodeP;
+		afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + (i + 2));
+		encodeP = *pPacketChar;
 
-		*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + (i + 1));
+		*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + (i + 2));
 		beforeparaP = afterparaP;
-		if (!checksumFlag)
-		{
-			checksum += *pPacketChar % 256;
-			checksumFlag = true;
-		}
+
+		checksum += *pPacketChar % 256;
+		checksum %= 256;
 	}
+
+	
 
 	//복호화가 제대로 이루어졌는지 확인
 	if (pHeader->CheckSum != checksum)
@@ -435,7 +440,11 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 					if (rb->GetUseSize() >= sizeof(PacketHeader))
 					{
 						PacketHeader* header = (PacketHeader*)rb->GetFrontBufferPtr();
-
+						if (header->Code != dfPACKET_CODE)
+						{
+							//잘못된 패킷이니까 죽이자.
+							__debugbreak();
+						}
 						//메시지 페이로드 길이 읽기
 						if (rb->GetUseSize() >= sizeof(PacketHeader) + header->Len)
 						{
@@ -451,7 +460,7 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 									__debugbreak();
 								}
 
-								rb->MoveFront(header->Len);
+								rb->MoveFront(sizeof(PacketHeader) + header->Len);
 								
 								contentPacket->AddRef();
 								pServer->OnRecv(ptr->session_id, contentPacket);
