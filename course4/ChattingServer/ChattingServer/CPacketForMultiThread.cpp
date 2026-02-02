@@ -84,22 +84,28 @@ void CPacket::Encode()
 
 
     int payLoadSize = m_iDataSize - _MsgheaderSize;
+
     for (int i = 0; i < payLoadSize; i++)
     {
         char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i];
         checksum += *pPacketChar % 256;
+    }
+    m_chpBuffer[4] = checksum % 256;
+
+    for (int i = 0; i < payLoadSize + sizeof(checksum); i++)
+    {
+        char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i - sizeof(checksum)];
         paraP = *pPacketChar ^ (paraP + randkey + (i + 1));
 
-        *pPacketChar = paraP ^ (encodeP + CODEKEY + (i + 1));
+        *pPacketChar = paraP ^ (encodeP + dfPACKET_KEY + (i + 1));
         encodeP = *pPacketChar;
     }
 
     //메시지 헤더 세팅
-    memset(m_chpBuffer, 0, 5);
-    m_chpBuffer[0] = CODEKEY;
+    memset(m_chpBuffer, 0, 4);
+    m_chpBuffer[0] = dfPACKET_CODE;
     m_chpBuffer[1] = (short)payLoadSize;
     m_chpBuffer[3] = randkey;
-    m_chpBuffer[4] = checksum % 256;
 }
 
 void CPacket::Clear(void)
