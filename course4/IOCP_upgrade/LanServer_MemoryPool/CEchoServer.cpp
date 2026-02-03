@@ -76,10 +76,11 @@ void CEchoServer::OnRecv(SessionID sessionID, CPacket* pPacket)
 	recvMsg->header = sizeof(recvMsg->payload);
 
 	CPacket* pSendPacket = CPacket::Alloc();
+	pSendPacket->AddRef();
 	pSendPacket->operator<<(recvMsg->header);
 	pSendPacket->PutData(recvMsg->payload, recvMsg->header);
 	int sendret = SendPacket(sessionID, pSendPacket);
-
+	pSendPacket->SubRef();
 	//세션이 이제 여기서 삭제되는 경우는 없음.
 	if (sendret == 0)
 	{

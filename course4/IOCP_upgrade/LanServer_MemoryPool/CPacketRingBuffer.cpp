@@ -25,11 +25,15 @@ CPacketRingBuffer::~CPacketRingBuffer() {
 
 int CPacketRingBuffer::GetBufferSize(void)
 {
+    long l = 0;
+    InterlockedExchange(&l, 0);
     return _capacity;
 }
 
 int CPacketRingBuffer::GetUseSize(void)
 {
+    long l = 0;
+    InterlockedExchange(&l, 0);
     if (_capacity == 0) return 0;
 
     if (_IsFull)
@@ -43,6 +47,8 @@ int CPacketRingBuffer::GetUseSize(void)
 
 int CPacketRingBuffer::GetFreeSize(void)
 {
+    long l = 0;
+    InterlockedExchange(&l, 0);
     if (_capacity == 0) return 0;
     return _capacity - GetUseSize();
 }

@@ -106,6 +106,8 @@ public:
 	// wsabuf에 값을 세팅해주기 위해 front 값을 넘겨준다.
 	//----------------------------------------------------------------
 	int GetFront() {
+		long l = 0;
+		InterlockedExchange(&l,0);
 		return _front;
 	}
 
