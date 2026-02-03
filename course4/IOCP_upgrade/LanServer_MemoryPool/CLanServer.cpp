@@ -223,6 +223,7 @@ bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
 	{
 		return false;
 	}
+
 	cp->AddRef();
 	int ret = ptr->sendBuf->Enqueue(cp);
 	if (ret == 0)
@@ -644,18 +645,19 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 		//ptr->sendBuf.GetLockBuffer();
 		if (ptr->sendBuf->GetUseSize() == 0)
 		{
-
+			//__debugbreak();
+			//다른 워커 스레드가 수신을 완료한 이후 한번더 send를 하면서 링버퍼에 남아있는 처리까지 완료한 경우
+			//이렇게 되면 이미 처리가 된 것이므로 return true하면 됨.
 			if (InterlockedCompareExchange(&ptr->IsSending, 0, 1) == 1)
 			{
 				//ptr->sendBuf.UnLockBuffer();
+				//__debugbreak();
 				return true;
 			}
 			else
 			{
-				while (1)
-				{
-					printf("[WsaSendSession] 그새 중첩이 발생했다고??\n");
-				}
+				printf("[WsaSendSession] 그새 중첩이 발생했다고??\n");
+				__debugbreak();
 			}
 
 		}
@@ -738,7 +740,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 			}
 		}
 
-		ptr->sendPacketNum = remain;
+		ptr->sendPacketNum = bufIndex;
 	}
 	else
 	{
