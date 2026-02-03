@@ -91,7 +91,9 @@ public:
 
 	static CPacket* Alloc()
 	{
-		return packetPool.Alloc();
+		CPacket* allocPacket = packetPool.Alloc();
+		allocPacket->Clear();
+		return allocPacket;
 	}
 
 	void AddRef()

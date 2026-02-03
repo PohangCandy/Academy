@@ -44,7 +44,7 @@ public:
 
 	~CRingBuffer();
 
-	void	Resize(int size);
+	//void	Resize(int size);
 
 	int GetBufferSize(void);
 

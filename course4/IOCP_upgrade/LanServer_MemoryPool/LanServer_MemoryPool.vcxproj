@@ -121,6 +121,7 @@
       <ConformanceMode>true</ConformanceMode>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -132,7 +133,7 @@
   <ItemGroup>
     <ClCompile Include="CEchoServer.cpp" />
     <ClCompile Include="CLanServer.cpp" />
-    <ClCompile Include="CPacket.cpp" />
+    <ClCompile Include="CPacketForMultiThread.cpp" />
     <ClCompile Include="CPacketRingBuffer.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="CSessionMap.cpp" />
@@ -147,7 +148,7 @@
     <ClInclude Include="CIOCPHandle.h" />
     <ClInclude Include="CLanClient.h" />
     <ClInclude Include="CLanServer.h" />
-    <ClInclude Include="CPacket.h" />
+    <ClInclude Include="CPacketForMultiThread.h" />
     <ClInclude Include="CPacketRingBuffer.h" />
     <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="cSessionMap.h" />
