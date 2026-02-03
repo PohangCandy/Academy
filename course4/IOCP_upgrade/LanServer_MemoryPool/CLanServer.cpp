@@ -5,15 +5,17 @@
 #include "CIOCPHandle.h"
 #include "cSessionMap.h"
 #include "Session.h"
-#include "CRingBufferForPacket.h"
+#include "CRingBuffer.h"
+#include  "CPacketRingBuffer.h"
 #include "OVERLAPPED_CONTEXT.h"
 #include "MessageQueue.h"
 #include "errlog.h"
 #include "CPacketForMultiThread.h"
 
 #define SERVERPORT (6000)
-#define BUFSIZE (1024 * 1024)
+#define BUFSIZE (1024 * 16)
 #define MSG_SIZE (8)
+#define WSASEND_MAX_BUFFER_COUNT (128)
 
 //------------------------------------
 //메시지 프로토콜
@@ -221,24 +223,14 @@ bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
 	{
 		return false;
 	}
-	ptr->sendBuf->GetLockBuffer();
 	cp->AddRef();
-	int ret = ptr->sendBuf->Enqueue(cp->GetBufferPtr(), cp->GetDataSize());
-	ptr->sendBuf->UnLockBuffer();
+	int ret = ptr->sendBuf->Enqueue(cp);
 	if (ret == 0)
 	{
-		while (1)
-		{
-			printf("[Network] 네트워크 송신 버퍼가 다 참\n");
-		}
+		printf("[Network]  Enqueue 실패\n");
+		__debugbreak();
 	}
-	else if (ret != cp->GetDataSize())
-	{
-		while (1)
-		{
-			printf("[Network]  송신 버퍼에 넣은 길이와 메시지 길이가 다름\n");
-		}
-	}
+
 	//여기에서 Session의 Send를 발생시켜야 Session이 삭제되지 않는다.
 	//클라이언트 정보 얻기
 	SOCKADDR_IN clientaddr;
@@ -503,10 +495,22 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		{
 			//락 풀기전에 Send한 크기만큼 송신 버퍼에서 movefront
 			
+			
+			int sendPacketNum = ptr->sendPacketNum;
+			int srfront = ptr->sendBuf->GetFront();
+			int srCapacity = ptr->sendBuf->GetBufferSize();
+			CPacket** ppacket = ptr->sendBuf->GetBufPtr();
+
+			//패킷 미리 해제
+			for (int i = 0; i < sendPacketNum; i++)
+			{
+				CPacket* packet = ppacket[srfront];
+				packet->SubRef();
+				srfront = (srfront + 1) % srCapacity;
+			}
+
 			//ptr->GetSessionLock();
-			ptr->sendBuf->GetLockBuffer();
-			ptr->sendBuf->MoveFront(cbTransferred);
-			ptr->sendBuf->UnLockBuffer();
+			ptr->sendBuf->MoveFront(sendPacketNum);
 			//ptr->UnLockSession();
 			
 			//송신 완료, 송신 플래그 해제
@@ -621,18 +625,12 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 
 bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 {
-
 	if (ptr == nullptr)
 	{
-		while (1)
-		{
-			printf("[Network] 송신 시도중인 세션이 이미 삭제된 세션\n");
-		}
+		printf("[WsaSendSession] 송신 시도중인 세션이 이미 삭제된 세션\n");
+		__debugbreak();
 	}
-
-
-
-
+	CPacketRingBuffer* prb = ptr->sendBuf;
 	int retval;
 	//Send 중이 아니라면
 	//Send 링버퍼에 있는 있는 내용 전부 Send
@@ -656,7 +654,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 			{
 				while (1)
 				{
-					printf("[Network] 그새 중첩이 발생했다고??\n");
+					printf("[WsaSendSession] 그새 중첩이 발생했다고??\n");
 				}
 			}
 
@@ -667,106 +665,85 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 		ptr->sendOverlapped->op = ESend;
 		ZeroMemory(ptr->sendOverlapped, sizeof(OVERLAPPED));
 
-		int sendlen = ptr->sendBuf->GetUseSize();
-		if (sendlen == 0)
+		int remain = prb->GetUseSize();
+
+		if (remain == 0)
 		{
-			while (1)
-			{
-				printf("[Network] 미친 지금 0짜리 보낼뻔\n");
-			}
+			printf("[WsaSendSession] 미친 지금 0짜리 보낼뻔\n");
+			__debugbreak();
 		}
-		if (sendlen > ptr->sendBuf->DirectDequeueSize())
+
+		WSABUF wsabuf[WSASEND_MAX_BUFFER_COUNT] = {0,};
+
+		int bufIndex = 0;
+		int rbFront = prb->GetFront();
+		int rbCpacity = prb->GetBufferSize();
+		CPacket** cpacket = prb->GetBufPtr();
+
+		if (remain > WSASEND_MAX_BUFFER_COUNT)
 		{
-			WSABUF wsabuf[2];
-			wsabuf[0].buf = ptr->sendBuf->GetFrontBufferPtr();
-			wsabuf[0].len = ptr->sendBuf->DirectDequeueSize();
-			int frontSize = ptr->sendBuf->GetBufferSize() - ptr->sendBuf->GetFreeSize() - ptr->sendBuf->DirectDequeueSize();
-			//wsabuf[1].buf = ptr->sendBuf->GetRearBufferPtr() - frontSize;
-			wsabuf[1].buf = ptr->sendBuf->GetBufPtr();
-			wsabuf[1].len = frontSize;
+			printf("[WsaSendSession] wsabuf 용량보다 sendlen가 더 큰 경우\n");
+			__debugbreak();
+		}
 
+		for (int i = 0; i < remain; i++)
+		{
+			CPacket* frontpacket = cpacket[rbFront];
 
-			int increase = InterlockedIncrement((long*)&ptr->IOCount);
-			if (increase == 1)
+			wsabuf[bufIndex].buf = frontpacket->GetBufferPtr();
+			wsabuf[bufIndex].len = frontpacket->GetDataSize();
+
+			bufIndex++;
+			rbFront = (rbFront + 1) % rbCpacity;
+		}
+
+		int increase = InterlockedIncrement((long*)&ptr->IOCount);
+		if (increase == 1)
+		{
+			printf("[Network] 누군가 정리 중인 것으로 보임. 송신 진행 불가. 포트번호 = %d\n", ntohs(clientaddr.sin_port));
+			//ptr->UnLockSession();
+			return false;
+			/*while (1)
 			{
-				printf("[Network] 누군가 정리 중인 것으로 보임. 송신 진행 불가. 포트번호 = %d\n", ntohs(clientaddr.sin_port));
-				//ptr->UnLockSession();
-				//누군가가 정리중이라면 send를 진행시키지 않는다.
-				return false;
-				/*while (1)
-				{
-					printf("[Network] send완료 시 감소 전이므로 발생해선 안되며, sendPacket에서도 삭제되었음변 아예 송신 못함.\n");
-				}*/
-			}
-			else
-			{
-				//nterlockedIncrement((long*)&i_send);
-			}
-			//printf("[Network] 데이터 송신  포트번호 = %d\n", ntohs(clientaddr.sin_port));
-			retval = WSASend(ptr->_sock, wsabuf, 2, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
-
-
-			if (retval == SOCKET_ERROR)
-			{
-				if (WSAGetLastError() != WSA_IO_PENDING)
-				{
-					//printf("[Network] ");
-					//err_display("WSASend()");
-					/*InterlockedDecrement((long*)&d_send);*/
-					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
-					{
-						//InterlockedCompareExchange(&ptr->IsSending, 0, 1);
-						ReleaseSession(clientaddr, ptr);
-						return false;
-					}
-				}
-			}
+				printf("[Network] send완료 시 감소 전이므로 발생해선 안되며, sendPacket에서도 삭제되었음변 아예 송신 못함.\n");
+			}*/
 		}
 		else
 		{
+			/*InterlockedIncrement((long*)&i_send);*/
+		}
 
-			WSABUF wsabuf;
-			wsabuf.buf = ptr->sendBuf->GetFrontBufferPtr();
-			wsabuf.len = ptr->sendBuf->DirectDequeueSize();
+		if (wsabuf[0].len == 0)
+		{
+			printf("[WsaSendSession] wsabuf 에 아무 값도 안들어갔음.\n");
+			__debugbreak();
+		}
 
-			int increase = InterlockedIncrement((long*)&ptr->IOCount);
-			if (increase == 1)
+		DWORD sendBytes = 0;
+		//printf("[Network] 데이터 송신  포트번호 = %d\n", ntohs(clientaddr.sin_port));
+		retval = WSASend(ptr->_sock, wsabuf, bufIndex, (LPDWORD)&sendBytes, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
+
+		if (retval == SOCKET_ERROR)
+		{
+			if (WSAGetLastError() != WSA_IO_PENDING)
 			{
-				printf("[Network] 누군가 정리 중인 것으로 보임. 송신 진행 불가. 포트번호 = %d\n", ntohs(clientaddr.sin_port));
-				//ptr->UnLockSession();
-				return false;
-				/*while (1)
+				//printf("[Network] ");
+				//err_display("WSASend()");
+				//InterlockedDecrement((long*)&d_send);
+				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
 				{
-					printf("[Network] send완료 시 감소 전이므로 발생해선 안되며, sendPacket에서도 삭제되었음변 아예 송신 못함.\n");
-				}*/
-			}
-			else
-			{
-				/*InterlockedIncrement((long*)&i_send);*/
-			}
-			//printf("[Network] 데이터 송신  포트번호 = %d\n", ntohs(clientaddr.sin_port));
-			retval = WSASend(ptr->_sock, &wsabuf, 1, (LPDWORD)&sendlen, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
-
-
-			if (retval == SOCKET_ERROR)
-			{
-				if (WSAGetLastError() != WSA_IO_PENDING)
-				{
-					//printf("[Network] ");
-					//err_display("WSASend()");
-					//InterlockedDecrement((long*)&d_send);
-					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
-					{
-						ReleaseSession(clientaddr, ptr);
-						return false;
-					}
+					ReleaseSession(clientaddr, ptr);
+					return false;
 				}
 			}
 		}
+
+		ptr->sendPacketNum = remain;
 	}
 	else
 	{
 		//printf("[Network] 이미 송신 진행 중  포트번호 = %d\n", ntohs(clientaddr.sin_port));
+		//이때 락걸고 대기해야 하는거아닌가?
 	}
 
 

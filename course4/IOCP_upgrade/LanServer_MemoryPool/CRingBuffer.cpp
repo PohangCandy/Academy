@@ -24,15 +24,15 @@ CRingBuffer::~CRingBuffer() {
     DeleteCriticalSection(&m_csRingbuffer);
 }
 
-void CRingBuffer::Resize(int size)
-{
-    delete[] m_pBuffer;
-    m_pBuffer = new char[size];
-    m_iBufferSize = size;
-    m_iFront = 0;
-    m_iRear = 0;
-    m_bIsFull = false;
-}
+//void CRingBuffer::Resize(int size)
+//{
+//    delete[] m_pBuffer;
+//    m_pBuffer = new char[size];
+//    m_iBufferSize = size;
+//    m_iFront = 0;
+//    m_iRear = 0;
+//    m_bIsFull = false;
+//}
 
 int CRingBuffer::GetBufferSize(void)
 {

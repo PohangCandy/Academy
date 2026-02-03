@@ -54,26 +54,20 @@ void CEchoServer::OnRecv(SessionID sessionID, CPacket* pPacket)
 	int ret = pPacket->GetData(recvMsg->payload, len);
 	if (ret == 0)
 	{
-		while (1)
-		{
-			printf("[Contents] 패킷에 남은 메시지 없는데 추출 시도함.\n");
-		}
+		printf("[Contents] 패킷에 남은 메시지 없는데 추출 시도함.\n");
+		__debugbreak();
 	}
 	else if (len != sizeof(recvMsg->payload))
 	{
-		while (1)
-		{
-			//악의적인 클라로 간주하고 끊는게 맞음. Disconnect하면 될 듯
-			printf("[Contents] 메시지와 패킷의 양식이 다름, 메시지  : %d , 패킷 : %d \n", sizeof(recvMsg->payload), len);
-		}
+		//악의적인 클라로 간주하고 끊는게 맞음. Disconnect하면 될 듯
+		printf("[Contents] 메시지와 패킷의 양식이 다름, 메시지  : %d , 패킷 : %d \n", sizeof(recvMsg->payload), len);
+		__debugbreak();
 	}
 	else if(len != ret)
 	{
-		while (1)
-		{
-			//악의적인 클라로 간주하고 끊는게 맞음. Disconnect하면 될 듯
-			printf("[Contents] 패킷에서 추출한 크기가 예상과 다름. 요청  : %d , 실제 : %d \n", len, ret);
-		}
+		//악의적인 클라로 간주하고 끊는게 맞음. Disconnect하면 될 듯
+		printf("[Contents] 패킷에서 추출한 크기가 예상과 다름. 요청  : %d , 실제 : %d \n", len, ret);
+		__debugbreak();
 	}
 
 	//printf("[Contents] : 수신 메시지 내용 %lld\n", (long long)recvMsg->payload);
@@ -89,10 +83,8 @@ void CEchoServer::OnRecv(SessionID sessionID, CPacket* pPacket)
 	//세션이 이제 여기서 삭제되는 경우는 없음.
 	if (sendret == 0)
 	{
-		while (1)
-		{
-			printf("[Contents] 네트워크 송신 버퍼가 꽉 참\n");
-		}
+		printf("[Contents] 네트워크 송신 버퍼가 꽉 참\n");
+		__debugbreak();
 	}
 
 	delete recvMsg;

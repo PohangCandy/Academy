@@ -1,6 +1,6 @@
 #include "Session.h"
-
-#include "CRingBufferForPacket.h"
+#include "CRingBuffer.h"
+#include  "CPacketRingBuffer.h"
 #include "MessageQueue.h"
 #include "OVERLAPPED_CONTEXT.h"
 
@@ -20,7 +20,7 @@ SOCKETINFO::SOCKETINFO(int bufsize)
 	//InitializeCriticalSection(&session_cs);
 	_sock = INVALID_SOCKET;
 	recvBuf = new CRingBuffer(bufsize + 1);
-	sendBuf = new CRingBuffer(bufsize + 1);
+	sendBuf = new CPacketRingBuffer(bufsize + 1);
 	messageQueue = new MessageQueue(bufsize);
 	sendOverlapped = new OVERLAPPED_CONTEXT(ESend);
 	recvOverlapped = new OVERLAPPED_CONTEXT(ERecv);
