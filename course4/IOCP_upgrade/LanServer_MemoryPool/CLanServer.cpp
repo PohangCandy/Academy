@@ -495,19 +495,20 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		else if (lpOverlapped->op == ESend)
 		{
 			//락 풀기전에 Send한 크기만큼 송신 버퍼에서 movefront
-			
-			
+			//long l = 0;
+			//InterlockedExchange(&l, 1);
 			int sendPacketNum = ptr->sendPacketNum;
 			int srfront = ptr->sendBuf->GetFront();
+			int cpysrfront = srfront;
 			int srCapacity = ptr->sendBuf->GetBufferSize();
 			CPacket** ppacket = ptr->sendBuf->GetBufPtr();
 
 			//패킷 미리 해제
 			for (int i = 0; i < sendPacketNum; i++)
 			{
-				CPacket* packet = ppacket[srfront];
+				CPacket* packet = ppacket[cpysrfront];
 				packet->SubRef();
-				srfront = (srfront + 1) % srCapacity;
+				cpysrfront = (cpysrfront + 1) % srCapacity;
 			}
 
 			//ptr->GetSessionLock();
@@ -723,15 +724,16 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 
 		DWORD sendBytes = 0;
 		//printf("[Network] 데이터 송신  포트번호 = %d\n", ntohs(clientaddr.sin_port));
-		retval = WSASend(ptr->_sock, wsabuf, bufIndex, (LPDWORD)&sendBytes, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
+
+		ptr->sendPacketNum = remain;
+		retval = WSASend(ptr->_sock, wsabuf, remain, (LPDWORD)&sendBytes, 0, (LPWSAOVERLAPPED)ptr->sendOverlapped, NULL);
 
 		if (retval == SOCKET_ERROR)
 		{
 			if (WSAGetLastError() != WSA_IO_PENDING)
 			{
-				//printf("[Network] ");
-				//err_display("WSASend()");
-				//InterlockedDecrement((long*)&d_send);
+				//보낼 세션이 접속을 끊어버린 상황
+				//__debugbreak();
 				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
 				{
 					ReleaseSession(clientaddr, ptr);
@@ -739,8 +741,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 				}
 			}
 		}
-
-		ptr->sendPacketNum = bufIndex;
+		
 	}
 	else
 	{
