@@ -51,6 +51,6 @@ private:
 	//SOCKETINFO _sessionMap[100000] = {};
 	//long long _mapIndex = 0;
 	long long _mapSize = 0;
-	//std::stack<long long> _deletedIdStack;
+	std::stack<long long> _deletedIdStack;
 	CRITICAL_SECTION _sessionMap_cs;
 };

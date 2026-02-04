@@ -92,10 +92,8 @@ unsigned int __stdcall PushPopThread(LPVOID arg)
 			}
 			break;
 		default:
-			while (1)
-			{
-				printf("말도 안되는게 나옴\n");
-			}
+			printf("말도 안되는게 나옴\n");
+			__debugbreak;
 			break;
 		}
 

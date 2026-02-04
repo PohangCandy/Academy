@@ -62,6 +62,7 @@ void CLockFreeStack::push(int i,CMemoryViewer* pmv)
 			//_pTop의 값을 읽을때 과거의 값을 읽으르모 충분히 가능성 있음..
 			//하지만 interlock에서 걸러지므로 문제갑 발생하지 않아야 정상임
 			printf("[push] 동일한 노드의 중복 삽입 시도 발생!");
+			__debugbreak();
 		}
 
 	} while (pushCAS(_pTop, newTop, ptop, pmv) != ptop);
@@ -229,6 +230,7 @@ Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, int& pop
 		if (nNewNode != ptop->nextNode)
 		{
 			printf("ABA문제가 발생했다!\n");
+			__debugbreak();
 		}
 
 		Node* pt = ptop;
@@ -303,11 +305,13 @@ Node* CLockFreeStack::popCAS(Node*& nTop, Node*& nNewNode, Node*& ptop, CMemoryV
 			if (UserBit == nextNode)
 			{
 				printf("[popCAS] 여기서 동일한 노드가 나왔다고라??");
+				__debugbreak();
 			}
 
 			if (nNewNode != UserBit->nextNode)
 			{
 				printf("ABA문제가 발생했다!\n");
+				__debugbreak();
 			}
 
 			//UserBit = nullptr;
