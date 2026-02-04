@@ -1,11 +1,11 @@
 #include "cSessionMap.h"
 #include "Session.h"
 #include "MemoryPoolForLockFree.h"
-#include "CLockFreeStack.h"
+//#include "CLockFreeStack.h"
 
 #define BUFSIZE (1024 * 1024)
 
-CLockFreeStack _deletedIdStack;
+//CLockFreeStack _deletedIdStack;
 
 cSessionMap* cSessionMap::sessionMapInstance = nullptr;
 
@@ -40,13 +40,12 @@ long long cSessionMap::InsertSessionptrToSessionMap(SOCKETINFO* psession)
 	//AcceptThread가 여러개있다면 맵에 추가하는 과정도 락/락프리를 통해 이뤄져야 한다.
 	long long id;
 
-	//EnterCriticalSection(&_sessionMap_cs);
+	EnterCriticalSection(&_sessionMap_cs);
 	if (!_deletedIdStack.empty())
 	{
-		int* top = _deletedIdStack.pop();
-		id = (long long) *top;
-		//_deletedIdStack.pop();
-		//LeaveCriticalSection(&_sessionMap_cs);
+		id = _deletedIdStack.top();
+		_deletedIdStack.pop();
+		LeaveCriticalSection(&_sessionMap_cs);
 
 		if (_sessionMap[id] != nullptr)
 		{
@@ -60,7 +59,7 @@ long long cSessionMap::InsertSessionptrToSessionMap(SOCKETINFO* psession)
 	{
 		id = _InterlockedIncrement64(&_mapSize);
 		_sessionMap[id] = psession;
-		//LeaveCriticalSection(&_sessionMap_cs);
+		LeaveCriticalSection(&_sessionMap_cs);
 	}
 	return id;
 }
@@ -77,7 +76,7 @@ void cSessionMap::deleteSessionptrFromSessionMap(SOCKETINFO*& psession, char* s_
 	delete psession;
 	psession = nullptr;
 
-	//EnterCriticalSection(&_sessionMap_cs);
+	EnterCriticalSection(&_sessionMap_cs);
 	if (_sessionMap[id] != nullptr)
 	{
 		__debugbreak();
@@ -85,7 +84,7 @@ void cSessionMap::deleteSessionptrFromSessionMap(SOCKETINFO*& psession, char* s_
 	_deletedIdStack.push(id);
 	printf("[Network] 클라이언트 종료: ID  = %d\n", id);
 
-	//LeaveCriticalSection(&_sessionMap_cs);
+	LeaveCriticalSection(&_sessionMap_cs);
 }
 
 void cSessionMap::GetSessionptr(long long sessionId, SOCKETINFO*& sessionptr)

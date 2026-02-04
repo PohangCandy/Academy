@@ -120,6 +120,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <Optimization>Disabled</Optimization>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -131,9 +132,7 @@
   <ItemGroup>
     <ClCompile Include="CLockFreeStack.cpp" />
     <ClCompile Include="CMemoryViewer.cpp" />
-    <ClCompile Include="LockFreeQueueWithMultiThread.cpp" />
-    <ClCompile Include="LockFreeTest.cpp" />
-    <ClCompile Include="LockTest.cpp" />
+    <ClCompile Include="LockFreeStackWithMultiThread.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CLockFreenewVersion.h" />

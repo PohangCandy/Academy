@@ -153,6 +153,7 @@ namespace procademy
 					if (newtop == nullptr)
 					{
 						printf("[MemoryPool] Alloc에서 메모리 할당 실패 발생!");
+						__debugbreak();
 						return nullptr;
 					}
 
@@ -193,11 +194,13 @@ namespace procademy
 					if (v1 != v2) {
 						// 여기서 v1과 v2의 값을 16진수로 출력해서 비트 하나하나가 일치하는지 확인
 						printf("Diff: %016llx vs %016llx\n", v1, v2);
+						__debugbreak();
 					}
 
 					if (nNewNode != UserBit->nextNode)
 					{
 						printf("ABA문제가 발생했다!\n");
+						__debugbreak();
 					}
 				}
 				return pt;
@@ -225,6 +228,7 @@ namespace procademy
 			if (temp->owner != this)
 			{
 				printf("풀에서 다른 객체 감지됨.\n");
+				__debugbreak();
 				return false;
 			}
 
@@ -252,9 +256,6 @@ namespace procademy
 			} while (pushCAS(m_pTopNode, newTop, ptop) != ptop);
 			//ptop가 nullptr이고, m_pTopNode이 nullptr이 아닌 경우에도 성립할 수 있음.
 			//ptop가 nullptr이고, m_pTopNode이 nullptr이 아니면 interlock으로 걸리지 않나?
-
-
-
 
 			//다시 메모리 풀에 채워주고
 			InterlockedDecrement((long*)&m_iUseCount);

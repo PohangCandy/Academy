@@ -49,10 +49,8 @@ void popCheck()
 	{
 		if (!g_myStack.empty())
 		{
-			while (1)
-			{
-				printf("pop한 결과가 다름1.\n");
-			}
+			printf("pop한 결과가 다름1.\n");
+			__debugbreak();
 		}
 	}
 	else
@@ -63,18 +61,14 @@ void popCheck()
 		g_myStack.pop(t2);
 		if (t1 != t2)
 		{
-			while (1)
-			{
-				printf("pop한 결과가 다름2.\n");
-			}
+			printf("pop한 결과가 다름2.\n");
+			__debugbreak();
 		}
 
 		if (g_stdStack.size() != g_myStack.size())
 		{
-			while (1)
-			{
-				printf("pop한 결과가 다름3.\n");
-			}
+			printf("pop한 결과가 다름3.\n");
+			__debugbreak();
 		}
 	}
 }
@@ -87,10 +81,8 @@ void pushCheck()
 	g_stdStack.push(r);
 	if (g_stdStack.size() != g_myStack.size())
 	{
-		while (1)
-		{
-			printf("push한 결과가 다름.\n");
-		}
+		printf("push한 결과가 다름.\n");
+		__debugbreak();
 	}
 }
 
@@ -104,6 +96,7 @@ void checkAllData()
 	if (!g_myStack.empty())
 	{
 		printf("전체 데이터 비교에서 결과가 다름.\n");
+		__debugbreak();
 	}
 }
 
@@ -125,10 +118,8 @@ int main()
 				popCheck();
 				break;
 			default:
-				while (1)
-				{
-					printf("말도 안되는게 나옴\n");
-				}
+				printf("말도 안되는게 나옴\n");
+				__debugbreak();
 				break;
 			}
 		}
