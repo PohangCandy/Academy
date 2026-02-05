@@ -69,6 +69,7 @@ void cSessionMap::deleteSessionptrFromSessionMap(SOCKETINFO*& psession, char* s_
 
 	closesocket(psession->_sock);
 	printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
+	
 	delete psession;
 	psession = nullptr;
 
