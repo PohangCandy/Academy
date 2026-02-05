@@ -137,7 +137,7 @@ bool CLanServer::Start()
 			}
 
 			
-			SOCKETINFO* ptr = sessionMap->MakeNewSession(client_sock);
+			SOCKETINFO* ptr = sessionMap->AllocSessionptr(client_sock);
 
 			long long id = ptr->session_id;
 			WSABUF wsabuf;
@@ -195,7 +195,7 @@ bool CLanServer::Disconnect(SessionID sessionId)
 	SOCKETINFO* ptr;
 	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
 
-	pSessionMap->GetSessionptr(sessionId, ptr);
+	ptr = pSessionMap->GetSessionptr(sessionId);
 	if (ptr == nullptr)
 	{
 		return false;
@@ -219,7 +219,7 @@ bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
 	short* phearder = (short*)cp->GetBufferPtr();
 	*phearder = netHeaderData;
 
-	pSessionMap->GetSessionptr(sessionId, ptr);
+	ptr = pSessionMap->GetSessionptr(sessionId);
 	if (ptr == nullptr)
 	{
 		return false;
@@ -242,6 +242,7 @@ bool CLanServer::SendPacket(SessionID sessionId, CPacket* cp)
 	if (!WsaSendSession(clientaddr, ptr))
 	{
 		//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
+		__debugbreak();
 		return false;
 	}
 	//PostQueuedCompletionStatus(pIOCPHandle->netHcp, len, (ULONG_PTR)ptr, (LPWSAOVERLAPPED)&ptr->contentsOverlapped);
@@ -265,7 +266,7 @@ int CLanServer::getSendMessageTPS()
 }
 
 
-void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 {
 	//long ReleaseFlag = 1 << 31;
 	//long oldIOCount = ptr->IOCount | ~ReleaseFlag;
@@ -284,7 +285,7 @@ void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 	cSessionMap* psm = cSessionMap::GetSessionMap();
 
 
-	psm->deleteSessionptrFromSessionMap(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+	psm->FreeSession(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 
 	//InterlockedIncrement((long*)&g_deleteSockNum);
 	//if (InterlockedCompareExchange((long*)&g_deleteSockNum, g_acceptSockNum, g_acceptSockNum) == g_acceptSockNum)
@@ -561,7 +562,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 }
 
 
-bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 {
 	int retval;
 
@@ -629,7 +630,7 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 	return true;
 }
 
-bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
+bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 {
 	if (ptr == nullptr)
 	{
@@ -740,6 +741,7 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO*& ptr)
 				//__debugbreak();
 				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
 				{
+					__debugbreak();
 					ReleaseSession(clientaddr, ptr);
 					return false;
 				}
