@@ -103,10 +103,29 @@ void cSessionMap::FreeSession(SOCKETINFO* psession, char* s_ip, int i_port)
 	LeaveCriticalSection(&_sessionMap_cs);
 }
 
-SOCKETINFO* cSessionMap::GetSessionptr(long long sessionId)
+SOCKETINFO* cSessionMap::GetSessionptr(long long key)
 {
-	long long index_Bit = GetSessionIndex(sessionId);
-	return &_sessionMap[index_Bit];
+	long long index = GetSessionIndex(key);
+	long long sessionId = GetSessionId(key);
+
+	SOCKETINFO* ptr = &_sessionMap[index];
+
+	// 1. 세션 ID 검증
+	if (ptr->session_id != sessionId)
+		return nullptr;
+
+	// 2. IOCount 증가 시도 (ReleaseFlag 체크)
+	if (!IncreaseSessionIO(ptr))
+		return nullptr;
+
+	// 3. 다시 한 번 세션 ID 검증 (ABA 방지)
+	if (ptr->session_id != sessionId)
+	{
+		DecreaseSessionIO(ptr);
+		return nullptr;
+	}
+
+	return ptr;
 }
 
 long long cSessionMap::GetnextSessionKey()
