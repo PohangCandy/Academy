@@ -17,6 +17,10 @@
 #define MSG_SIZE (8)
 #define WSASEND_MAX_BUFFER_COUNT (128)
 
+#define RELEASE_FLAGBIT 31
+#define RELEASE_FLAG      (1u << RELEASE_FLAGBIT)  
+#define RELEASE_FLAG_MASK (RELEASE_FLAG - 1)       
+
 //------------------------------------
 //메시지 프로토콜
 // 헤더 2Byte (길이)
@@ -153,9 +157,10 @@ bool CLanServer::Start()
 
 			//비동기 입출력 시작
 			flags = 0;
-			//IOCount를 증가시켰는데 1이라면, 정리중인 세션이므로
-			//더 이상 송수신 처리가 일어나지 않도록 한다.
-			InterlockedIncrement((long*)&ptr->IOCount);
+			if (!IncreaseSessionIO(ptr))
+			{
+				__debugbreak();
+			}
 			retval = WSARecv(client_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->recvOverlapped, NULL);
 			if (retval == SOCKET_ERROR)
 			{
@@ -164,10 +169,9 @@ bool CLanServer::Start()
 
 					//여기서 IOCount의 최상위 비트를 SessionReleaseFlag로 사용한다면??
 					//IOCount가 0이면 비트에 1넣기
-
-					if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+					if (!DecreaseSessionIO(clientaddr, ptr))
 					{
-						ReleaseSession(clientaddr, ptr);
+						//세션이 삭제된 경우
 						continue;
 					}
 				}
@@ -268,31 +272,89 @@ int CLanServer::getSendMessageTPS()
 
 void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 {
-	//long ReleaseFlag = 1 << 31;
-	//long oldIOCount = ptr->IOCount | ~ReleaseFlag;
-	////Flag를 제거한 IOCount가 0이 아니면 return
-	//if (0 != oldIOCount) return;
-
-	//long CountwithFlagBit = (ReleaseFlag & oldIOCount);
-	//if (InterlockedCompareExchange((long*)&ptr->IOCount, CountwithFlagBit, oldIOCount) != oldIOCount)
-	//{
-	//	return;
-	//}
-	if (ptr->IOCount != 0)
-	{
-		__debugbreak();
-	}
 	cSessionMap* psm = cSessionMap::GetSessionMap();
-
-
 	psm->FreeSession(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+}
 
-	//InterlockedIncrement((long*)&g_deleteSockNum);
-	//if (InterlockedCompareExchange((long*)&g_deleteSockNum, g_acceptSockNum, g_acceptSockNum) == g_acceptSockNum)
-	//{
-	//	printf("[Network] Accept 횟수와 Delete횟수가 일치했음.");
-	//	_CrtDumpMemoryLeaks();
-	//}
+bool CLanServer::DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
+{
+	unsigned long oldVal;
+	unsigned long newVal;
+
+	while (true)
+	{
+		oldVal = ptr->IOCount;
+
+		// 이미 Release 상태면 아무것도 하지 않음
+		if (oldVal & RELEASE_FLAG)
+			return false;
+
+		unsigned long io = oldVal & RELEASE_FLAG_MASK;
+		if (io == 0)
+		{
+			__debugbreak(); // underflow
+			return false;
+		}
+
+		newVal = oldVal - 1;
+
+		// IOCount 감소 성공?
+		if (InterlockedCompareExchange(
+			(unsigned long*)&ptr->IOCount,
+			newVal,
+			oldVal) == oldVal)
+		{
+			break;
+		}
+	}
+
+	// 감소 후 IOCount == 0 이고 ReleaseFlag == 0 이면
+	if ((newVal & RELEASE_FLAG_MASK) == 0)
+	{
+		// ReleaseFlag 세팅 시도
+		if (InterlockedCompareExchange(
+			(unsigned long*)&ptr->IOCount,
+			newVal | RELEASE_FLAG,
+			newVal) == newVal)
+		{
+			ReleaseSession(clientaddr, ptr);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool CLanServer::IncreaseSessionIO(SOCKETINFO* ptr)
+{
+	unsigned long oldVal;
+	unsigned long newVal;
+
+	while (true)
+	{
+		oldVal = ptr->IOCount;
+
+		// 이미 Release 상태면 IO 추가 불가
+		if (oldVal & RELEASE_FLAG)
+			return false;
+
+		unsigned long io = oldVal & RELEASE_FLAG_MASK;
+		if (io == RELEASE_FLAG_MASK)
+		{
+			__debugbreak(); // overflow
+			return false;
+		}
+
+		newVal = oldVal + 1;
+
+		if (InterlockedCompareExchange(
+			(unsigned long*)&ptr->IOCount,
+			newVal,
+			oldVal) == oldVal)
+		{
+			return true;
+		}
+	}
 }
 
 //작업자 스레드 함수
@@ -331,24 +393,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		{
 			//클라가 종료신호 FIN보냄.
 			//printf("[Network] 클라이언트 종료 신호 수신: IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-			int decrease = InterlockedDecrement((long*)&ptr->IOCount);
-			if (decrease == 0)
+			if (!pServer->DecreaseSessionIO(clientaddr, ptr))
 			{
-				//세션에 대해 락을 얻는다  = 현재 sendpacket을 진행 중인지 확인
-				//IsSending 확인 = send 중인지 확인, send 중이라면 이미 IO가 하나 커졌을때니깐, 0인지만 확인하면 되지 않을까?
-				//락 얻고, 0인지 비교한 후 들어와서 락 푼다면?
-				pServer->ReleaseSession(clientaddr, ptr);
-			}
-			else if (decrease < 0)
-			{
-				while (1)
-				{
-					printf("뭐야 이거\n");
-				}
-			}
-			else
-			{
-				//printf("[Network] 아직 IO 덜 끝남.\n");
+				//세션이 삭제된 경우
+				continue;
 			}
 
 			continue;
@@ -362,9 +410,9 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 				//GQCS 실패
 				printf("[Network] ");
 				err_display("WSAGetOverlappedResult()");
-				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				if (!pServer->DecreaseSessionIO(clientaddr, ptr))
 				{
-					pServer->ReleaseSession(clientaddr, ptr);
+					//세션이 삭제된 경우
 					continue;
 				}
 			}
@@ -372,11 +420,9 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			{
 				//IO 실패
 				printf("[Network] IO 실패\n");
-				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				if (!pServer->DecreaseSessionIO(clientaddr, ptr))
 				{
-
-					pServer->ReleaseSession(clientaddr, ptr);
-
+					//세션이 삭제된 경우
 					continue;
 				}
 
@@ -478,9 +524,9 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			}
 
 			//GQCS Recv 완료통지에 대한 IO 감소
-			if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+			if (!pServer->DecreaseSessionIO(clientaddr, ptr))
 			{
-				pServer->ReleaseSession(clientaddr, ptr);
+				//세션이 삭제된 경우
 				continue;
 			}
 		}
@@ -542,9 +588,9 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			//ptr->UnLockSession();
 
 			//GQCS Send 완료통지에 대한 IO 감소
-			if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+			if (!pServer->DecreaseSessionIO(clientaddr, ptr))
 			{
-				pServer->ReleaseSession(clientaddr, ptr);
+				//세션이 삭제된 경우
 				continue;
 			}
 		}
@@ -584,7 +630,10 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 		wsabuf[1].len = frontSize;
 		DWORD recvbytes;
 		DWORD flags = 0;
-		InterlockedIncrement((long*)&ptr->IOCount);
+		if (!IncreaseSessionIO(ptr))
+		{
+			__debugbreak();
+		}
 		retval = WSARecv(ptr->_sock, wsabuf, 2, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->recvOverlapped, NULL);
 
 		if (retval == SOCKET_ERROR)
@@ -593,9 +642,9 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 			{
 				//printf("[Network] ");
 				//err_display("WSARecv()");
-				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				if (!DecreaseSessionIO(clientaddr, ptr))
 				{
-					ReleaseSession(clientaddr, ptr);
+					//세션이 삭제된 경우
 					return false;
 				}
 			}
@@ -609,7 +658,10 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 		wsabuf.len = ptr->recvBuf->DirectEnqueueSize();
 		DWORD recvbytes;
 		DWORD flags = 0;
-		InterlockedIncrement((long*)&ptr->IOCount);
+		if (!IncreaseSessionIO(ptr))
+		{
+			__debugbreak();
+		}
 		retval = WSARecv(ptr->_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->recvOverlapped, NULL);
 
 		if (retval == SOCKET_ERROR)
@@ -618,9 +670,9 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 			{
 				//printf("[Network] ");
 				//err_display("WSARecv()");
-				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				if (!DecreaseSessionIO(clientaddr, ptr))
 				{
-					ReleaseSession(clientaddr, ptr);
+					//세션이 삭제된 경우
 					return false;
 				}
 			}
@@ -705,20 +757,11 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 			rbFront = (rbFront + 1) % rbCpacity;
 		}
 
-		int increase = InterlockedIncrement((long*)&ptr->IOCount);
-		if (increase == 1)
+		if (!IncreaseSessionIO(ptr))
 		{
 			printf("[Network] 누군가 정리 중인 것으로 보임. 송신 진행 불가. 포트번호 = %d\n", ntohs(clientaddr.sin_port));
-			//ptr->UnLockSession();
+			__debugbreak();
 			return false;
-			/*while (1)
-			{
-				printf("[Network] send완료 시 감소 전이므로 발생해선 안되며, sendPacket에서도 삭제되었음변 아예 송신 못함.\n");
-			}*/
-		}
-		else
-		{
-			/*InterlockedIncrement((long*)&i_send);*/
 		}
 
 		if (wsabuf[0].len == 0)
@@ -737,12 +780,9 @@ bool CLanServer::WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 		{
 			if (WSAGetLastError() != WSA_IO_PENDING)
 			{
-				//보낼 세션이 접속을 끊어버린 상황
-				//__debugbreak();
-				if (InterlockedDecrement((long*)&ptr->IOCount) == 0)
+				if (!DecreaseSessionIO(clientaddr, ptr))
 				{
-					__debugbreak();
-					ReleaseSession(clientaddr, ptr);
+					//세션이 삭제된 경우
 					return false;
 				}
 			}

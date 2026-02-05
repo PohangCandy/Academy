@@ -35,7 +35,7 @@ public:
 	long long session_id = 0;
 	LONG IsSending = 0;
 	int sendPacketNum = 0;
-	long IOCount = 0;
+	unsigned long IOCount = 0;
 	OVERLAPPED_CONTEXT* sendOverlapped;
 	OVERLAPPED_CONTEXT* recvOverlapped;
 	//OVERLAPPED_CONTEXT contentsOverlapped{ EContents };

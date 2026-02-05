@@ -62,7 +62,7 @@ void SOCKETINFO::Inintialize(SOCKET sock, long long sessionID)
 void SOCKETINFO::DecreaseIOCount()
 {
 	//EnterCriticalSection(&session_cs);
-	InterlockedDecrement((long*)&IOCount);
+	InterlockedDecrement((unsigned long*)&IOCount);
 	//LeaveCriticalSection(&session_cs);
 }
 
