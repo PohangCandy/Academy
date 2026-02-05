@@ -14,15 +14,12 @@ public:
 
 	static void Destroy();
 
-	//return newSessionptr
-	SOCKETINFO* MakeNewSession(SOCKET sock);
-
 	//return SessionId
-	long long InsertSessionptrToSessionMap(SOCKETINFO* psession);
+	SOCKETINFO* AllocSessionptr(SOCKET sock);
 
-	void deleteSessionptrFromSessionMap(SOCKETINFO*& psession, char* s_ip, int i_port);
+	void FreeSession(SOCKETINFO* psession, char* s_ip, int i_port);
 
-	void GetSessionptr(long long sessionId, SOCKETINFO*& sessionptr);
+	SOCKETINFO* GetSessionptr(long long sessionId);
 
 	//long long GetSessionCount();
 
@@ -30,7 +27,7 @@ public:
 
 	//void UnLockMap();
 
-	long long GetSize();
+	long long GetnextSessionKey();
 
 private:
 
@@ -40,21 +37,17 @@ private:
 	cSessionMap();
 	~cSessionMap();
 
-	//--------------------------------
-	// 세션과 세션 ID를 저장하기 위한 맵 
-	// 자료구조 : 배열
-	// 최대치 : 8byte 크기
-	//--------------------------------
-	SOCKETINFO* _sessionMap[1 << 24] = {};
-	//세션의 연결이 끊겼다고 해서 바로 세션을 종료시키는게 아님.
-	// IO카운팅이 끊나야 세션을 종료시키므로 대충 한 10만명 받을 수 있도록 만들어둬야
-	// 유니크한 세션 ID와 인덱스를 조합시켜야 하므로
-	// 세션 ID는 long long -> 8바이트 = 약 64비트
-	// 인덱스로 적당히 한 20비트 사용, sessionid 44비트는 
-	//SOCKETINFO _sessionMap[100000] = {};
+	long long GetSessionId(long long  key);
+
+	long long GetSessionIndex(long long  key);
+
+	long long MakeSessionKey(long long  index, long long sessionId);
+
 	
 	//long long _mapIndex = 0;
-	long long _mapSize = 0;
+	long long _nextSessionID = 0;
+	long long _nextIndex = 0;
+
 	std::stack<long long> _deletedIdStack;
 	CRITICAL_SECTION _sessionMap_cs;
 };

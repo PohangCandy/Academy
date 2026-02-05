@@ -4,24 +4,17 @@
 #include "MessageQueue.h"
 #include "OVERLAPPED_CONTEXT.h"
 
+#define BUFSIZE (1024 * 16)
+
+
+
 SOCKETINFO::SOCKETINFO()
 {
 	//InitializeCriticalSection(&session_cs);
 	_sock = INVALID_SOCKET;
-	recvBuf = nullptr;
-	sendBuf = nullptr;
-	messageQueue = nullptr;
-	sendOverlapped = new OVERLAPPED_CONTEXT(ESend);
-	recvOverlapped = new OVERLAPPED_CONTEXT(ERecv);
-}
-
-SOCKETINFO::SOCKETINFO(int bufsize)
-{
-	//InitializeCriticalSection(&session_cs);
-	_sock = INVALID_SOCKET;
-	recvBuf = new CRingBuffer(bufsize + 1);
-	sendBuf = new CPacketRingBuffer(bufsize + 1);
-	messageQueue = new MessageQueue(bufsize);
+	recvBuf = new CRingBuffer(BUFSIZE + 1);
+	sendBuf = new CPacketRingBuffer(BUFSIZE + 1);
+	messageQueue = new MessageQueue(BUFSIZE);
 	sendOverlapped = new OVERLAPPED_CONTEXT(ESend);
 	recvOverlapped = new OVERLAPPED_CONTEXT(ERecv);
 }
@@ -48,6 +41,7 @@ SOCKETINFO::~SOCKETINFO()
 
 void SOCKETINFO::Inintialize(SOCKET sock, long long sessionID)
 {
+	_Active = true;
 	_sock = sock;
 	session_id = sessionID;
 	IsSending = 0;
@@ -71,6 +65,17 @@ void SOCKETINFO::DecreaseIOCount()
 	InterlockedDecrement((long*)&IOCount);
 	//LeaveCriticalSection(&session_cs);
 }
+
+//SOCKETINFO::SOCKETINFO()
+//{
+//	//InitializeCriticalSection(&session_cs);
+//	_sock = INVALID_SOCKET;
+//	recvBuf = nullptr;
+//	sendBuf = nullptr;
+//	messageQueue = nullptr;
+//	sendOverlapped = new OVERLAPPED_CONTEXT(ESend);
+//	recvOverlapped = new OVERLAPPED_CONTEXT(ERecv);
+//}
 
 //void SOCKETINFO::GetSessionLock()
 //{
