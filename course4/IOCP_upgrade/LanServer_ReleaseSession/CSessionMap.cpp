@@ -9,6 +9,10 @@
 #define SESSION_ID_BITMASK ((1ULL << SESSION_ID_BIT) - 1)
 #define SESSION_INDEX_BITMASK  (((1ULL << SESSION_INDEX_BIT) - 1) << SESSION_ID_BITMASK)
 
+#define RELEASE_FLAGBIT 31
+#define RELEASE_FLAG      (1u << RELEASE_FLAGBIT)  
+#define RELEASE_FLAG_MASK (RELEASE_FLAG - 1)    
+
 	//--------------------------------
 	// 세션과 세션 ID를 저장하기 위한 맵 
 	// 자료구조 : 배열
@@ -126,6 +130,92 @@ SOCKETINFO* cSessionMap::GetSessionptr(long long key)
 	}
 
 	return ptr;
+}
+
+void cSessionMap::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
+{
+	FreeSession(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+}
+
+bool cSessionMap::DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
+{
+	unsigned long oldVal;
+	unsigned long newVal;
+
+	while (true)
+	{
+		oldVal = ptr->IOCount;
+
+		// 이미 Release 상태면 아무것도 하지 않음
+		if (oldVal & RELEASE_FLAG)
+			return false;
+
+		unsigned long io = oldVal & RELEASE_FLAG_MASK;
+		if (io == 0)
+		{
+			__debugbreak(); // underflow
+			return false;
+		}
+
+		newVal = oldVal - 1;
+
+		// IOCount 감소 성공?
+		if (InterlockedCompareExchange(
+			(unsigned long*)&ptr->IOCount,
+			newVal,
+			oldVal) == oldVal)
+		{
+			break;
+		}
+	}
+
+	// 감소 후 IOCount == 0 이고 ReleaseFlag == 0 이면
+	if ((newVal & RELEASE_FLAG_MASK) == 0)
+	{
+		// ReleaseFlag 세팅 시도
+		if (InterlockedCompareExchange(
+			(unsigned long*)&ptr->IOCount,
+			newVal | RELEASE_FLAG,
+			newVal) == newVal)
+		{
+			ReleaseSession(clientaddr, ptr);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool cSessionMap::IncreaseSessionIO(SOCKETINFO* ptr)
+{
+	unsigned long oldVal;
+	unsigned long newVal;
+
+	while (true)
+	{
+		oldVal = ptr->IOCount;
+
+		// 이미 Release 상태면 IO 추가 불가
+		if (oldVal & RELEASE_FLAG)
+			return false;
+
+		unsigned long io = oldVal & RELEASE_FLAG_MASK;
+		if (io == RELEASE_FLAG_MASK)
+		{
+			__debugbreak(); // overflow
+			return false;
+		}
+
+		newVal = oldVal + 1;
+
+		if (InterlockedCompareExchange(
+			(unsigned long*)&ptr->IOCount,
+			newVal,
+			oldVal) == oldVal)
+		{
+			return true;
+		}
+	}
 }
 
 long long cSessionMap::GetnextSessionKey()
