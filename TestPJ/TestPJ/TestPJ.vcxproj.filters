@@ -21,10 +21,10 @@
     <ClCompile Include="CRingBuffer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="PacketRingbufTest.cpp">
+    <ClCompile Include="CPacketRingBuffer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="CPacketRingBuffer.cpp">
+    <ClCompile Include="Test_inet_ntoa.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

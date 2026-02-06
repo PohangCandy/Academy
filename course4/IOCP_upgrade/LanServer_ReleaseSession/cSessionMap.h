@@ -17,7 +17,7 @@ public:
 	//return SessionId
 	SOCKETINFO* AllocSessionptr(SOCKET sock);
 
-	void FreeSession(SOCKETINFO* psession, char* s_ip, int i_port);
+	void FreeSession(SOCKETINFO* psession);
 
 	SOCKETINFO* GetSessionptr(long long key);
 
@@ -31,7 +31,7 @@ public:
 	// 세션 종료
 	// IO가 끝난 세션에 대해 완전히 삭제
 	//-----------------------------------------
-	void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr);
+	void ReleaseSession(SOCKETINFO* ptr);
 
 	//-----------------------------------------
 	// 세션 IOCount를 줄이는 함수
@@ -39,7 +39,7 @@ public:
 	// 원래는 무조건 ReleaseSession을 진행시킨다였지만 이젠 경우에 따라 ReleaseSession이 진행 되니 않고 그냥 decrease만 하는 경우도 존재
 	// decreaseIO를 한 결과가 false면 ReleaseSession 성공으로 간주한다.
 	//-----------------------------------------
-	bool DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr);
+	bool DecreaseSessionIO(SOCKETINFO* ptr);
 
 	//-----------------------------------------
 	// 세션 IOCount를 증가시키는 함수

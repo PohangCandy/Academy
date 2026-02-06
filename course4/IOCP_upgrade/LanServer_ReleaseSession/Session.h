@@ -16,25 +16,29 @@ public:
 
 	void Inintialize(SOCKET sock, long long sessionID);
 
-	//void GetSessionLock();
-
-	//void UnLockSession();
-
 	void DecreaseIOCount();
 
-
-	//CRITICAL_SECTION session_cs;
 	SOCKET _sock;
-	//지금은 그냥 객체 자체가 들어가있는데 포인터가 들어가는게 맞아보임.
-	//안그러면 세션 객체 크기가 너무 커짐. 딱히 문제는 없어보이는데 문제가 있을까?
+
+	//-----------------------------
+	// 세션에 맴버로 IP와 포트를 두는 게 디버깅에서 훨씬 더 편하여 맴버로 추가함.
+	// ex) 세션을 다루는 함수에서 세션의 포르를 찍어보고 wireshark로 패킷을 관찰하는게 가장 큼.
+	// 이게 없으면 계속 LanServer의 ClientsockAddr 인자를 함수로 넘겨줘서 코드가 길어짐.
+	// 함수를 만드는 쪽이나 읽는 쪽이나 코드는 줄일수록 좋다고 생각함.
+	//-----------------------------
+	std::string _IP = {};
+	int _PORT = 0;
+
 	bool _Active = false;
 
 	CRingBuffer* recvBuf;
 	CPacketRingBuffer* sendBuf;
 	MessageQueue* messageQueue;
+	//index[20], key[44] Bit
 	long long session_id = 0;
 	LONG IsSending = 0;
 	int sendPacketNum = 0;
+	//Release Flag[1], IOCount[31] Bit
 	unsigned long IOCount = 0;
 	OVERLAPPED_CONTEXT* sendOverlapped;
 	OVERLAPPED_CONTEXT* recvOverlapped;

@@ -84,7 +84,7 @@ SOCKETINFO* cSessionMap::AllocSessionptr(SOCKET sock)
 	return &_sessionMap[index_Bit];
 }
 
-void cSessionMap::FreeSession(SOCKETINFO* psession, char* s_ip, int i_port)
+void cSessionMap::FreeSession(SOCKETINFO* psession)
 {
 	long long session_id;
 	long long id_Bit;
@@ -132,12 +132,12 @@ SOCKETINFO* cSessionMap::GetSessionptr(long long key)
 	return ptr;
 }
 
-void cSessionMap::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
+void cSessionMap::ReleaseSession(SOCKETINFO* ptr)
 {
-	FreeSession(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+	FreeSession(ptr);
 }
 
-bool cSessionMap::DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
+bool cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 {
 	unsigned long oldVal;
 	unsigned long newVal;
@@ -178,7 +178,7 @@ bool cSessionMap::DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 			newVal | RELEASE_FLAG,
 			newVal) == newVal)
 		{
-			ReleaseSession(clientaddr, ptr);
+			ReleaseSession(ptr);
 			return false;
 		}
 	}
