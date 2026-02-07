@@ -32,6 +32,7 @@ int CPacketRingBuffer::GetBufferSize(void)
 
 int CPacketRingBuffer::GetUseSize(void)
 {
+    //캐시에 있는 값을 읽어오기 위한 interlock함수
     long l = 0;
     InterlockedExchange(&l, 0);
     if (_capacity == 0) return 0;
