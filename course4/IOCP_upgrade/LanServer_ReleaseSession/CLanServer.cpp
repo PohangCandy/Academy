@@ -212,10 +212,12 @@ bool CLanServer::Disconnect(SessionKey sessionId)
 	ptr = pSessionMap->GetSessionptr(sessionId);
 	if (ptr == nullptr)
 	{
+		pSessionMap->DecreaseSessionIO(ptr);
 		return false;
 	}
 	if (shutdown(ptr->_sock, SD_BOTH) != 0)
 	{
+		pSessionMap->DecreaseSessionIO(ptr);
 		return false;
 	}
     return true;
@@ -237,6 +239,7 @@ bool CLanServer::SendPacket(SessionKey sessionId, CPacket* cp)
 	if (ptr == nullptr)
 	{
 		printf("[Network] 삭제된 세션입니다~ 접근 불가능~\n");
+		pSessionMap->DecreaseSessionIO(ptr);
 		return false;
 	}
 
@@ -256,7 +259,9 @@ bool CLanServer::SendPacket(SessionKey sessionId, CPacket* cp)
 	
 	if (!CanSend(ptr))
 	{
-		return false;
+		//printf("[Network] 송신 중입니다~\n");
+		pSessionMap->DecreaseSessionIO(ptr);
+		return true;
 	}
 
 	if (!SendPost(clientaddr, ptr))
@@ -264,11 +269,13 @@ bool CLanServer::SendPacket(SessionKey sessionId, CPacket* cp)
 		//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
 		printf("[Network] WsaSendSession 실패했어요~\n");
 		__debugbreak();
+		pSessionMap->DecreaseSessionIO(ptr);
 		return false;
 	}
 
 	//PostQueuedCompletionStatus(pIOCPHandle->netHcp, len, (ULONG_PTR)ptr, (LPWSAOVERLAPPED)&ptr->contentsOverlapped);
 	//ptr->UnLockSession();
+	pSessionMap->DecreaseSessionIO(ptr);
     return true;
 }
 
@@ -377,23 +384,17 @@ int CLanServer::getSendMessageTPS()
 
 bool CLanServer::CanSend(SOCKETINFO* ptr)
 {
-	if (InterlockedCompareExchange(&ptr->_IsSending, 1, 0) == 0)
+	// 이미 누군가 Send 중이면 절대 허용 X
+	if (InterlockedCompareExchange(&ptr->_IsSending, 1, 0) != 0)
+		return false;
+
+	// 내가 Send 담당자가 됐는데 보낼 게 없다?
+	if (ptr->_sendBuf->GetUseSize() == 0)
 	{
-		//다른 스레드가 MoveFront를 한 후, Flag가 풀리지마자 확인했다면 송신하지 않도록 만든다.
-		if (ptr->_sendBuf->GetUseSize() == 0)
-		{
-			if (InterlockedCompareExchange(&ptr->_IsSending, 0, 1) == 1)
-			{
-				return false;
-			}
-			else
-			{
-				printf("[CanSend] 그새 중첩이 발생했다고??\n");
-				__debugbreak();
-			}
-			return false;
-		}
+		InterlockedExchange(&ptr->_IsSending, 0);
+		return false;
 	}
+
 	return true;
 }
 
@@ -595,11 +596,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			int srCapacity = ptr->_sendBuf->GetBufferSize();
 			CPacket** ppacket = ptr->_sendBuf->GetBufPtr();
 
-			//패킷 미리 해제
+			//패킷 해제
 			for (int i = 0; i < sendPacketNum; i++)
 			{
-				CPacket* packet = ppacket[cpysrfront];
-				packet->SubRef();
+				ppacket[cpysrfront]->SubRef();
 				cpysrfront = (cpysrfront + 1) % srCapacity;
 			}
 

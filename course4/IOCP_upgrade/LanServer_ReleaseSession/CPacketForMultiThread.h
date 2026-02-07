@@ -105,6 +105,7 @@ public:
 	{
 		if (InterlockedDecrement64(&mRefCount) == 0)
 		{
+			//printf("SubRef %p -> %d\n", this, mRefCount);
 			packetPool.Free(this);
 		}
 	}

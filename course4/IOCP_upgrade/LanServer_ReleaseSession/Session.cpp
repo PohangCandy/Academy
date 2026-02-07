@@ -59,13 +59,6 @@ void SOCKETINFO::Inintialize(SOCKET sock, SessionKey sessionKey)
 	_sendBuf->ClearBuffer();
 }
 
-void SOCKETINFO::DecreaseIOCount()
-{
-	//EnterCriticalSection(&session_cs);
-	InterlockedDecrement((unsigned long*)&_IOCount);
-	//LeaveCriticalSection(&session_cs);
-}
-
 //SOCKETINFO::SOCKETINFO()
 //{
 //	//InitializeCriticalSection(&session_cs);
