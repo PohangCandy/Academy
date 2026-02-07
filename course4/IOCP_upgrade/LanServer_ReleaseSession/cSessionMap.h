@@ -59,9 +59,7 @@ private:
 	~cSessionMap();
 
 	long long GetSessionId(long long  key);
-
 	long long GetSessionIndex(long long  key);
-
 	long long MakeSessionKey(long long  index, long long sessionId);
 
 	
