@@ -17,8 +17,6 @@ public:
 
 	void Inintialize(SOCKET sock, SessionKey sessionKey);
 
-	void DecreaseIOCount();
-
 	SOCKET _sock;
 
 	//-----------------------------

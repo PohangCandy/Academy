@@ -25,16 +25,16 @@ CPacketRingBuffer::~CPacketRingBuffer() {
 
 int CPacketRingBuffer::GetBufferSize(void)
 {
-    long l = 0;
-    InterlockedExchange(&l, 0);
+    EnterCriticalSection(&_csRingbuffer);
+    LeaveCriticalSection(&_csRingbuffer);
     return _capacity;
 }
 
 int CPacketRingBuffer::GetUseSize(void)
 {
     //캐시에 있는 값을 읽어오기 위한 interlock함수
-    long l = 0;
-    InterlockedExchange(&l, 0);
+    EnterCriticalSection(&_csRingbuffer);
+    LeaveCriticalSection(&_csRingbuffer);
     if (_capacity == 0) return 0;
 
     if (_IsFull)
@@ -48,8 +48,8 @@ int CPacketRingBuffer::GetUseSize(void)
 
 int CPacketRingBuffer::GetFreeSize(void)
 {
-    long l = 0;
-    InterlockedExchange(&l, 0);
+    EnterCriticalSection(&_csRingbuffer);
+    LeaveCriticalSection(&_csRingbuffer);
     if (_capacity == 0) return 0;
     return _capacity - GetUseSize();
 }
@@ -191,6 +191,8 @@ int CPacketRingBuffer::MoveFront(int iSize)
 
 CPacket** CPacketRingBuffer::GetFrontBufferPtr(void)
 {
+    EnterCriticalSection(&_csRingbuffer);
+    LeaveCriticalSection(&_csRingbuffer);
     if (_capacity == 0)
         return nullptr;
     return _packetBuffer + _front;
@@ -198,6 +200,8 @@ CPacket** CPacketRingBuffer::GetFrontBufferPtr(void)
 
 CPacket** CPacketRingBuffer::GetRearBufferPtr(void)
 {
+    EnterCriticalSection(&_csRingbuffer);
+    LeaveCriticalSection(&_csRingbuffer);
     if (_capacity == 0)
         return nullptr;
     return _packetBuffer + _rear;
@@ -205,6 +209,8 @@ CPacket** CPacketRingBuffer::GetRearBufferPtr(void)
 
 CPacket** CPacketRingBuffer::GetBufPtr(void)
 {
+    EnterCriticalSection(&_csRingbuffer);
+    LeaveCriticalSection(&_csRingbuffer);
     return _packetBuffer;
 }
 
