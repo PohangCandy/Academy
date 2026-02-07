@@ -1,6 +1,7 @@
 //SOCKETINFO.h
 #pragma once
 #include "stdafx.h"
+#include "SessionKey.h"
 
 class MessageQueue;
 class CRingBuffer;
@@ -14,7 +15,7 @@ public:
 	SOCKETINFO();
 	~SOCKETINFO();
 
-	void Inintialize(SOCKET sock, long long sessionID);
+	void Inintialize(SOCKET sock, SessionKey sessionKey);
 
 	void DecreaseIOCount();
 
@@ -31,16 +32,19 @@ public:
 
 	bool _Active = false;
 
-	CRingBuffer* recvBuf;
-	CPacketRingBuffer* sendBuf;
+	CRingBuffer* _recvBuf;
+	CPacketRingBuffer* _sendBuf;
 	MessageQueue* messageQueue;
+
 	//index[20], key[44] Bit
-	long long session_id = 0;
-	LONG IsSending = 0;
-	int sendPacketNum = 0;
+	SessionKey _sessionKey = {0};
+
+	LONG _IsSending = 0;
+	int _sendPacketNum = 0;
+
 	//Release Flag[1], IOCount[31] Bit
-	unsigned long IOCount = 0;
-	OVERLAPPED_CONTEXT* sendOverlapped;
-	OVERLAPPED_CONTEXT* recvOverlapped;
+	unsigned long _IOCount = 0;
+	OVERLAPPED_CONTEXT* _sendOverlapped;
+	OVERLAPPED_CONTEXT* _recvOverlapped;
 	//OVERLAPPED_CONTEXT contentsOverlapped{ EContents };
 };

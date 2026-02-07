@@ -23,10 +23,10 @@
 //CLanServer.h
 #pragma once
 #include "stdafx.h"
+#include "SessionKey.h"
 
 class CPacket;
 class SOCKETINFO;
-typedef long long SessionID;
 class CLanServer;
 class IOCPHandle;
 
@@ -45,8 +45,8 @@ public:
 	void Stop();
 	int GetSessionCount();
 
-	bool Disconnect(SessionID sessionId); // SESSION_ID
-	bool SendPacket(SessionID sessionId, CPacket* cp); // SESSION_ID
+	bool Disconnect(SessionKey sessionId); // SESSION_ID
+	bool SendPacket(SessionKey sessionId, CPacket* cp); // SESSION_ID
 
 	//------------------------------------------
 	// 세션 수신
@@ -89,16 +89,16 @@ public:
 	//return false; //시 클라이언트 거부.
 	//return true; //시 접속 허용
 
-	virtual void	OnClientJoin(SOCKADDR_IN Client ,SessionID s) = 0;/// 기타등등
+	virtual void	OnClientJoin(SOCKADDR_IN Client ,SessionKey s) = 0;/// 기타등등
 	//< Accept 후 접속처리 완료 후 호출.
 	//OnAccept(..)
 
-	virtual void 	OnClientLeave(SessionID s) = 0; 
+	virtual void 	OnClientLeave(SessionKey s) = 0; 
 	//< Release 후 호출
 	//OnRelease(..)
 
 
-	virtual void 	OnRecv(SessionID s, CPacket* pPacket) = 0;
+	virtual void 	OnRecv(SessionKey s, CPacket* pPacket) = 0;
 	//< 패킷 수신 완료 후
 	//OnMessage(..)
 

@@ -33,17 +33,17 @@ bool CEchoServer::OnConnectionRequest(std::string IP, int Port)
     return true;
 }
 
-void CEchoServer::OnClientJoin(SOCKADDR_IN clientaddr, SessionID s)
+void CEchoServer::OnClientJoin(SOCKADDR_IN clientaddr, SessionKey s)
 {
     //printf("[Echo 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 }
 
-void CEchoServer::OnClientLeave(SessionID s)
+void CEchoServer::OnClientLeave(SessionKey s)
 {
     //캐릭터 삭제같은걸 넣으면 될 것 같은데 에코에선 딱히 할게 없는 것으로 보임.
 }
 
-void CEchoServer::OnRecv(SessionID sessionID, CPacket* pPacket)
+void CEchoServer::OnRecv(SessionKey sessionID, CPacket* pPacket)
 {
 	//네트워크에서 넘긴 길이만큼 추출
 	//Msg recvMsg; 굳이 동적할당 해야할까? 어차피 송신 링버퍼에 복사가 되었다면 문제 없는게 정상임.

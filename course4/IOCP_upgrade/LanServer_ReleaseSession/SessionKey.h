@@ -20,7 +20,7 @@ struct SessionKey
         return value & ID_MASK;
     }
 
-    static SessionKey Make(uint32_t index, uint64_t sessionId)
+    static SessionKey MakeKey(uint32_t index, uint64_t sessionId)
     {
         return SessionKey{
             (static_cast<uint64_t>(index) << ID_BITS) |
