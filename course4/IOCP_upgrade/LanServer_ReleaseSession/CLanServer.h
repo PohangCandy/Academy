@@ -58,27 +58,12 @@ public:
 	// 세션 송신
 	// 세션 송신 링버퍼 상태 확인 후 WSAbuf에 등록, 해당 소켓에 대해 WSASend 호출
 	//------------------------------------------
-	bool WsaSendSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr);
+	bool SendPost(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr);
 
-	////-----------------------------------------
-	//// 세션 종료
-	//// IO가 끝난 세션에 대해 완전히 삭제
-	////-----------------------------------------
-	//void ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr);
-
-	////-----------------------------------------
-	//// 세션 IOCount를 줄이는 함수
-	//// -> interlock해도 되지만 곳곳에 ReleaseSession이 뿌려져 있는게 마음에 들지 않아서 묶음.
-	//// 원래는 무조건 ReleaseSession을 진행시킨다였지만 이젠 경우에 따라 ReleaseSession이 진행 되니 않고 그냥 decrease만 하는 경우도 존재
-	//// decreaseIO를 한 결과가 false면 ReleaseSession 성공으로 간주한다.
-	////-----------------------------------------
-	//bool DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr);
-
-	////-----------------------------------------
-	//// 세션 IOCount를 증가시키는 함수
-	//// ReleaseFlag 비트를 제외한 나머지 비트에 대해서만 증가를 시킨다.
-	////-----------------------------------------
-	//bool IncreaseSessionIO(SOCKETINFO* ptr);
+	//------------------------------------------
+	// 현제 세션의 SendFlag와 송신 링버퍼 안에 있는 잔류 데이터 크기로 송신을 시도할지 말지 정한다.
+	//------------------------------------------
+	bool CanSend(SOCKETINFO* ptr);
 
 	//작업자 스레드 함수
 	static unsigned int __stdcall WorkerThread(LPVOID arg);
