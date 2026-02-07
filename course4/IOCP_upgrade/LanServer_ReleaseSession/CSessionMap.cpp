@@ -1,4 +1,5 @@
 #include "cSessionMap.h"
+#include "SessionKey.h"
 #include "Session.h"
 #include "MemoryPoolForLockFree.h"
 //#include "CLockFreeStack.h"
@@ -51,17 +52,15 @@ SOCKETINFO* cSessionMap::AllocSessionptr(SOCKET sock)
 {
 	//AcceptThread가 여러개있다면 맵에 추가하는 과정도 락/락프리를 통해 이뤄져야 한다.
 
-	long long session_id;
-	long long id_Bit;
+	SessionKey session_key;
+	uint32_t id_Bit;
 	long long index_Bit;
 
 	EnterCriticalSection(&_sessionMap_cs);
-	if (!_deletedIdStack.empty())
+	if (!_deletedSessionIndex.empty())
 	{
-		session_id = _deletedIdStack.top();
-		_deletedIdStack.pop();
-
-		index_Bit = GetSessionIndex(session_id);
+		index_Bit = _deletedSessionIndex.top();
+		_deletedSessionIndex.pop();
 
 		if (_sessionMap[index_Bit]._Active == true)
 		{
@@ -77,8 +76,8 @@ SOCKETINFO* cSessionMap::AllocSessionptr(SOCKET sock)
 	}
 	id_Bit = _InterlockedIncrement64(&_nextSessionID);
 	
-	session_id = MakeSessionKey(index_Bit, id_Bit);
-	_sessionMap[index_Bit].Inintialize(sock, session_id);
+	session_key = SessionKey::MakeKey(index_Bit, id_Bit);
+	_sessionMap[index_Bit].Inintialize(sock, session_key);
 	LeaveCriticalSection(&_sessionMap_cs);
 
 	return &_sessionMap[index_Bit];
@@ -86,12 +85,13 @@ SOCKETINFO* cSessionMap::AllocSessionptr(SOCKET sock)
 
 void cSessionMap::FreeSession(SOCKETINFO* psession)
 {
-	long long session_id;
-	long long id_Bit;
-	long long index_Bit;
+	SessionKey session_key;
+	uint64_t id_Bit;
+	uint32_t index_Bit;
 
-	session_id = psession->session_id;
-	index_Bit = GetSessionIndex(session_id);
+	session_key = psession->_sessionKey;
+	id_Bit = session_key.GetSessionId();
+	index_Bit = session_key.GetIndex();
 
 	_sessionMap[index_Bit]._Active = false;
 
@@ -99,31 +99,29 @@ void cSessionMap::FreeSession(SOCKETINFO* psession)
 	//printf("[Network] 클라이언트 종료: IP 주소 = %s, 포트번호 = %d\n", s_ip, i_port);
 
 	EnterCriticalSection(&_sessionMap_cs);
-	_deletedIdStack.push(index_Bit);
+	_deletedSessionIndex.push(index_Bit);
 
-	id_Bit = GetSessionId(session_id);
 	printf("[Network] 클라이언트 종료: ID  = %d\n", id_Bit);
 
 	LeaveCriticalSection(&_sessionMap_cs);
 }
 
-SOCKETINFO* cSessionMap::GetSessionptr(long long key)
+SOCKETINFO* cSessionMap::GetSessionptr(SessionKey key)
 {
-	long long index = GetSessionIndex(key);
-	long long sessionId = GetSessionId(key);
+	uint32_t index = key.GetIndex();
+	uint64_t sessionId = key.GetSessionId();
 
 	SOCKETINFO* ptr = &_sessionMap[index];
 
-	// 1. 세션 ID 검증
-	if (ptr->session_id != sessionId)
+	//이 작업을 하지 않더라도 3번에서 삭제된 세션을 검증하므로 보장이되지만
+	//IncreaseIO에 있는 interlock의 비용이 비싸다고 판단하여 거를수 있으면 미리 거르게 만들 수 있음.
+	if (ptr->_sessionKey.GetSessionId() != sessionId)
 		return nullptr;
 
-	// 2. IOCount 증가 시도 (ReleaseFlag 체크)
 	if (!IncreaseSessionIO(ptr))
 		return nullptr;
 
-	// 3. 다시 한 번 세션 ID 검증 (ABA 방지)
-	if (ptr->session_id != sessionId)
+	if (ptr->_sessionKey.GetSessionId() != sessionId)
 	{
 		DecreaseSessionIO(ptr);
 		return nullptr;
@@ -144,7 +142,7 @@ bool cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 
 	while (true)
 	{
-		oldVal = ptr->IOCount;
+		oldVal = ptr->_IOCount;
 
 		// 이미 Release 상태면 아무것도 하지 않음
 		if (oldVal & RELEASE_FLAG)
@@ -161,7 +159,7 @@ bool cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 
 		// IOCount 감소 성공?
 		if (InterlockedCompareExchange(
-			(unsigned long*)&ptr->IOCount,
+			(unsigned long*)&ptr->_IOCount,
 			newVal,
 			oldVal) == oldVal)
 		{
@@ -174,7 +172,7 @@ bool cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 	{
 		// ReleaseFlag 세팅 시도
 		if (InterlockedCompareExchange(
-			(unsigned long*)&ptr->IOCount,
+			(unsigned long*)&ptr->_IOCount,
 			newVal | RELEASE_FLAG,
 			newVal) == newVal)
 		{
@@ -193,7 +191,7 @@ bool cSessionMap::IncreaseSessionIO(SOCKETINFO* ptr)
 
 	while (true)
 	{
-		oldVal = ptr->IOCount;
+		oldVal = ptr->_IOCount;
 
 		// 이미 Release 상태면 IO 추가 불가
 		if (oldVal & RELEASE_FLAG)
@@ -209,7 +207,7 @@ bool cSessionMap::IncreaseSessionIO(SOCKETINFO* ptr)
 		newVal = oldVal + 1;
 
 		if (InterlockedCompareExchange(
-			(unsigned long*)&ptr->IOCount,
+			(unsigned long*)&ptr->_IOCount,
 			newVal,
 			oldVal) == oldVal)
 		{
@@ -231,21 +229,6 @@ cSessionMap::cSessionMap()
 cSessionMap::~cSessionMap()
 {
 	DeleteCriticalSection(&_sessionMap_cs);
-}
-
-long long cSessionMap::GetSessionId(long long key)
-{
-	return key & SESSION_ID_BITMASK;
-}
-
-long long cSessionMap::GetSessionIndex(long long key)
-{
-	return (key & SESSION_INDEX_BITMASK) >> SESSION_ID_BIT;
-}
-
-long long cSessionMap::MakeSessionKey(long long index, long long sessionId)
-{
-	return (index << SESSION_ID_BIT) | (sessionId & SESSION_ID_BITMASK);
 }
 
 //void cSessionMap::GetMapLock()

@@ -13,15 +13,15 @@ class CEchoServer : public CLanServer
 	//return false; //시 클라이언트 거부.
 	//return true; //시 접속 허용
 
-	virtual void	OnClientJoin(SOCKADDR_IN clientaddr, SessionID s) override;/// 기타등등
+	virtual void	OnClientJoin(SOCKADDR_IN clientaddr, SessionKey s) override;/// 기타등등
 	//< Accept 후 접속처리 완료 후 호출.
 	//OnAccept(..)
 
-	virtual void 	OnClientLeave(SessionID s) override;
+	virtual void 	OnClientLeave(SessionKey s) override;
 	//< Release 후 호출
 	//OnRelease(..)
 
-	virtual void 	OnRecv(SessionID s, CPacket* pPacket)  override;
+	virtual void 	OnRecv(SessionKey s, CPacket* pPacket)  override;
 	//< 패킷 수신 완료 후
 	//OnMessage(..)
 
