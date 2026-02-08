@@ -24,7 +24,7 @@ public:
 	SessionKey _sessionkey;
 
 	long long _lastRecvTime;
-	bool _bDie;
+	//bool _bDie;
 };
 
 
@@ -36,6 +36,12 @@ public:
 	~ChattingServer();
 
 	bool _bIsTimerThreadRuning() { return _bIsTimerThreadAlive; }
+
+	Character* FindCharacter(SessionKey sessionkey);
+
+	bool DeleteCharacter(SessionKey sessionkey);
+
+	bool CreateCharacter(SessionKey sessionkey);
 
 private:
 
@@ -72,8 +78,6 @@ private:
 	//	virtual void OnWorkerThreadEnd() = 0;                      < 워커스레드 1루프 종료 후
 
 	virtual void OnError(int errorcode, char*) override;
-
-
 
 	EServerMode _serverMode = None;
 };
