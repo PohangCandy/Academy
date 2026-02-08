@@ -422,76 +422,64 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 			//printf("[Network] 클라이언트 수신, 포트번호 = %d\n", ntohs(clientaddr.sin_port));
 
 			CRingBuffer* rb = ptr->recvBuf;
-			if (rb->MoveRear(cbTransferred) != 0)
-			{
-				//Recv 버퍼에 있는 내용 읽어서, send링버퍼에 담기
-				
-
-				//이제 메시지 길이 단위로 읽어서 컨텐츠 스레드에 넘겨야 한다.
-				//그래야 메시지 순서가 보장됨.
-				//수신 링버퍼에 있는 데이터 중 헤더 길이만큼 있는 메시지는 모두 읽어서 처리
-				//------------------------------------------------------
-				// 1. 링 버퍼에서 Dequeue
-				// 먼저 메시지 길이만큼 읽을 후, 해당 메시지 길이를 Dequeue
-				//------------------------------------------------------
-				while (1)
-				{
-					//메시지 헤더 먼저 읽기
-					if (rb->GetUseSize() >= sizeof(PacketHeader))
-					{
-						PacketHeader* header = (PacketHeader*)rb->GetFrontBufferPtr();
-						if (header->Code != dfPACKET_CODE)
-						{
-							//잘못된 패킷이니까 죽이자.
-							__debugbreak();
-						}
-						//메시지 페이로드 길이 읽기
-						if (rb->GetUseSize() >= sizeof(PacketHeader) + header->Len)
-						{
-							//디코딩
-							if (pServer->Decode(header, rb->GetFrontBufferPtr()))
-							{
-								//네트워크 헤더 제거한 나머지 컨텐츠에게 패킷에 담아서 넘겨주기
-								CPacket* contentPacket = CPacket::Alloc();
-								int ret = contentPacket->PutData(rb->GetFrontBufferPtr() + sizeof(PacketHeader), header->Len);
-								if (ret != header->Len)
-								{
-									printf("[Network] 직렬화 버퍼 삽입 오류: 요청 %d, 실제 %d\n", header->Len, ret);
-									__debugbreak();
-								}
-
-								rb->MoveFront(sizeof(PacketHeader) + header->Len);
-								
-								contentPacket->AddRef();
-								pServer->OnRecv(ptr->session_id, contentPacket);
-								contentPacket->SubRef();
-							}
-							else
-							{
-								//디코딩이 실패했다면? 해당 메시지를 그냥 폐기하는게 맞을 것으로 생각함.
-								//폐기하고 세션 종료까지 해주는게 맞다고 생각함.
-								__debugbreak();
-							}
-						}
-						else
-						{
-							break;
-						}
-					}
-					else
-					{
-						break;
-					}
-
-					
-				}
-
-			}
-			else
+			if (rb->MoveRear(cbTransferred) == 0)
 			{
 				//수신 링버퍼가 가득차서 더이상 데이터를 받을 수 없는 상황
-				//printf("[Network] 수신 링버퍼 꽉 찼음.\n");
+				//cpu 100%인지 확인하기 -> 아니라면 로직 오류, 맞을 경우 AcceptThread의 부하 줄일 수 있는 방법 고려해야 함.
+				printf("[Network] 수신 링버퍼 꽉 찼음.\n");
+				__debugbreak();
 			}
+
+			//Recv 버퍼에 있는 내용 읽어서, send링버퍼에 담기
+
+			//이제 메시지 길이 단위로 읽어서 컨텐츠 스레드에 넘겨야 한다.
+			//그래야 메시지 순서가 보장됨.
+			//수신 링버퍼에 있는 데이터 중 헤더 길이만큼 있는 메시지는 모두 읽어서 처리
+			//------------------------------------------------------
+			// 1. 링 버퍼에서 Dequeue
+			// 먼저 메시지 길이만큼 읽을 후, 해당 메시지 길이를 Dequeue
+			//------------------------------------------------------
+
+			//메시지 헤더 먼저 읽기
+			while (rb->GetUseSize() >= sizeof(PacketHeader))
+			{
+				PacketHeader* header = (PacketHeader*)rb->GetFrontBufferPtr();
+
+				if (header->Code != dfPACKET_CODE)
+				{
+					//잘못된 패킷이니까 세션 죽이자.
+					__debugbreak();
+				}
+
+				//메시지 페이로드 길이 읽기
+				if (rb->GetUseSize() < sizeof(PacketHeader) + header->Len)
+				{
+					break;
+				}
+
+				//디코딩
+				if (!pServer->Decode(header, rb->GetFrontBufferPtr()))
+				{
+					//디코딩 실패
+					__debugbreak();
+				}
+
+				//네트워크 헤더 제거한 나머지 컨텐츠에게 패킷에 담아서 컨텐츠에 넘겨주기
+				CPacket* contentPacket = CPacket::Alloc();
+				int ret = contentPacket->PutData(rb->GetFrontBufferPtr() + sizeof(PacketHeader), header->Len);
+				if (ret != header->Len)
+				{
+					printf("[Network] 직렬화 버퍼 삽입 오류: 요청 %d, 실제 %d\n", header->Len, ret);
+					__debugbreak();
+				}
+
+				rb->MoveFront(sizeof(PacketHeader) + header->Len);
+
+				contentPacket->AddRef();
+				pServer->OnRecv(ptr->session_id, contentPacket);
+				contentPacket->SubRef();
+			}
+
 
 
 
