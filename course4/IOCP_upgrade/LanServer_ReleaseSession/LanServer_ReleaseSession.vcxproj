@@ -147,7 +147,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CEchoServer.h" />
-    <ClInclude Include="CIOCPHandle.h" />
     <ClInclude Include="CLanClient.h" />
     <ClInclude Include="CLanServer.h" />
     <ClInclude Include="CLockFreeStack.h" />
