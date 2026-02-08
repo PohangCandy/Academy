@@ -20,11 +20,26 @@ struct SessionKey
         return value & ID_MASK;
     }
 
+    uint64_t GetSessionKey() const
+    {
+        return value;
+    }
+
     static SessionKey MakeKey(uint32_t index, uint64_t sessionId)
     {
         return SessionKey{
             (static_cast<uint64_t>(index) << ID_BITS) |
             (sessionId & ID_MASK)
         };
+    }
+
+    bool operator==(const SessionKey& other) const noexcept
+    {
+        return value == other.value;
+    }
+
+    bool operator!=(const SessionKey& other) const noexcept
+    {
+        return value != other.value;
     }
 };

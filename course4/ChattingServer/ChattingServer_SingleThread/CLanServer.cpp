@@ -189,14 +189,12 @@ bool CLanServer::Start()
 			ptr->_PORT = ntohs(clientaddr.sin_port);
 
 
-			//세션의 세션 ID를 찾는 함수를 세션에 만들어야 겠다.
 			uint64_t id_bit = ptr->_sessionKey.GetSessionId();
 			WSABUF wsabuf;
 			wsabuf.buf = ptr->_recvBuf->GetFrontBufferPtr();
 			wsabuf.len = ptr->_recvBuf->GetFreeSize();
 
-			//printf("[TCP 서버] 클라이언트 접속 : IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-			printf("[TCP 서버] 클라이언트 접속 : ID = %d\n", id_bit);
+			printf("[TCP 서버] 클라이언트 접속 : ID = %lld\n", id_bit);
 			OnClientJoin(clientaddr, ptr->_sessionKey);
 
 			//소켓과 입출력 완료 포트 연결
