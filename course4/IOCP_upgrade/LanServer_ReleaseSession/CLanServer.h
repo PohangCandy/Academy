@@ -30,12 +30,6 @@ class SOCKETINFO;
 class CLanServer;
 class IOCPHandle;
 
-struct ServerAndHandle
-{
-	CLanServer* thisptr;
-	IOCPHandle* phandle;
-};
-
 class CLanServer
 {
 
@@ -98,6 +92,7 @@ public:
 	int getRecvMessageTPS();
 	int getSendMessageTPS();
 
+	HANDLE _hWorkerThreadIOCP;
 
 	int _sessionCount;
 

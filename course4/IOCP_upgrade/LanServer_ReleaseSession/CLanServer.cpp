@@ -2,7 +2,7 @@
 #pragma comment(lib, "ws2_32")
 
 #include "CLanServer.h"
-#include "CIOCPHandle.h"
+//#include "CIOCPHandle.h"
 #include "cSessionMap.h"
 #include "Session.h"
 #include "CRingBuffer.h"
@@ -54,12 +54,8 @@ bool CLanServer::Start()
 		WSADATA wsa;
 		if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
 
-		//네트워크, 컨텐츠 스레드 입출력 완료 포트 생성
-		IOCPHandle* pIOCPHandle = IOCPHandle::GetIOCPHandleInstance();
-		pIOCPHandle->netHcp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-		if (pIOCPHandle->netHcp == NULL) return false;
-		pIOCPHandle->contentHcp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-		if (pIOCPHandle->contentHcp == NULL) return false;
+		_hWorkerThreadIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+		if (_hWorkerThreadIOCP == NULL) return false;
 
 		//CPU 개수 확인
 		SYSTEM_INFO si;
@@ -69,10 +65,6 @@ bool CLanServer::Start()
 		HANDLE hThread;
 		unsigned int uiThreadID;
 
-		ServerAndHandle* sah = new ServerAndHandle;
-		sah->phandle = pIOCPHandle;
-		sah->thisptr = this;
-
 		for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
 			//for (int i = 0; i < 1; i++)
 		{
@@ -80,7 +72,7 @@ bool CLanServer::Start()
 				NULL,           // Security attributes (NULL = 디폴트)
 				0,              // Stack size (0 = 디폴트)
 				WorkerThread,   // Thread function
-				sah,    // Argument list to be passed to thread function
+				this,    // Argument list to be passed to thread function
 				0,              // Initial state (0 = 즉시 실행)
 				&uiThreadID     // Pointer to thread ID
 			);
@@ -106,6 +98,7 @@ bool CLanServer::Start()
 		//listen()
 		retval = listen(listen_sock, SOMAXCONN);
 		if (retval == SOCKET_ERROR) err_quit("listen()");
+		printf("서버 시작 포트 : %d\n", SERVERPORT);
 
 		//데이터 통신에 사용할 변수
 		SOCKET client_sock;
@@ -163,7 +156,7 @@ bool CLanServer::Start()
 			OnClientJoin(clientaddr, ptr->_sessionKey);
 
 			//소켓과 입출력 완료 포트 연결
-			CreateIoCompletionPort((HANDLE)client_sock, pIOCPHandle->netHcp, (ULONG_PTR)ptr, 0);
+			CreateIoCompletionPort((HANDLE)client_sock, _hWorkerThreadIOCP, (ULONG_PTR)ptr, 0);
 
 			//비동기 입출력 시작
 			flags = 0;
@@ -215,11 +208,13 @@ bool CLanServer::Disconnect(SessionKey sessionId)
 		pSessionMap->DecreaseSessionIO(ptr);
 		return false;
 	}
-	if (shutdown(ptr->_sock, SD_BOTH) != 0)
+	if (shutdown(ptr->_sock, SD_RECEIVE) != 0)
 	{
 		pSessionMap->DecreaseSessionIO(ptr);
 		return false;
 	}
+
+	pSessionMap->DecreaseSessionIO(ptr);
     return true;
 }
 
@@ -405,13 +400,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 
 	cSessionMap* sessionMap = cSessionMap::GetSessionMap();
 
-	ServerAndHandle* sah = (ServerAndHandle*)arg;
-
-	CLanServer* pServer = sah->thisptr;
-	IOCPHandle* iocpHandle = sah->phandle;
-
-	//IOCPHandle* iocpHandle = (IOCPHandle*)arg;
-	HANDLE hcp = iocpHandle->netHcp;
+	CLanServer* pServer = (CLanServer*)arg;
 
 
 	while (1) {
@@ -420,7 +409,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		SOCKET client_sock;
 		SOCKETINFO* ptr;
 		OVERLAPPED_CONTEXT* lpOverlapped;
-		retval = GetQueuedCompletionStatus(hcp, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
+		retval = GetQueuedCompletionStatus(pServer->_hWorkerThreadIOCP, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
 
 		//삭제된 세션에 대한 완료 통지가 온다면 무시하도록 한다.
 		if (ptr == nullptr) continue;
