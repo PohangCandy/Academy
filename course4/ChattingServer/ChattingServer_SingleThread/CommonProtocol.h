@@ -15,6 +15,13 @@ struct PacketHeader
 };
 #pragma pack(pop)
 
+enum class ReleaseResult : uint8_t
+{
+	Fail,
+	Success,
+	Released
+};
+
 enum en_PACKET_TYPE
 {
 	////////////////////////////////////////////////////////

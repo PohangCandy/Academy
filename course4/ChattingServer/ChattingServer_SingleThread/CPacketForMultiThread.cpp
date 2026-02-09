@@ -115,6 +115,7 @@ CPacket::~CPacket()
 
 void CPacket::Clear(void)
 {
+    IsEncoded = false;
     m_iReadPos = 0;
     m_iWritePos = 0;
     m_iDataSize = 0;

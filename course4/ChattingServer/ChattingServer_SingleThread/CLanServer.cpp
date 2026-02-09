@@ -214,9 +214,10 @@ bool CLanServer::Start()
 
 					//여기서 IOCount의 최상위 비트를 SessionReleaseFlag로 사용한다면??
 					//IOCount가 0이면 비트에 1넣기
-					if (!sessionMap->DecreaseSessionIO(ptr))
+					if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 					{
 						//세션이 삭제된 경우
+						OnClientLeave(ptr->_sessionKey);
 						continue;
 					}
 				}
@@ -239,39 +240,69 @@ int CLanServer::GetSessionCount()
     return _sessionCount;
 }
 
-bool CLanServer::Disconnect(SessionKey sessionId)
+bool CLanServer::Disconnect(SessionKey sessionkey)
 {
 	SOCKETINFO* ptr;
 	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
 
-	ptr = pSessionMap->GetSessionptr(sessionId);
+	ptr = pSessionMap->GetSessionptr(sessionkey);
+
+	//세션이 이미 삭제된 경우
 	if (ptr == nullptr)
 	{
-		pSessionMap->DecreaseSessionIO(ptr);
-		return false;
-	}
-	if (shutdown(ptr->_sock, SD_RECEIVE) != 0)
-	{
-		pSessionMap->DecreaseSessionIO(ptr);
 		return false;
 	}
 
-	pSessionMap->DecreaseSessionIO(ptr);
+	//삭제가 일어난 후 잘못된 세션을 읽어온 경우
+	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
+	{
+		if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			//세션이 삭제된 경우
+			OnClientLeave(ptr->_sessionKey);
+			return false;
+		}
+	}
+
+	if (shutdown(ptr->_sock, SD_RECEIVE) != 0)
+	{
+		if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			//세션이 삭제된 경우
+			OnClientLeave(ptr->_sessionKey);
+		}
+		return false;
+	}
+
+	if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+	{
+		//세션이 삭제된 경우
+		OnClientLeave(ptr->_sessionKey);
+	}
     return true;
 }
 
-bool CLanServer::SendPacket(SessionKey sessionId, CPacket* cp)
+bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 {
 	//1. 세션 검색
 	SOCKETINFO* ptr;
 	cSessionMap* pSessionMap = cSessionMap::GetSessionMap();
 
-	ptr = pSessionMap->GetSessionptr(sessionId);
+	ptr = pSessionMap->GetSessionptr(sessionkey);
 	if (ptr == nullptr)
 	{
 		printf("[Network] 삭제된 세션입니다~ 접근 불가능~\n");
-		pSessionMap->DecreaseSessionIO(ptr);
 		return false;
+	}
+
+	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
+	{
+		if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			//세션이 삭제된 경우
+			OnClientLeave(ptr->_sessionKey);
+			return false;
+		}
 	}
 
 	//2. 인코딩
@@ -296,7 +327,11 @@ bool CLanServer::SendPacket(SessionKey sessionId, CPacket* cp)
 	if (!CanSend(ptr))
 	{
 		//printf("[Network] 송신 중입니다~\n");
-		pSessionMap->DecreaseSessionIO(ptr);
+		if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			//세션이 삭제된 경우
+			OnClientLeave(ptr->_sessionKey);
+		}
 		return true;
 	}
 
@@ -305,13 +340,21 @@ bool CLanServer::SendPacket(SessionKey sessionId, CPacket* cp)
 		//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
 		printf("[Network] WsaSendSession 실패했어요~\n");
 		__debugbreak();
-		pSessionMap->DecreaseSessionIO(ptr);
+		if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			//세션이 삭제된 경우
+			OnClientLeave(ptr->_sessionKey);
+		}
 		return false;
 	}
 
 	//PostQueuedCompletionStatus(pIOCPHandle->netHcp, len, (ULONG_PTR)ptr, (LPWSAOVERLAPPED)&ptr->contentsOverlapped);
 	//ptr->UnLockSession();
-	pSessionMap->DecreaseSessionIO(ptr);
+	if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+	{
+		//세션이 삭제된 경우
+		OnClientLeave(ptr->_sessionKey);
+	}
     return true;
 }
 
@@ -465,9 +508,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		{
 			//클라가 종료신호 FIN보냄.
 			//printf("[Network] 클라이언트 종료 신호 수신: IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-			if (!sessionMap->DecreaseSessionIO(ptr))
+			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{
 				//세션이 삭제된 경우
+				pServer->OnClientLeave(ptr->_sessionKey);
 				continue;
 			}
 
@@ -482,9 +526,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 				//GQCS 실패
 				printf("[Network] ");
 				err_display("WSAGetOverlappedResult()");
-				if (!sessionMap->DecreaseSessionIO(ptr))
+				if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 				{
 					//세션이 삭제된 경우
+					pServer->OnClientLeave(ptr->_sessionKey);
 					continue;
 				}
 			}
@@ -492,9 +537,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			{
 				//IO 실패
 				printf("[Network] IO 실패\n");
-				if (!sessionMap->DecreaseSessionIO(ptr))
+				if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 				{
 					//세션이 삭제된 경우
+					pServer->OnClientLeave(ptr->_sessionKey);
 					continue;
 				}
 
@@ -575,9 +621,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			}
 
 			//GQCS Recv 완료통지에 대한 IO 감소
-			if (!sessionMap->DecreaseSessionIO(ptr))
+			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{
 				//세션이 삭제된 경우
+				pServer->OnClientLeave(ptr->_sessionKey);
 				continue;
 			}
 		}
@@ -640,9 +687,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			//ptr->UnLockSession();
 
 			//GQCS Send 완료통지에 대한 IO 감소
-			if (!sessionMap->DecreaseSessionIO(ptr))
+			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{
 				//세션이 삭제된 경우
+				pServer->OnClientLeave(ptr->_sessionKey);
 				continue;
 			}
 		}
@@ -694,9 +742,10 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 			{
 				//printf("[Network] ");
 				//err_display("WSARecv()");
-				if (!sessionMap->DecreaseSessionIO(ptr))
+				if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 				{
 					//세션이 삭제된 경우
+					OnClientLeave(ptr->_sessionKey);
 					return false;
 				}
 			}
@@ -722,9 +771,10 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 			{
 				//printf("[Network] ");
 				//err_display("WSARecv()");
-				if (!sessionMap->DecreaseSessionIO(ptr))
+				if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 				{
 					//세션이 삭제된 경우
+					OnClientLeave(ptr->_sessionKey);
 					return false;
 				}
 			}
@@ -806,9 +856,10 @@ bool CLanServer::SendPost(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 	{
 		if (WSAGetLastError() != WSA_IO_PENDING)
 		{
-			if (!sessionMap->DecreaseSessionIO(ptr))
+			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{
 				//세션이 삭제된 경우
+				OnClientLeave(ptr->_sessionKey);
 				return false;
 			}
 		}

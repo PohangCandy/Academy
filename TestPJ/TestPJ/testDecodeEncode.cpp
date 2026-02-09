@@ -2,17 +2,17 @@
 #include "CPacketForMultiThread.h"
 #include "CRingBuffer.h"
 
-#pragma pack(push,1)
-struct MsgHeader
+#pragma pack(push, 1)
+struct PacketHeader
 {
-	char Code; //(1byte)
-	short Len; //(2byte)
-	char RandKey; //(1byte)
-	char CheckSum; //(1byte)
+	unsigned char Code;//
+	unsigned short Len;
+	unsigned char RandKey;
+	unsigned char CheckSum;
 };
 #pragma pack(pop)
 
-bool Decode(MsgHeader* pHeader, char* pc);
+bool Decode(PacketHeader* pHeader, char* pc);
 
 int main()
 {
@@ -65,10 +65,9 @@ int main()
 	}
 }
 
-bool Decode(MsgHeader* pHeader, char* pc) 
+bool Decode(PacketHeader* pHeader, char* pc)
 {
-
-	int checksum = 0;
+	unsigned int checksum = 0;
 	unsigned char beforeparaP = 0;
 	unsigned char afterparaP = 0;
 	unsigned char encodeP = 0;
@@ -76,10 +75,10 @@ bool Decode(MsgHeader* pHeader, char* pc)
 
 	int payLoadSize = pHeader->Len;
 
-	int checkSumSize = sizeof(MsgHeader::CheckSum);
-	char* pPacketChar = &pc[sizeof(MsgHeader) - checkSumSize];
+	int checkSumSize = sizeof(PacketHeader::CheckSum);
+	char* pPacketChar = &pc[sizeof(PacketHeader) - checkSumSize];
 
-	afterparaP = *pPacketChar ^ (encodeP + pHeader->Code + 1);
+	afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + 1);
 	encodeP = *pPacketChar;
 
 	*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + 1);
@@ -87,9 +86,9 @@ bool Decode(MsgHeader* pHeader, char* pc)
 
 	for (int i = 0; i < payLoadSize; i++)
 	{
-		char* pPacketChar = &pc[sizeof(MsgHeader) + i];
+		char* pPacketChar = &pc[sizeof(PacketHeader) + i];
 
-		afterparaP = *pPacketChar ^ (encodeP + pHeader->Code + (i + 2));
+		afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + (i + 2));
 		encodeP = *pPacketChar;
 
 		*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + (i + 2));

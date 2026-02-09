@@ -89,10 +89,11 @@ class CPacket
 
 public:
 
-	void setMsgHeadetSize(int headerSize)
+	static CPacket* Alloc()
 	{
-		_MsgheaderSize = headerSize;
-		MoveWritePos(headerSize);
+		CPacket* allocPacket = packetPool.Alloc();
+		allocPacket->Clear();
+		return allocPacket;
 	}
 
 	//--------------------------------------------------------------
@@ -100,61 +101,9 @@ public:
 	// 패킷을 한번만 인코딩 시키고, 이미 인코딩 된 경우에만 반환
 	// -> 다른 스레드가 인코딩 중일 경우 위에서 대기하도록 만들어야 함.
 	//--------------------------------------------------------------
-//----------------------------------
-	// 송신 시, 패킷을 인코딩 할 맴버 함수
-	// 송신 링버퍼에 집어넣기 전에 하는 작업이므로,
-	// 더 이상 패킷을 만지거나 꺼낼 이유가 없음.
-	// 보내기 위해 새롭게 생성된 패킷이므로, 읽기 위치는 버퍼의 데이터가 시작되는 지점을 가리키고,
-	// 쓰기 위치는 버퍼 데이터가 끝나는 지점을 가리키고 있을거임.
-	// 그러므로 읽기 위치부터 쓰기 위치까지 있는 모든 문자형 데이터를 하나씩 인코딩시킨다.
-	//----------------------------------
-	void Encode(unsigned char key) {
+	bool IsEncoded = false;
 
-		unsigned char checksum = 0;
-
-		if (_MsgheaderSize == -1)
-		{
-			printf("[CPacket/Encode] 메시지 헤더 크기가 없는데 이거 맞아?\n");
-		}
-
-		//unsigned char randkey = rand() % 100;
-		unsigned char randkey = 0x31;
-
-		unsigned char paraP = 0;
-		unsigned char encodeP = 0;
-
-
-		int payLoadSize = m_iDataSize - _MsgheaderSize;
-
-		for (int i = 0; i < payLoadSize; i++)
-		{
-			char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i];
-			checksum += *pPacketChar % 256;
-			checksum %= 256;
-		}
-		m_chpBuffer[4] = checksum;
-
-		for (int i = 0; i < payLoadSize + sizeof(checksum); i++)
-		{
-			char* pPacketChar = &m_chpBuffer[_MsgheaderSize + i - sizeof(checksum)];
-			paraP = *pPacketChar ^ (paraP + randkey + (i + 1));
-
-			*pPacketChar = paraP ^ (encodeP + 0xa9 + (i + 1));
-			encodeP = *pPacketChar;
-		}
-
-		//메시지 헤더 세팅
-		memset(m_chpBuffer, 0, 4);
-		m_chpBuffer[0] = 0xa9;
-		m_chpBuffer[1] = (short)payLoadSize;
-		m_chpBuffer[3] = randkey;
-	}
-
-
-	static CPacket* Alloc()
-	{
-		return packetPool.Alloc();
-	}
+	void Encode();
 
 	void AddRef()
 	{
@@ -165,6 +114,7 @@ public:
 	{
 		if (InterlockedDecrement64(&mRefCount) == 0)
 		{
+			//printf("SubRef %p -> %d\n", this, mRefCount);
 			packetPool.Free(this);
 		}
 	}
@@ -289,6 +239,9 @@ public:
 
 	inline static myMemorypool::CMemoryPool<CPacket> packetPool = myMemorypool::CMemoryPool<CPacket>(1024, true);
 
+	//메시지 헤더 크기
+	int _MsgheaderSize = -1;
+
 protected:
 	//////////////////////////////////////////////////////////////////////////
 	// 생성자, 파괴자.
@@ -306,6 +259,8 @@ protected:
 
 	char* m_chpBuffer = nullptr;
 
+
+
 	// 전체 버퍼 크기
 	int     m_iBufferSize = 0;
 
@@ -317,9 +272,6 @@ protected:
 	int     m_iWritePos = 0;
 
 	long long mRefCount = 0;
-
-	//메시지 헤더 크기
-	int _MsgheaderSize = -1;
 };
 
 

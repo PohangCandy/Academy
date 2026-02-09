@@ -15,24 +15,21 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CPacketForMultiThread.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="CRingBuffer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="CPacketRingBuffer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="testDecodeEncode.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="CPacketForMultiThread.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="CPacketForMultiThread.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="MemoryPoolForLockFree.h">
@@ -42,6 +39,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="CPacketRingBuffer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CPacketForMultiThread.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

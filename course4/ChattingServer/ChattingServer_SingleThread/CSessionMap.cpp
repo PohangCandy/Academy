@@ -2,6 +2,8 @@
 #include "SessionKey.h"
 #include "Session.h"
 #include "MemoryPoolForLockFree.h"
+#include "CommonProtocol.h"
+
 //#include "CLockFreeStack.h"
 
 #define SESSION_ID_BIT (44) 
@@ -121,21 +123,11 @@ SOCKETINFO* cSessionMap::GetSessionptr(SessionKey key)
 	if (!IncreaseSessionIO(ptr))
 		return nullptr;
 
-	if (ptr->_sessionKey.GetSessionId() != sessionId)
-	{
-		DecreaseSessionIO(ptr);
-		return nullptr;
-	}
-
 	return ptr;
 }
 
-void cSessionMap::ReleaseSession(SOCKETINFO* ptr)
-{
-	FreeSession(ptr);
-}
 
-bool cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
+ReleaseResult cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 {
 	unsigned long oldVal;
 	unsigned long newVal;
@@ -146,13 +138,13 @@ bool cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 
 		// 이미 Release 상태면 아무것도 하지 않음
 		if (oldVal & RELEASE_FLAG)
-			return false;
+			return ReleaseResult::Fail;
 
 		unsigned long io = oldVal & RELEASE_FLAG_MASK;
 		if (io == 0)
 		{
 			__debugbreak(); // underflow
-			return false;
+			return ReleaseResult::Fail;
 		}
 
 		newVal = oldVal - 1;
@@ -176,12 +168,12 @@ bool cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 			newVal | RELEASE_FLAG,
 			newVal) == newVal)
 		{
-			ReleaseSession(ptr);
-			return false;
+			FreeSession(ptr);
+			return ReleaseResult::Released;
 		}
 	}
 
-	return true;
+	return ReleaseResult::Success;
 }
 
 bool cSessionMap::IncreaseSessionIO(SOCKETINFO* ptr)
