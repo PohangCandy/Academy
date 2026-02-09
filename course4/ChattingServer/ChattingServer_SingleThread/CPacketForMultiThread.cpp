@@ -83,6 +83,8 @@ void CPacket::Encode()
     m_chpBuffer[1] = (short)payLoadSize;
     m_chpBuffer[3] = randkey;
 
+
+
     IsEncoded = true;
 }
 
