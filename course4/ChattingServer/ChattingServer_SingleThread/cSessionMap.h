@@ -1,13 +1,14 @@
 #pragma once
 #include "stdafx.h"
 #include <stack>
-//#include "SessionKey.h"
+
 //--------------------------------
 //세션과 세션 ID를 저장하기 위한 맵 
 // 싱글톤으로 만들어서, 세션 포인터 반환받는 작업에 락걸고 동기화
 //--------------------------------
 class SOCKETINFO;
 struct SessionKey;
+enum class ReleaseResult : uint8_t;
 
 class cSessionMap {
 public:
@@ -19,7 +20,6 @@ public:
 	//return SessionId
 	SOCKETINFO* AllocSessionptr(SOCKET sock);
 
-	void FreeSession(SOCKETINFO* psession);
 
 	SOCKETINFO* GetSessionptr(SessionKey key);
 
@@ -29,11 +29,11 @@ public:
 
 	//void UnLockMap();
 
-		//-----------------------------------------
+	//-----------------------------------------
 	// 세션 종료
 	// IO가 끝난 세션에 대해 완전히 삭제
 	//-----------------------------------------
-	void ReleaseSession(SOCKETINFO* ptr);
+	void FreeSession(SOCKETINFO* psession);
 
 	//-----------------------------------------
 	// 세션 IOCount를 줄이는 함수
@@ -41,7 +41,7 @@ public:
 	// 원래는 무조건 ReleaseSession을 진행시킨다였지만 이젠 경우에 따라 ReleaseSession이 진행 되니 않고 그냥 decrease만 하는 경우도 존재
 	// decreaseIO를 한 결과가 false면 ReleaseSession 성공으로 간주한다.
 	//-----------------------------------------
-	bool DecreaseSessionIO(SOCKETINFO* ptr);
+	ReleaseResult DecreaseSessionIO(SOCKETINFO* ptr);
 
 	//-----------------------------------------
 	// 세션 IOCount를 증가시키는 함수

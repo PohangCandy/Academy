@@ -144,7 +144,7 @@ void ChattingServer::OnRecv(SessionKey sessionkey, CPacket* pPacket)
 {
 	pPacket->AddRef();
 
-	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), (ULONG_PTR)&sessionkey, (LPWSAOVERLAPPED)pPacket))
+	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), (ULONG_PTR)sessionkey.GetSessionKey(), (LPWSAOVERLAPPED)pPacket))
 	{
 		printf("[OnRecv] 컨텐츠 IOCP에 PQCS실패!\n");
 		__debugbreak();
@@ -393,14 +393,20 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			// 2. 메시지를 주위 섹터 플레이어에게 보내기
 			INT64	AccountNo;
+			WORD messageLen;
+			char Message[500];
 			*pPacket >> AccountNo;
+			*pPacket >> messageLen;
+			pPacket->GetData(Message, messageLen);
+
 			CPacket* packetToSend = CPacket::Alloc();
 			packetToSend->_MsgheaderSize = sizeof(PacketHeader);
 			*packetToSend << (short)en_PACKET_SC_CHAT_RES_MESSAGE;
 			packetToSend->PutData((char*)&pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
 			packetToSend->PutData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));
 			packetToSend->PutData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));
-			packetToSend->PutData(pPacket->GetBufferPtr(), pPacket->GetDataSize());
+			packetToSend->PutData((char*)&messageLen, sizeof(messageLen));
+			packetToSend->PutData(Message, messageLen);
 			pPacket->SubRef();
 
 			int dx[9] = { -1,0,1,-1,0,1,-1,0,1 };
@@ -408,6 +414,9 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			packetToSend->AddRef();
 			for (int i = 0; i < 9; i++)
 			{
+				int nx = pcharacter->_SectorX + dx[i];
+				int ny = pcharacter->_SectorY + dy[i];
+				if (nx < 0 || ny < 0 || nx > 50 || ny > 50) continue;
 				for (auto& a : umapCharcterSector[pcharacter->_SectorY + dy[i]][pcharacter->_SectorX + dx[i]])
 				{
 					bool ret = pServer->SendPacket(a.second->_sessionkey, packetToSend);
@@ -517,12 +526,12 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 		Sleep(20000); // 20초 주기
 		ppacket->AddRef();
 
-		PostQueuedCompletionStatus(
-			pServer->hContentCompletionPort,
-			1,//byte
-			-1,//id
-			(LPOVERLAPPED)ppacket
-		);
+		//PostQueuedCompletionStatus(
+		//	pServer->hContentCompletionPort,
+		//	1,//byte
+		//	-1,//id
+		//	(LPOVERLAPPED)ppacket
+		//);
 	}
 	return 0;
 }
