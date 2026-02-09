@@ -401,6 +401,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			CPacket* packetToSend = CPacket::Alloc();
 			packetToSend->_MsgheaderSize = sizeof(PacketHeader);
+			packetToSend->PutData((char*)&header, sizeof(PacketHeader));
 			*packetToSend << (short)en_PACKET_SC_CHAT_RES_MESSAGE;
 			packetToSend->PutData((char*)&pcharacter->_AccountNo, sizeof(pcharacter->_AccountNo));
 			packetToSend->PutData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));
@@ -416,8 +417,8 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			{
 				int nx = pcharacter->_SectorX + dx[i];
 				int ny = pcharacter->_SectorY + dy[i];
-				if (nx < 0 || ny < 0 || nx > 50 || ny > 50) continue;
-				for (auto& a : umapCharcterSector[pcharacter->_SectorY + dy[i]][pcharacter->_SectorX + dx[i]])
+				if (nx < 0 || ny < 0 || nx >= 50 || ny >= 50) continue;
+				for (auto& a : umapCharcterSector[ny][nx])
 				{
 					bool ret = pServer->SendPacket(a.second->_sessionkey, packetToSend);
 					if (!ret)

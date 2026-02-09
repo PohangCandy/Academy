@@ -139,6 +139,7 @@
     <ClCompile Include="testDecodeEncode.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CommonProtocol.h" />
     <ClInclude Include="CPacketForMultiThread.h" />
     <ClInclude Include="CPacketRingBuffer.h" />
     <ClInclude Include="CRingBuffer.h" />
