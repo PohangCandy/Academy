@@ -56,7 +56,7 @@ bool CLanServer::Decode(PacketHeader* pHeader, char* pc)
 
 	for (int i = 0; i < payLoadSize; i++)
 	{
-		char* pPacketChar = &pc[sizeof(PacketHeader) + i];
+		pPacketChar = &pc[sizeof(PacketHeader) + i];
 
 		afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + (i + 2));
 		encodeP = *pPacketChar;
@@ -266,6 +266,7 @@ bool CLanServer::Disconnect(SessionKey sessionkey)
 
 	if (shutdown(ptr->_sock, SD_RECEIVE) != 0)
 	{
+		__debugbreak();
 		if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 		{
 			//세션이 삭제된 경우
@@ -291,7 +292,7 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	ptr = pSessionMap->GetSessionptr(sessionkey);
 	if (ptr == nullptr)
 	{
-		printf("[Network] 삭제된 세션입니다~ 접근 불가능~\n");
+		printf("[Network] SessionID: %lld 삭제된 세션입니다~ 접근 불가능~\n", sessionkey.GetSessionId());
 		return false;
 	}
 
@@ -338,7 +339,7 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	if (!SendPost(clientaddr, ptr))
 	{
 		//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
-		printf("[Network] WsaSendSession 실패했어요~\n");
+		printf("[Network] SessionID : %lld WsaSendSession 실패했어요~\n", ptr->_sessionKey.GetSessionId());
 		__debugbreak();
 		if (pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 		{
@@ -575,7 +576,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			//메시지 헤더 먼저 읽기
 			while (rb->GetUseSize() >= sizeof(PacketHeader))
 			{
-				PacketHeader* header = (PacketHeader*)rb->GetFrontBufferPtr();
+				//헤더 읽을때도 임시 버퍼에 담아서 가져와야 함.
+				char tempHead[dfPACKET_HEADERSIZE];
+				rb->Peek(tempHead, dfPACKET_HEADERSIZE);
+				PacketHeader* header = (PacketHeader*)tempHead;
 
 				if (header->Code != dfPACKET_CODE)
 				{
@@ -584,28 +588,32 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 				}
 
 				//메시지 페이로드 길이 읽기
-				if (rb->GetUseSize() < sizeof(PacketHeader) + header->Len)
+				if (rb->GetUseSize() < header->Len)
 				{
 					break;
 				}
+				rb->MoveFront(dfPACKET_HEADERSIZE);
 
-				//디코딩
-				if (!pServer->Decode(header, rb->GetFrontBufferPtr()))
-				{
-					//디코딩 실패
-					__debugbreak();
-				}
+				//수신에서 Copy가 발생할 수 밖에 없음.
+				//링버퍼에서 rear > front인 상황에 링버퍼에 2개로 나눠져있는 데이터를 안전하게 꺼내오려면 링버퍼 함수를 사용해야 함.
+				char tempBuf[500];
+				rb->Dequeue(tempBuf, header->Len);
 
 				//네트워크 헤더 제거한 나머지 컨텐츠에게 패킷에 담아서 컨텐츠에 넘겨주기
 				CPacket* contentPacket = CPacket::Alloc();
-				int ret = contentPacket->PutData(rb->GetFrontBufferPtr() + sizeof(PacketHeader), header->Len);
+				int ret = contentPacket->PutData(tempBuf, header->Len);
 				if (ret != header->Len)
 				{
 					printf("[Network] 직렬화 버퍼 삽입 오류: 요청 %d, 실제 %d\n", header->Len, ret);
 					__debugbreak();
 				}
 
-				rb->MoveFront(sizeof(PacketHeader) + header->Len);
+				//디코딩
+				if (!contentPacket->Decode(header))
+				{
+					//디코딩 실패
+					__debugbreak();
+				}
 
 				contentPacket->AddRef();
 				pServer->OnRecv(ptr->_sessionKey, contentPacket);

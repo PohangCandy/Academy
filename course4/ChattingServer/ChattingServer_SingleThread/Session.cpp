@@ -14,7 +14,7 @@ SOCKETINFO::SOCKETINFO()
 	_sock = INVALID_SOCKET;
 	_recvBuf = new CRingBuffer(BUFSIZE + 1);
 	_sendBuf = new CPacketRingBuffer(BUFSIZE + 1);
-	messageQueue = new MessageQueue(BUFSIZE);
+	//messageQueue = new MessageQueue(BUFSIZE);
 	_sendOverlapped = new OVERLAPPED_CONTEXT(ESend);
 	_recvOverlapped = new OVERLAPPED_CONTEXT(ERecv);
 }
@@ -29,8 +29,8 @@ SOCKETINFO::~SOCKETINFO()
 	delete _sendBuf;
 	_sendBuf = nullptr;
 
-	delete messageQueue;
-	messageQueue = nullptr;
+	//delete messageQueue;
+	//messageQueue = nullptr;
 
 	delete _sendOverlapped;
 	_sendOverlapped = nullptr;

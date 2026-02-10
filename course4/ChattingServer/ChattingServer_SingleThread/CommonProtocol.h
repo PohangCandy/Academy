@@ -4,6 +4,7 @@
 //#define CODEKEY (0x77)
 #define dfPACKET_CODE		(0x77)
 #define dfPACKET_KEY		(0x32)
+#define dfPACKET_HEADERSIZE		(5)
 
 #pragma pack(push, 1)
 struct PacketHeader

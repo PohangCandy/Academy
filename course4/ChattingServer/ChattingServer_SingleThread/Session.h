@@ -32,7 +32,7 @@ public:
 
 	CRingBuffer* _recvBuf;
 	CPacketRingBuffer* _sendBuf;
-	MessageQueue* messageQueue;
+	//MessageQueue* messageQueue;
 
 	//index[20], key[44] Bit
 	SessionKey _sessionKey = {0};

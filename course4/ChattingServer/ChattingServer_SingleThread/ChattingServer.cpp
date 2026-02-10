@@ -176,8 +176,11 @@ bool ChattingServer::DeleteCharacter(SessionKey sessionkey)
 		return false;
 
 	// 1. 섹터 맵에서 제거
-	auto& sectorMap = umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX];
-	sectorMap.erase(pcharacter->_sessionkey.GetSessionId());
+	if (pcharacter->_SectorY != 0xffff)
+	{
+		auto& sectorMap = umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX];
+		sectorMap.erase(pcharacter->_sessionkey.GetSessionId());
+	}
 
 	// 2. 전체 캐릭터 맵에서 제거
 	umapCharacter.erase(pcharacter->_sessionkey.GetSessionId());
@@ -307,7 +310,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			if (!ret)
 			{
-				printf("[Contents] SendPacket 실패, 세션 ID : %ull\n", pcharacter->_sessionkey.GetSessionId());
+				printf("[Contents] SendPacket 실패, 세션 ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
 				__debugbreak();
 			}
 			break;
@@ -370,7 +373,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			packetToSend->SubRef();
 			if (!ret)
 			{
-				printf("[Contents] SendPacket 실패, 세션 ID : %ull\n", pcharacter->_sessionkey.GetSessionId());
+				printf("[Contents] SendPacket 실패, 세션 ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
 				__debugbreak();
 			}
 
@@ -423,8 +426,8 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 					bool ret = pServer->SendPacket(a.second->_sessionkey, packetToSend);
 					if (!ret)
 					{
-						printf("[Contents] SendPacket 실패, 세션 ID : %ull\n", pcharacter->_sessionkey.GetSessionId());
-						__debugbreak();
+						printf("[Contents] SendPacket 실패, 세션 ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
+						//__debugbreak();
 					}
 				}
 
@@ -496,6 +499,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		{
 			pPacket->SubRef();
 			pServer->CreateCharacter(sessionkey);
+			printf("[Contents] 세션 ID : %lld 캐릭터 생성\n", sessionkey.GetSessionId());
 			break;
 		}
 
