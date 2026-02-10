@@ -83,6 +83,8 @@
 
 #include"MemoryPoolForLockFree.h"
 
+struct PacketHeader;
+
 class CPacket
 {
 	friend class myMemorypool::CMemoryPool<CPacket>;
@@ -104,6 +106,11 @@ public:
 	bool IsEncoded = false;
 
 	void Encode();
+
+	//-----------------------------------------
+	// µðÄÚµù
+	//-----------------------------------------
+	bool Decode(PacketHeader* pHeader);
 
 	void AddRef()
 	{

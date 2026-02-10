@@ -1,11 +1,18 @@
 #include <stdio.h>
 
+typedef unsigned short      WORD;
+
 int main()
 {
-	int a = 3045743;
-	int b = 1646289184;
-	int c = 1835081801;
-	//int c = 183;
-	puts((char*) & c);
+	WORD	_SectorY = -1;
+
+	if (_SectorY == 0xffff)
+	{
+		printf("정상 결과 출력\n");
+	}
+	else
+	{
+		printf("비정상 결과 출력\n");
+	}
 	return 0;
 }

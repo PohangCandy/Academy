@@ -14,7 +14,11 @@ void CPacket::_EnsureCapacity(int requireBytes)
         newSize <<= 1; // 2배씩 확장
 
     char* newBuf = new (std::nothrow) char[newSize];
-    if (!newBuf) return; // 메모리 부족 시 안전 탈출(실전이면 예외/로그 권장)
+    if (!newBuf)
+    {
+        printf("[CPacket] 버퍼 확장에 실패\n");
+        return;
+    }
 
     // 기존 데이터 복사
     if (m_chpBuffer && m_iWritePos > 0)
@@ -86,6 +90,51 @@ void CPacket::Encode()
 
 
     IsEncoded = true;
+}
+
+bool CPacket::Decode(PacketHeader* pHeader)
+{
+    //패킷에 담을 것이므로 pHeader의 체크섬 인코딩은 따로 진행한 후 맴버에 담고
+    //패킷에 payload 데이터만 담아서 디코딩 시키는 걸로 진행 
+    unsigned char* payload = (unsigned char*)m_chpBuffer +m_iReadPos;
+    unsigned int checksum = 0;
+    unsigned char beforeparaP = 0;
+    unsigned char afterparaP = 0;
+    unsigned char encodeP = 0;
+
+
+    int payLoadSize = pHeader->Len;
+    unsigned char* pPacketChar = &pHeader->CheckSum;
+
+    afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + 1);
+    encodeP = *pPacketChar;
+
+    *pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + 1);
+    beforeparaP = afterparaP;
+
+    for (int i = 0; i < payLoadSize; i++)
+    {
+        pPacketChar = &payload[i];
+
+        afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + (i + 2));
+        encodeP = *pPacketChar;
+
+        *pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + (i + 2));
+        beforeparaP = afterparaP;
+
+        checksum += *pPacketChar % 256;
+        checksum %= 256;
+    }
+
+
+
+    //복호화가 제대로 이루어졌는지 확인
+    if (pHeader->CheckSum != checksum)
+    {
+        printf("[Decode] checksum이 일치하지 않음. 복호화가 제대로 이루어지지 않음.\n");
+        return false;
+    }
+    return true;
 }
 
 // ============================== 생성/소멸/관리 ==============================

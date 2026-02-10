@@ -27,7 +27,7 @@
 	// 유니크한 세션 ID와 인덱스를 조합시켜야 하므로
 	// 세션 ID는 long long -> 8바이트 = 약 64비트
 	// 인덱스로 적당히 한 20비트 사용, sessionid 44비트는 
-SOCKETINFO _sessionMap[100000] = {};
+SOCKETINFO _sessionMap[50000] = {};
 
 //CLockFreeStack _deletedIdStack;
 

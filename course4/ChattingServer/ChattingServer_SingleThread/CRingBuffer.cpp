@@ -115,7 +115,10 @@ int CRingBuffer::Enqueue(const char* chpData, int iSize)
 int CRingBuffer::Dequeue(char* chpDest, int iSize)
 {
     if (iSize <= 0 || chpDest == nullptr || m_iBufferSize == 0)
+    {
+        __debugbreak();
         return 0;
+    }
 
     //------------------------------------------
     // Dequeue했을 때, iSize길이보다 짧은 길이가 리턴되는 경우
@@ -140,7 +143,10 @@ int CRingBuffer::Dequeue(char* chpDest, int iSize)
         iSize = 0;
 
     if (iSize == 0)
+    {
+        __debugbreak();
         return 0;
+    }
 
     int tailSize = m_iBufferSize - m_iFront;
     if (tailSize >= iSize)
