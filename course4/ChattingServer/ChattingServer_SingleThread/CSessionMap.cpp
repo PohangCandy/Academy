@@ -27,7 +27,7 @@
 	// 유니크한 세션 ID와 인덱스를 조합시켜야 하므로
 	// 세션 ID는 long long -> 8바이트 = 약 64비트
 	// 인덱스로 적당히 한 20비트 사용, sessionid 44비트는 
-SOCKETINFO _sessionMap[50000] = {};
+SOCKETINFO _sessionMap[dfSESSEIONMAPSIZE] = {};
 
 //CLockFreeStack _deletedIdStack;
 
@@ -103,7 +103,7 @@ void cSessionMap::FreeSession(SOCKETINFO* psession)
 	EnterCriticalSection(&_sessionMap_cs);
 	_deletedSessionIndex.push(index_Bit);
 
-	printf("[Network] 클라이언트 종료: ID  = %d\n", id_Bit);
+	printf("[Network] 클라이언트 종료: ID  = %lld\n", id_Bit);
 
 	LeaveCriticalSection(&_sessionMap_cs);
 }

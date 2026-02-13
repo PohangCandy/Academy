@@ -1,5 +1,6 @@
 #pragma once
 #include "stdafx.h"
+//#include "CommonProtocol.h"
 
 struct SessionKey
 {
@@ -27,7 +28,7 @@ struct SessionKey
 
     static SessionKey MakeKey(uint32_t index, uint64_t sessionId)
     {
-        if (index > 10000 || sessionId > 10000)
+        if (index >= 50000)
         {
             printf("인덱스와 세션 아이디 폭증을 막을 방어코드 필요함\n");
             __debugbreak();

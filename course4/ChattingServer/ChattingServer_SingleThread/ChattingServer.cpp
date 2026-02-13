@@ -118,7 +118,7 @@ void ChattingServer::OnClientJoin(SOCKADDR_IN clientaddr,SessionKey sessionkey)
 	*pPacket << en_PACKET_SS_Create_Character;
 	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), (ULONG_PTR)sessionkey.GetSessionKey(), (LPWSAOVERLAPPED)pPacket))
 	{
-		printf("[OnRecv] 컨텐츠 IOCP에 PQCS실패!\n");
+		printf("[OnClientJoin] 컨텐츠 IOCP에 PQCS실패!\n");
 		__debugbreak();
 	}
 }
@@ -132,9 +132,10 @@ void ChattingServer::OnClientLeave(SessionKey sessionkey)
 	CPacket* pPacket = CPacket::Alloc();
 	pPacket->AddRef();
 	*pPacket << en_PACKET_SS_Session_Release;
+	//printf("[OnClientLeave] ID = %lld\n", sessionkey.GetSessionId());
 	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), (ULONG_PTR)sessionkey.GetSessionKey(), (LPWSAOVERLAPPED)pPacket))
 	{
-		printf("[OnRecv] 컨텐츠 IOCP에 PQCS실패!\n");
+		printf("[OnClientLeave] 컨텐츠 IOCP에 PQCS실패!\n");
 		__debugbreak();
 	}
 }
@@ -426,7 +427,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 					bool ret = pServer->SendPacket(a.second->_sessionkey, packetToSend);
 					if (!ret)
 					{
-						printf("[Contents] SendPacket 실패, 세션 ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
+						//printf("[Contents] SendPacket 실패, 세션 ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
 						//__debugbreak();
 					}
 				}
@@ -499,7 +500,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		{
 			pPacket->SubRef();
 			pServer->CreateCharacter(sessionkey);
-			printf("[Contents] 세션 ID : %lld 캐릭터 생성\n", sessionkey.GetSessionId());
+			//printf("[Contents] 세션 ID : %lld 캐릭터 생성\n", sessionkey.GetSessionId());
 			break;
 		}
 
