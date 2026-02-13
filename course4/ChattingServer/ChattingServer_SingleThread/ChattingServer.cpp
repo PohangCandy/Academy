@@ -312,7 +312,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			if (!ret)
 			{
 				printf("[Contents] SendPacket 角菩, 技记 ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
-				__debugbreak();
+				//__debugbreak();
 			}
 			break;
 		}
@@ -375,7 +375,7 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			if (!ret)
 			{
 				printf("[Contents] SendPacket 角菩, 技记 ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
-				__debugbreak();
+				//__debugbreak();
 			}
 
 			break;

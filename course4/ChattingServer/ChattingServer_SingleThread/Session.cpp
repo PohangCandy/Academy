@@ -56,6 +56,9 @@ void SOCKETINFO::Inintialize(SOCKET sock, SessionKey sessionKey)
 	ZeroMemory(_sendOverlapped, sizeof(OVERLAPPED));
 	
 	_recvBuf->ClearBuffer();
+	if (_sendBuf->GetUseSize() > 0) {
+		__debugbreak();
+	}
 	_sendBuf->ClearBuffer();
 }
 
