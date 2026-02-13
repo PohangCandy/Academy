@@ -103,7 +103,7 @@ void cSessionMap::FreeSession(SOCKETINFO* psession)
 	EnterCriticalSection(&_sessionMap_cs);
 	_deletedSessionIndex.push(index_Bit);
 
-	printf("[Network] 클라이언트 종료: ID  = %lld\n", id_Bit);
+	//printf("[Network] 클라이언트 종료: ID  = %lld\n", id_Bit);
 
 	LeaveCriticalSection(&_sessionMap_cs);
 }

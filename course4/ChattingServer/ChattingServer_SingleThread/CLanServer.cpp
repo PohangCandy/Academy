@@ -194,7 +194,7 @@ bool CLanServer::Start()
 			wsabuf.buf = ptr->_recvBuf->GetFrontBufferPtr();
 			wsabuf.len = ptr->_recvBuf->GetFreeSize();
 
-			printf("[TCP 서버] 클라이언트 접속 : ID = %lld\n", id_bit);
+			//printf("[TCP 서버] 클라이언트 접속 : ID = %lld\n", id_bit);
 			OnClientJoin(clientaddr, ptr->_sessionKey);
 
 			//소켓과 입출력 완료 포트 연결
@@ -330,6 +330,10 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	int addrlen = sizeof(clientaddr);
 	getpeername(ptr->_sock, (SOCKADDR*)&clientaddr, &addrlen);
 	
+	//실패하는 경우
+	// 이미 네트워크에서 송신 링버퍼에 있는 내용을 모두 Send 해버림.
+	// 이미 네트워크에서 삭제된 세션일 가능성? = 0
+	// getSessionptr을 하면서 ReleaseFlag 비교와 IOCount 증가를 진행하였으므로, 그럴 가능성 0
 	if (!CanSend(ptr))
 	{
 		SessionKey origin = ptr->_sessionKey;
@@ -808,6 +812,7 @@ bool CLanServer::SendPost(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 {
 	if (ptr == nullptr)
 	{
+		//불가능
 		printf("[WsaSendSession] 송신 시도중인 세션이 이미 삭제된 세션\n");
 		__debugbreak();
 	}
