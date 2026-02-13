@@ -134,6 +134,23 @@ bool CPacket::Decode(PacketHeader* pHeader)
         printf("[Decode] checksum이 일치하지 않음. 복호화가 제대로 이루어지지 않음.\n");
         return false;
     }
+
+    //WORD* header = (WORD*)m_chpBuffer + m_iReadPos;
+    //if (*header == 0x0001)
+    //{
+    //    printf("[Decode] 로그인 패킷.\n");
+    //    __debugbreak();
+    //}
+    //else if (*header == 0x0002)
+    //{
+    //    printf("[Decode] 섹터 위치 이동 패킷.\n");
+    //    __debugbreak();
+    //}
+    //else if (*header == 0x0009)
+    //{
+    //    __debugbreak();
+    //}
+
     return true;
 }
 

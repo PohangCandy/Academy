@@ -41,7 +41,7 @@ public:
 	int _sendPacketNum = 0;
 
 	//Release Flag[1], IOCount[31] Bit
-	unsigned long _IOCount = 0;
+	alignas(32) unsigned long _IOCount = 0;
 	OVERLAPPED_CONTEXT* _sendOverlapped;
 	OVERLAPPED_CONTEXT* _recvOverlapped;
 	//OVERLAPPED_CONTEXT contentsOverlapped{ EContents };

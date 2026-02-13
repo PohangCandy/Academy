@@ -5,6 +5,7 @@
 #define dfPACKET_CODE		(0x77)
 #define dfPACKET_KEY		(0x32)
 #define dfPACKET_HEADERSIZE		(5)
+#define dfSESSEIONMAPSIZE		(50000)
 
 #pragma pack(push, 1)
 struct PacketHeader
