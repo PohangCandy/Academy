@@ -155,11 +155,11 @@ public:
 	//----------------------------------------------------
 	// 멀티 스레드에서 링버퍼의 락을 보장받기 위한 락과 언락
 	//----------------------------------------------------
-	void GetLockBuffer();
-	void UnLockBuffer();
+	//void GetLockBuffer();
+	//void UnLockBuffer();
 
 private:
-	CRITICAL_SECTION m_csRingbuffer;
+	//CRITICAL_SECTION m_csRingbuffer;
 	char* m_pBuffer;
 	int m_iBufferSize;
 	int m_iFront;

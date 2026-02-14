@@ -7,13 +7,13 @@
 CRingBuffer::CRingBuffer(void)
     : m_pBuffer(nullptr), m_iBufferSize(0), m_iFront(0), m_iRear(0), m_bIsFull(false)
 {
-    InitializeCriticalSection(&m_csRingbuffer);
+    //InitializeCriticalSection(&m_csRingbuffer);
 }
 
 CRingBuffer::CRingBuffer(int iBufferSize)
     : m_pBuffer(new char[iBufferSize]), m_iBufferSize(iBufferSize), m_iFront(0), m_iRear(0), m_bIsFull(false)
 {
-    InitializeCriticalSection(&m_csRingbuffer);
+    //InitializeCriticalSection(&m_csRingbuffer);
 }
 
 CRingBuffer::~CRingBuffer() {
@@ -21,7 +21,7 @@ CRingBuffer::~CRingBuffer() {
         delete[] m_pBuffer; // 할당된 메모리 해제
         m_pBuffer = nullptr;
     }
-    DeleteCriticalSection(&m_csRingbuffer);
+    //DeleteCriticalSection(&m_csRingbuffer);
 }
 
 //void CRingBuffer::Resize(int size)
@@ -294,12 +294,12 @@ char* CRingBuffer::GetBufPtr(void)
     return m_pBuffer;
 }
 
-void CRingBuffer::GetLockBuffer()
-{
-    EnterCriticalSection(&m_csRingbuffer);
-}
-
-void CRingBuffer::UnLockBuffer()
-{
-    LeaveCriticalSection(&m_csRingbuffer);
-}
+//void CRingBuffer::GetLockBuffer()
+//{
+//    EnterCriticalSection(&m_csRingbuffer);
+//}
+//
+//void CRingBuffer::UnLockBuffer()
+//{
+//    LeaveCriticalSection(&m_csRingbuffer);
+//}

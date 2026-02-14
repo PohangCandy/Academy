@@ -25,16 +25,16 @@ CPacketRingBuffer::~CPacketRingBuffer() {
 
 int CPacketRingBuffer::GetBufferSize(void)
 {
-    EnterCriticalSection(&_csRingbuffer);
-    LeaveCriticalSection(&_csRingbuffer);
+    /*EnterCriticalSection(&_csRingbuffer);
+    LeaveCriticalSection(&_csRingbuffer);*/
     return _capacity;
 }
 
 int CPacketRingBuffer::GetUseSize(void)
 {
     //캐시에 있는 값을 읽어오기 위한 interlock함수
-    EnterCriticalSection(&_csRingbuffer);
-    LeaveCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
     if (_capacity == 0) return 0;
 
     if (_IsFull)
@@ -48,10 +48,17 @@ int CPacketRingBuffer::GetUseSize(void)
 
 int CPacketRingBuffer::GetFreeSize(void)
 {
-    EnterCriticalSection(&_csRingbuffer);
-    LeaveCriticalSection(&_csRingbuffer);
+   /* EnterCriticalSection(&_csRingbuffer);
+    LeaveCriticalSection(&_csRingbuffer);*/
     if (_capacity == 0) return 0;
     return _capacity - GetUseSize();
+}
+
+int CPacketRingBuffer::GetFront()
+{
+    //EnterCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
+    return _front;
 }
 
 //---------------------------------------------------------------------
@@ -62,10 +69,10 @@ int CPacketRingBuffer::GetFreeSize(void)
 //---------------------------------------------------------------------
 bool CPacketRingBuffer::Enqueue(CPacket* pPacket)
 {
-    EnterCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
     if (pPacket == nullptr || _capacity == 0)
     {
-        LeaveCriticalSection(&_csRingbuffer);
+        //LeaveCriticalSection(&_csRingbuffer);
         return false;
     }
 
@@ -76,7 +83,7 @@ bool CPacketRingBuffer::Enqueue(CPacket* pPacket)
     //---------------------------------------
     if (_IsFull)
     {
-        LeaveCriticalSection(&_csRingbuffer);
+        //LeaveCriticalSection(&_csRingbuffer);
         return false;
     }
 
@@ -89,7 +96,7 @@ bool CPacketRingBuffer::Enqueue(CPacket* pPacket)
     //--------------------------------------------------------------------
     _IsFull = (_rear == _front);
 
-    LeaveCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
     return true;
 }
 
@@ -104,16 +111,16 @@ bool CPacketRingBuffer::Enqueue(CPacket* pPacket)
 //--------------------------------------------------------------------
 bool CPacketRingBuffer::Dequeue(CPacket*& pPacket)
 {
-    EnterCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
     if (_capacity == 0)
     {
-        LeaveCriticalSection(&_csRingbuffer);
+        //LeaveCriticalSection(&_csRingbuffer);
         return false;
     }
 
     if (0 >= GetUseSize())
     {
-        LeaveCriticalSection(&_csRingbuffer);
+        //LeaveCriticalSection(&_csRingbuffer);
         return false;
     }
 
@@ -122,25 +129,25 @@ bool CPacketRingBuffer::Dequeue(CPacket*& pPacket)
     _front = (_front + 1) % _capacity;
     _IsFull = false;
 
-    LeaveCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
     return true;
 }
 
 void CPacketRingBuffer::ClearBuffer(void)
 {
-    EnterCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
     _front = 0;
     _rear = 0;
     _IsFull = false;
-    LeaveCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
 }
 
 int CPacketRingBuffer::MoveRear(int iSize)
 {
-    EnterCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
     if (_capacity == 0)
     {
-        LeaveCriticalSection(&_csRingbuffer);
+        //LeaveCriticalSection(&_csRingbuffer);
         return 0;
     }
 
@@ -151,23 +158,23 @@ int CPacketRingBuffer::MoveRear(int iSize)
     int freeSize = GetFreeSize();
     if (iSize > freeSize)
     {
-        LeaveCriticalSection(&_csRingbuffer);
+        //LeaveCriticalSection(&_csRingbuffer);
         return 0;
     }
 
     _rear = (_rear + iSize) % _capacity;
     _IsFull = (_rear == _front);
 
-    LeaveCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
     return iSize;
 }
 
 int CPacketRingBuffer::MoveFront(int iSize)
 {
-    EnterCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
     if (_capacity == 0)
     {
-        LeaveCriticalSection(&_csRingbuffer);
+        //LeaveCriticalSection(&_csRingbuffer);
         return 0;
     }
 
@@ -178,21 +185,21 @@ int CPacketRingBuffer::MoveFront(int iSize)
     int useSize = GetUseSize();
     if (iSize > useSize)
     {
-        LeaveCriticalSection(&_csRingbuffer);
+        //LeaveCriticalSection(&_csRingbuffer);
         return 0;
     }
 
     _front = (_front + iSize) % _capacity;
     _IsFull = false;
 
-    LeaveCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
     return iSize;
 }
 
 CPacket** CPacketRingBuffer::GetFrontBufferPtr(void)
 {
-    EnterCriticalSection(&_csRingbuffer);
-    LeaveCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
     if (_capacity == 0)
         return nullptr;
     return _packetBuffer + _front;
@@ -200,8 +207,8 @@ CPacket** CPacketRingBuffer::GetFrontBufferPtr(void)
 
 CPacket** CPacketRingBuffer::GetRearBufferPtr(void)
 {
-    EnterCriticalSection(&_csRingbuffer);
-    LeaveCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
     if (_capacity == 0)
         return nullptr;
     return _packetBuffer + _rear;
@@ -209,8 +216,8 @@ CPacket** CPacketRingBuffer::GetRearBufferPtr(void)
 
 CPacket** CPacketRingBuffer::GetBufPtr(void)
 {
-    EnterCriticalSection(&_csRingbuffer);
-    LeaveCriticalSection(&_csRingbuffer);
+    //EnterCriticalSection(&_csRingbuffer);
+    //LeaveCriticalSection(&_csRingbuffer);
     return _packetBuffer;
 }
 
