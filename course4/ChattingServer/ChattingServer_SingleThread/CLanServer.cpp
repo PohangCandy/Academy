@@ -311,13 +311,17 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 		}
 	}
 
+	//---------------이 아래에서 세션의 삭제가 이뤄지지 않음이 보장됨.-------------
+
 	//2. 인코딩
 	//함수 안에서 네트워크 헤더까지 세팅
 	cp->Encode();
 
 	//3. 링버퍼 삽입
 	cp->AddRef();
+	ptr->_sendBuf->Lock();
 	int ret = ptr->_sendBuf->Enqueue(cp);
+
 	if (ret == 0)
 	{
 		printf("[Network]  Enqueue 실패\n");
@@ -336,12 +340,16 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	// getSessionptr을 하면서 ReleaseFlag 비교와 IOCount 증가를 진행하였으므로, 그럴 가능성 0
 	if (!CanSend(ptr))
 	{
+		//__debugbreak();
 		SessionKey origin = ptr->_sessionKey;
 		if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 		{
-			//세션이 삭제된 경우
+			//세션이 삭제된 경우가 나와선 안됨.
+			//네트워크가 송신 중이므로 IO증가시킴
+			__debugbreak();
 			OnClientLeave(origin);
 		}
+		ptr->_sendBuf->UnLock();
 		return true;
 	}
 
@@ -356,6 +364,7 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 			//세션이 삭제된 경우
 			OnClientLeave(origin);
 		}
+		ptr->_sendBuf->UnLock();
 		return false;
 	}
 
@@ -367,6 +376,7 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 		//세션이 삭제된 경우
 		OnClientLeave(origin);
 	}
+	ptr->_sendBuf->UnLock();
     return true;
 }
 
@@ -518,6 +528,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		//비동기 입출력 결과 확인
 		if (cbTransferred == 0)
 		{
+			__debugbreak();
 			//클라가 종료신호 FIN보냄.
 			//printf("[Network] 클라이언트 종료 신호 수신: IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 			SessionKey origin = ptr->_sessionKey;
@@ -531,6 +542,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		}
 		else if (retval == 0)
 		{
+			__debugbreak();
 			DWORD lpcbTransfer, temp2;
 			bool isIOSuccess = WSAGetOverlappedResult(ptr->_sock, (LPWSAOVERLAPPED)&lpOverlapped, &lpcbTransfer, false, &temp2);
 			if (isIOSuccess && lpcbTransfer > 0)
@@ -670,6 +682,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			//락 풀기전에 Send한 크기만큼 송신 버퍼에서 movefront
 			//long l = 0;
 			//InterlockedExchange(&l, 1);
+			ptr->_sendBuf->Lock();
 			int sendPacketNum = ptr->_sendPacketNum;
 			int srfront = ptr->_sendBuf->GetFront();
 			int cpysrfront = srfront;
@@ -696,16 +709,17 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 
 			//ptr->GetSessionLock();
 			//송신 링버퍼에 남은 데이터를 Send
-			//ptr->sendBuf->GetLockBuffer();
 			if (pServer->CanSend(ptr))
 			{
 				if (!pServer->SendPost(clientaddr, ptr))
 				{
 					//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
 					//ptr->sendBuf->UnLockBuffer();
+					ptr->_sendBuf->UnLock();
 					continue;
 				}
 			}
+			ptr->_sendBuf->UnLock();
 
 			//ptr->sendBuf->UnLockBuffer();
 			//ptr->UnLockSession();

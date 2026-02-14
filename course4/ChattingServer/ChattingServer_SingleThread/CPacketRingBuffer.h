@@ -105,10 +105,15 @@ public:
 	//----------------------------------------------------------------
 	// wsabuf에 값을 세팅해주기 위해 front 값을 넘겨준다.
 	//----------------------------------------------------------------
-	int GetFront() {
+	int GetFront();
+
+
+	void Lock() {
 		EnterCriticalSection(&_csRingbuffer);
+	}
+
+	void UnLock() {
 		LeaveCriticalSection(&_csRingbuffer);
-		return _front;
 	}
 
 private:

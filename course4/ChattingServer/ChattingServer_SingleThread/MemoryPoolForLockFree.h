@@ -147,6 +147,7 @@ namespace myMemorypool
 				//아예 새로운 노드 할당
 				else
 				{
+					//__debugbreak();
 					newtop = (st_STACK_NODE*)malloc(sizeof(st_STACK_NODE));
 					if (newtop == nullptr)
 					{
