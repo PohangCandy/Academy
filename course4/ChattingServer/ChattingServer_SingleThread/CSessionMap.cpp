@@ -3,6 +3,7 @@
 #include "Session.h"
 #include "MemoryPoolForLockFree.h"
 #include "CommonProtocol.h"
+#include "CPacketRingBuffer.h"
 
 //#include "CLockFreeStack.h"
 
@@ -168,6 +169,13 @@ ReleaseResult cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 			newVal | RELEASE_FLAG,
 			newVal) == newVal)
 		{
+			ptr->_sendBuf->Lock();
+			if (ptr->_sendBuf->GetUseSize() > 0)
+			{
+				__debugbreak();
+			}
+			ptr->_sendBuf->UnLock();
+
 			FreeSession(ptr);
 			return ReleaseResult::Released;
 		}

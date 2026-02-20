@@ -58,6 +58,7 @@ void SOCKETINFO::Inintialize(SOCKET sock, SessionKey sessionKey)
 	_recvBuf->ClearBuffer();
 	if (_sendBuf->GetUseSize() > 0) {
 		__debugbreak();
+		//printf("sendpacket left\n");
 	}
 	_sendBuf->ClearBuffer();
 }

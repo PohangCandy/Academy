@@ -373,6 +373,7 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	SessionKey origin = ptr->_sessionKey;
 	if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 	{
+		__debugbreak();
 		//세션이 삭제된 경우
 		OnClientLeave(origin);
 	}
@@ -395,94 +396,6 @@ int CLanServer::getSendMessageTPS()
     return _sendMessageTPS;
 }
 
-
-//void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
-//{
-//	cSessionMap* psm = cSessionMap::GetSessionMap();
-//	psm->FreeSession(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-//}
-//
-//bool CLanServer::DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
-//{
-//	unsigned long oldVal;
-//	unsigned long newVal;
-//
-//	while (true)
-//	{
-//		oldVal = ptr->IOCount;
-//
-//		// 이미 Release 상태면 아무것도 하지 않음
-//		if (oldVal & RELEASE_FLAG)
-//			return false;
-//
-//		unsigned long io = oldVal & RELEASE_FLAG_MASK;
-//		if (io == 0)
-//		{
-//			__debugbreak(); // underflow
-//			return false;
-//		}
-//
-//		newVal = oldVal - 1;
-//
-//		// IOCount 감소 성공?
-//		if (InterlockedCompareExchange(
-//			(unsigned long*)&ptr->IOCount,
-//			newVal,
-//			oldVal) == oldVal)
-//		{
-//			break;
-//		}
-//	}
-//
-//	// 감소 후 IOCount == 0 이고 ReleaseFlag == 0 이면
-//	if ((newVal & RELEASE_FLAG_MASK) == 0)
-//	{
-//		// ReleaseFlag 세팅 시도
-//		if (InterlockedCompareExchange(
-//			(unsigned long*)&ptr->IOCount,
-//			newVal | RELEASE_FLAG,
-//			newVal) == newVal)
-//		{
-//			ReleaseSession(clientaddr, ptr);
-//			return false;
-//		}
-//	}
-//
-//	return true;
-//}
-//
-//bool CLanServer::IncreaseSessionIO(SOCKETINFO* ptr)
-//{
-//	unsigned long oldVal;
-//	unsigned long newVal;
-//
-//	while (true)
-//	{
-//		oldVal = ptr->IOCount;
-//
-//		// 이미 Release 상태면 IO 추가 불가
-//		if (oldVal & RELEASE_FLAG)
-//			return false;
-//
-//		unsigned long io = oldVal & RELEASE_FLAG_MASK;
-//		if (io == RELEASE_FLAG_MASK)
-//		{
-//			__debugbreak(); // overflow
-//			return false;
-//		}
-//
-//		newVal = oldVal + 1;
-//
-//		if (InterlockedCompareExchange(
-//			(unsigned long*)&ptr->IOCount,
-//			newVal,
-//			oldVal) == oldVal)
-//		{
-//			return true;
-//		}
-//	}
-//}
-
 bool CLanServer::CanSend(SOCKETINFO* ptr)
 {
 	// 이미 누군가 Send 중이면 절대 허용 X
@@ -490,12 +403,15 @@ bool CLanServer::CanSend(SOCKETINFO* ptr)
 		return false;
 
 	// 내가 Send 담당자가 됐는데 보낼 게 없다?
+	ptr->_sendBuf->Lock();
 	if (ptr->_sendBuf->GetUseSize() == 0)
 	{
 		InterlockedExchange(&ptr->_IsSending, 0);
+		ptr->_sendBuf->UnLock();
 		return false;
 	}
 
+	ptr->_sendBuf->UnLock();
 	return true;
 }
 
@@ -528,7 +444,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		//비동기 입출력 결과 확인
 		if (cbTransferred == 0)
 		{
-			__debugbreak();
+			//__debugbreak();
 			//클라가 종료신호 FIN보냄.
 			//printf("[Network] 클라이언트 종료 신호 수신: IP 주소 = %s, 포트번호 = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 			SessionKey origin = ptr->_sessionKey;
@@ -713,6 +629,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			{
 				if (!pServer->SendPost(clientaddr, ptr))
 				{
+					__debugbreak();
 					//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
 					//ptr->sendBuf->UnLockBuffer();
 					ptr->_sendBuf->UnLock();
@@ -909,3 +826,89 @@ bool CLanServer::SendPost(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 	return true;
 }
 
+//void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
+//{
+//	cSessionMap* psm = cSessionMap::GetSessionMap();
+//	psm->FreeSession(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+//}
+//
+//bool CLanServer::DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
+//{
+//	unsigned long oldVal;
+//	unsigned long newVal;
+//
+//	while (true)
+//	{
+//		oldVal = ptr->IOCount;
+//
+//		// 이미 Release 상태면 아무것도 하지 않음
+//		if (oldVal & RELEASE_FLAG)
+//			return false;
+//
+//		unsigned long io = oldVal & RELEASE_FLAG_MASK;
+//		if (io == 0)
+//		{
+//			__debugbreak(); // underflow
+//			return false;
+//		}
+//
+//		newVal = oldVal - 1;
+//
+//		// IOCount 감소 성공?
+//		if (InterlockedCompareExchange(
+//			(unsigned long*)&ptr->IOCount,
+//			newVal,
+//			oldVal) == oldVal)
+//		{
+//			break;
+//		}
+//	}
+//
+//	// 감소 후 IOCount == 0 이고 ReleaseFlag == 0 이면
+//	if ((newVal & RELEASE_FLAG_MASK) == 0)
+//	{
+//		// ReleaseFlag 세팅 시도
+//		if (InterlockedCompareExchange(
+//			(unsigned long*)&ptr->IOCount,
+//			newVal | RELEASE_FLAG,
+//			newVal) == newVal)
+//		{
+//			ReleaseSession(clientaddr, ptr);
+//			return false;
+//		}
+//	}
+//
+//	return true;
+//}
+//
+//bool CLanServer::IncreaseSessionIO(SOCKETINFO* ptr)
+//{
+//	unsigned long oldVal;
+//	unsigned long newVal;
+//
+//	while (true)
+//	{
+//		oldVal = ptr->IOCount;
+//
+//		// 이미 Release 상태면 IO 추가 불가
+//		if (oldVal & RELEASE_FLAG)
+//			return false;
+//
+//		unsigned long io = oldVal & RELEASE_FLAG_MASK;
+//		if (io == RELEASE_FLAG_MASK)
+//		{
+//			__debugbreak(); // overflow
+//			return false;
+//		}
+//
+//		newVal = oldVal + 1;
+//
+//		if (InterlockedCompareExchange(
+//			(unsigned long*)&ptr->IOCount,
+//			newVal,
+//			oldVal) == oldVal)
+//		{
+//			return true;
+//		}
+//	}
+//}
