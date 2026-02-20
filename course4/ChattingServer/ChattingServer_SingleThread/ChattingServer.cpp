@@ -529,8 +529,9 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 
 	while (pServer->_bIsTimerThreadAlive)
 	{
+		//__debugbreak();
 		Sleep(20000); // 20ÃÊ ÁÖ±â
-		ppacket->AddRef();
+		//ppacket->AddRef();
 
 		//PostQueuedCompletionStatus(
 		//	pServer->hContentCompletionPort,
