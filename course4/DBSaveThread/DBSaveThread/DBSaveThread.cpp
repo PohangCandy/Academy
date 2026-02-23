@@ -19,7 +19,7 @@ enum DB_MODE
 };
 
 // 테스트하고 싶은 모드로 변경하세요
-DB_MODE gDBMode = SINGLE_QUERY;
+DB_MODE gDBMode = TRANSACTION;
 
 CPacketRingBuffer gMessageQueue(10000);
 HANDLE g_hEvent;
