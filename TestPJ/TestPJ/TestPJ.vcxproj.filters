@@ -24,7 +24,7 @@
     <ClCompile Include="CPacketForMultiThread.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="LuaTest.cpp">
+    <ClCompile Include="pingTest.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

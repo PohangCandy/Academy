@@ -139,7 +139,7 @@
     <ClCompile Include="CPacketForMultiThread.cpp" />
     <ClCompile Include="CPacketRingBuffer.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
-    <ClCompile Include="LuaTest.cpp" />
+    <ClCompile Include="pingTest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CommonProtocol.h" />
