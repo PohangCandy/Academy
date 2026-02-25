@@ -96,7 +96,7 @@ public:
 	int getRecvMessageTPS();
 	int getSendMessageTPS();
 
-	//	virtual void OnSend(g_SessionCounter, int sendsize) = 0;           < 패킷 송신 완료 후
+	virtual void OnSend(SessionKey s, int sendsize) = 0;           //< 패킷 송신 완료 후
 
 	//	virtual void OnWorkerThreadBegin() = 0;                    < 워커스레드 GQCS 바로 하단에서 호출
 	//	virtual void OnWorkerThreadEnd() = 0;                      < 워커스레드 1루프 종료 후
