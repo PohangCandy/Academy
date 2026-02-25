@@ -266,6 +266,7 @@ bool CLanServer::Disconnect(SessionKey sessionkey)
 		}
 	}
 
+	//상대로부터의 송신 차단
 	if (shutdown(ptr->_sock, SD_RECEIVE) != 0)
 	{
 		__debugbreak();
@@ -278,7 +279,17 @@ bool CLanServer::Disconnect(SessionKey sessionkey)
 		return false;
 	}
 
+	//여기서 세션 IO를 감소시켜서 세션의 연결 끊김을 유도하는게 맞지 않을까?
 	SessionKey origin = ptr->_sessionKey;
+	if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+	{
+		//세션이 삭제된 경우
+		__debugbreak();
+		OnClientLeave(origin);
+		return false;
+	}
+
+	//GetSessionMap에 대한 IO감소
 	if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 	{
 		//세션이 삭제된 경우
@@ -615,6 +626,8 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			//ptr->GetSessionLock();
 			ptr->_sendBuf->MoveFront(sendPacketNum);
 			//ptr->UnLockSession();
+
+			pServer->OnSend(ptr->_sessionKey, sendPacketNum);
 			
 			//송신 완료, 송신 플래그 해제
 			if (InterlockedCompareExchange(&ptr->_IsSending, 0, 1) != 1)

@@ -31,9 +31,33 @@ LoginServer::LoginServer()
 		return;
 	}
 
-	//ServerAndHandle* sah = new ServerAndHandle;
-	//sah->handle = hContentCompletionPort;
-	//sah->thisptr = this;
+	// ---------------------------------------------------------
+		// [추가] 서버 시작 시 DB Status 초기화 (1회 수행)
+		// ---------------------------------------------------------
+	MYSQL initConn;
+	mysql_init(&initConn);
+
+	// 초기화 작업을 위한 일회성 연결
+	if (mysql_real_connect(&initConn, "127.0.0.1", "root", "vmfh1234!", "accountdb", 3306, NULL, 0))
+	{
+		const char* initQuery = "UPDATE status SET status = 0";
+		if (mysql_query(&initConn, initQuery) == 0)
+		{
+			//printf("[DB] 서버 시작: 모든 유저의 status를 0으로 초기화했습니다. (Affected: %lld)\n",(long long)mysql_affected_rows(&initConn));
+		}
+		else
+		{
+			printf("[DB Error] 초기화 쿼리 실패: %s\n", mysql_error(&initConn));
+			__debugbreak(); // 초기화 실패 시 서버 구동 중단 고려
+		}
+		mysql_close(&initConn); // 사용 후 즉시 닫기
+	}
+	else
+	{
+		printf("[DB Error] 초기화용 DB 연결 실패: %s\n", mysql_error(&initConn));
+		__debugbreak();
+		return;
+	}
 
 	//컨텐츠 스레드 생성
 	unsigned int uiThreadID;
@@ -111,6 +135,11 @@ void LoginServer::OnRecv(SessionKey sessionkey, CPacket* pPacket)
 	}
 }
 
+void LoginServer::OnSend(SessionKey s, int sendsize)
+{
+	Disconnect(s);
+}
+
 void LoginServer::OnError(int errorcode, char*)
 {
 
@@ -129,7 +158,7 @@ unsigned int __stdcall LoginServer::ContentsThread(LPVOID arg)
 	MYSQL conn;
 	mysql_init(&conn);
 	unsigned long flags = (gDBMode == MULTI_QUERY) ? CLIENT_MULTI_STATEMENTS : 0;
-	MYSQL* connection = mysql_real_connect(&conn, "127.0.0.1", "root", "vmfh1234!", "game_a", 3306, NULL, flags);
+	MYSQL* connection = mysql_real_connect(&conn, "127.0.0.1", "root", "vmfh1234!", "accountdb", 3306, NULL, flags);
 
 	if (!connection)
 	{
@@ -179,15 +208,13 @@ unsigned int __stdcall LoginServer::ContentsThread(LPVOID arg)
 			//AccountNo로 조회 후 응답에 필요한 내용 던져주기
 		case en_PACKET_CS_LOGIN_REQ_LOGIN:
 		{
-			WORD	Type;
 			INT64	AccountNo;
 			char	SessionKey[64];
-			*pPacket >> Type;
 			*pPacket >> AccountNo;
-			*pPacket >> Type;
+			pPacket->GetData(SessionKey, sizeof(SessionKey));
 			pPacket->SubRef();
 
-			BYTE	Status;		// 0 (세션오류) / 1 (성공) ...  하단 defines 사용
+			BYTE	Status = 0;		// 0 (세션오류) / 1 (성공) ...  하단 defines 사용
 
 			WCHAR	ID[20];			// 사용자 ID		. null 포함
 			WCHAR	Nickname[20];		// 사용자 닉네임	. null 포함
@@ -202,7 +229,7 @@ unsigned int __stdcall LoginServer::ContentsThread(LPVOID arg)
 
 			// 2. 유저 정보 조회 (accountdb 테이블)
 			// 주의: DB의 char/varchar가 UTF-8이라면 MultiByteToWideChar 처리가 필요할 수 있습니다.
-			sprintf_s(query, "SELECT userid, usernick FROM accountdb WHERE AccountNo = %lld", AccountNo);
+			sprintf_s(query, "SELECT userid, usernick FROM account WHERE AccountNo = %lld", AccountNo);
 
 			if (mysql_query(connection, query) == 0) {
 				MYSQL_RES* result = mysql_store_result(connection);
@@ -229,7 +256,7 @@ unsigned int __stdcall LoginServer::ContentsThread(LPVOID arg)
 
 						// 3. Status 업데이트 (중복 로그인 방지 핵심)
 						// status가 0인 경우에만 1로 업데이트 시도
-						sprintf_s(query, "UPDATE status_table SET status = 1 WHERE AccountNo = %lld AND status = 0", AccountNo);
+						sprintf_s(query, "UPDATE status SET status = 1 WHERE AccountNo = %lld AND status = 0", AccountNo);
 
 						if (mysql_query(connection, query) == 0) {
 							if (mysql_affected_rows(connection) > 0) {
@@ -240,21 +267,25 @@ unsigned int __stdcall LoginServer::ContentsThread(LPVOID arg)
 							else {
 								// 실패: 이미 로그인 중(status=1)이거나 계정 없음
 								Status = 0;
+								__debugbreak();
 								mysql_query(connection, "ROLLBACK");
 							}
 						}
 						else {
+							__debugbreak();
 							mysql_query(connection, "ROLLBACK");
 						}
 					}
 					else {
 						// 계정 정보 없음
+						__debugbreak();
 						mysql_query(connection, "ROLLBACK");
 					}
 					mysql_free_result(result);
 				}
 			}
 			else {
+				__debugbreak();
 				mysql_query(connection, "ROLLBACK");
 			}
 
@@ -283,9 +314,6 @@ unsigned int __stdcall LoginServer::ContentsThread(LPVOID arg)
 				printf("[Contents] SendPacket 실패, 세션 ID : %lld\n", sessionkey.GetSessionId());
 				//__debugbreak();
 			}
-
-			//DB에 성공적으로 들어간 이후 성공 메시지 보낸 후 연결 끊어주기
-			pServer->Disconnect(sessionkey);
 
 			break;
 		}
