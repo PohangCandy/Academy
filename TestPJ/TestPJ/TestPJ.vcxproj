@@ -70,6 +70,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -139,7 +142,7 @@
     <ClCompile Include="CPacketForMultiThread.cpp" />
     <ClCompile Include="CPacketRingBuffer.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
-    <ClCompile Include="pingTest.cpp" />
+    <ClCompile Include="redisSample.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CommonProtocol.h" />
@@ -148,11 +151,6 @@
     <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="MemoryPoolForLockFree.h" />
     <ClInclude Include="stdafx.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\lua54\lua54.vcxproj">
-      <Project>{208c233d-9515-48e6-beb9-65bb8c05861a}</Project>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
