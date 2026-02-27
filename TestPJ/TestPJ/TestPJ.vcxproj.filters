@@ -24,7 +24,7 @@
     <ClCompile Include="CPacketForMultiThread.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="pingTest.cpp">
+    <ClCompile Include="redisSample.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
