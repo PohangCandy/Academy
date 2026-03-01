@@ -142,7 +142,7 @@
     <ClCompile Include="CPacketForMultiThread.cpp" />
     <ClCompile Include="CPacketRingBuffer.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
-    <ClCompile Include="redisSample.cpp" />
+    <ClCompile Include="PersonalOrganizationTest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CommonProtocol.h" />
