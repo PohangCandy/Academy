@@ -18,56 +18,11 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="AuthGroup.cpp" />
-    <ClCompile Include="ChattingServer.cpp" />
-    <ClCompile Include="CLanServer.cpp" />
-    <ClCompile Include="CLockFreeStack.cpp" />
-    <ClCompile Include="CMemoryViewer.cpp" />
-    <ClCompile Include="CPacketForMultiThread.cpp" />
-    <ClCompile Include="CPacketRingBuffer.cpp" />
-    <ClCompile Include="CRingBuffer.cpp" />
-    <ClCompile Include="CSessionMap.cpp" />
-    <ClCompile Include="errlog.cpp" />
-    <ClCompile Include="Group.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="MapGroup.cpp" />
-    <ClCompile Include="MessageQueue.cpp" />
-    <ClCompile Include="OVERLAPPED_CONTEXT.cpp" />
-    <ClCompile Include="Player.cpp" />
-    <ClCompile Include="Session.cpp" />
-    <ClCompile Include="WorkerThread.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="AuthGroup.h" />
-    <ClInclude Include="ChattingServer.h" />
-    <ClInclude Include="CLanClient.h" />
-    <ClInclude Include="CLanServer.h" />
-    <ClInclude Include="CLockFreeStack.h" />
-    <ClInclude Include="CMemoryViewer.h" />
-    <ClInclude Include="CommonProtocol.h" />
-    <ClInclude Include="CPacketForMultiThread.h" />
-    <ClInclude Include="CPacketRingBuffer.h" />
-    <ClInclude Include="CRingBuffer.h" />
-    <ClInclude Include="cSessionMap.h" />
-    <ClInclude Include="errlog.h" />
-    <ClInclude Include="Group.h" />
-    <ClInclude Include="MapGroup.h" />
-    <ClInclude Include="MemoryPool.h" />
-    <ClInclude Include="MemoryPoolForLockFree.h" />
-    <ClInclude Include="MessageQueue.h" />
-    <ClInclude Include="OVERLAPPED_CONTEXT.h" />
-    <ClInclude Include="Player.h" />
-    <ClInclude Include="Session.h" />
-    <ClInclude Include="SessionKey.h" />
-    <ClInclude Include="stdafx.h" />
-    <ClInclude Include="WorkerThread.h" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{71bb7f23-c821-4709-a0a2-f7fef6d00b76}</ProjectGuid>
-    <RootNamespace>EchoServerWithGroup</RootNamespace>
+    <ProjectGuid>{88a0eac5-6f70-401b-8538-4ab0f82ce4fd}</ProjectGuid>
+    <RootNamespace>ChattingServerSingleThread</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -149,6 +104,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -164,6 +120,8 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -172,6 +130,41 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="ChattingServer.cpp" />
+    <ClCompile Include="CLanServer.cpp" />
+    <ClCompile Include="CLockFreeStack.cpp" />
+    <ClCompile Include="CMemoryViewer.cpp" />
+    <ClCompile Include="CPacketForMultiThread.cpp" />
+    <ClCompile Include="CPacketRingBuffer.cpp" />
+    <ClCompile Include="CRingBuffer.cpp" />
+    <ClCompile Include="CSessionMap.cpp" />
+    <ClCompile Include="errlog.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="MessageQueue.cpp" />
+    <ClCompile Include="OVERLAPPED_CONTEXT.cpp" />
+    <ClCompile Include="Session.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ChattingServer.h" />
+    <ClInclude Include="CLanClient.h" />
+    <ClInclude Include="CLanServer.h" />
+    <ClInclude Include="CLockFreeStack.h" />
+    <ClInclude Include="CMemoryViewer.h" />
+    <ClInclude Include="CommonProtocol.h" />
+    <ClInclude Include="CPacketForMultiThread.h" />
+    <ClInclude Include="CPacketRingBuffer.h" />
+    <ClInclude Include="CRingBuffer.h" />
+    <ClInclude Include="cSessionMap.h" />
+    <ClInclude Include="errlog.h" />
+    <ClInclude Include="MemoryPool.h" />
+    <ClInclude Include="MemoryPoolForLockFree.h" />
+    <ClInclude Include="MessageQueue.h" />
+    <ClInclude Include="OVERLAPPED_CONTEXT.h" />
+    <ClInclude Include="Session.h" />
+    <ClInclude Include="SessionKey.h" />
+    <ClInclude Include="stdafx.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
