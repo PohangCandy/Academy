@@ -11,10 +11,11 @@
 #include "MessageQueue.h"
 #include "errlog.h"
 #include "CPacketForMultiThread.h"
+#include "CSystemLog.h"
 #include <ws2tcpip.h>
 
-
-#define SERVERPORT (6000)
+//이거 지금 chtting.cpp에도 있음. 중복임.
+#define SERVERPORT (21501)
 #define BUFSIZE (1024 * 16)
 #define MSG_SIZE (8)
 #define WSASEND_MAX_BUFFER_COUNT (128)
@@ -126,6 +127,14 @@ bool CLanServer::Start()
 			CloseHandle(hThread);
 		}
 
+		// 워커 스레드 생성 루프 직후에 추가
+		unsigned int uiMonitorID;
+		_hMonitorThread = (HANDLE)_beginthreadex(
+			NULL, 0, MonitorThread, this, 0, &uiMonitorID
+		);
+		if (_hMonitorThread == NULL) return false;
+		CloseHandle(_hMonitorThread);
+
 		//socket()
 		SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
 		if (listen_sock == INVALID_SOCKET) err_quit("socket()");
@@ -163,6 +172,8 @@ bool CLanServer::Start()
 				break;
 			}
 
+			_acceptCount.fetch_add(1, std::memory_order_relaxed); // ← 추가
+
 			//RST를 보내기위한 소켓 옵션
 			LINGER optval;
 			optval.l_onoff = 1;
@@ -177,6 +188,7 @@ bool CLanServer::Start()
 			if (!OnConnectionRequest(inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port)))
 			{
 				closesocket(client_sock);
+				continue;
 			}
 
 			
@@ -262,8 +274,8 @@ bool CLanServer::Disconnect(SessionKey sessionkey)
 		{
 			//세션이 삭제된 경우
 			OnClientLeave(origin);
-			return false;
 		}
+		return false;
 	}
 
 	if (shutdown(ptr->_sock, SD_RECEIVE) != 0)
@@ -307,8 +319,8 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 		{
 			//세션이 삭제된 경우
 			OnClientLeave(origin);
-			return false;
 		}
+		return false;
 	}
 
 	//---------------이 아래에서 세션의 삭제가 이뤄지지 않음이 보장됨.-------------
@@ -373,7 +385,7 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	SessionKey origin = ptr->_sessionKey;
 	if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 	{
-		__debugbreak();
+		//__debugbreak();
 		//세션이 삭제된 경우
 		OnClientLeave(origin);
 	}
@@ -395,6 +407,25 @@ int CLanServer::getSendMessageTPS()
 {
     return _sendMessageTPS;
 }
+
+unsigned int __stdcall CLanServer::MonitorThread(void* arg)
+{
+	CLanServer* server = reinterpret_cast<CLanServer*>(arg);
+
+	while (1)
+	{
+		Sleep(1000);
+
+		// 1초마다 카운터를 읽고 초기화
+		int count = server->_acceptCount.exchange(0, std::memory_order_relaxed);
+		server->_acceptTPS.store(count, std::memory_order_relaxed);
+
+		printf("[Monitor] AcceptTPS : %d\n", count);
+	}
+
+	return 0;
+}
+
 
 bool CLanServer::CanSend(SOCKETINFO* ptr)
 {
@@ -525,8 +556,28 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 
 				if (header->Code != dfPACKET_CODE)
 				{
-					//잘못된 패킷이니까 세션 죽이자.
-					__debugbreak();
+					LOG(L"Network", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] [IP:%S] Invalid Packet Code: 0x%02X (expected: 0x%02X)",
+						ptr->_sessionKey.GetSessionId(),
+						ptr->_IP.c_str(),
+						header->Code,
+						dfPACKET_CODE);
+
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
+				}
+
+				// 비정상 패킷 크기
+				if (header->Len > 500)
+				{
+					LOG(L"Network", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] [IP:%S] Oversized Packet Len: %d",
+						ptr->_sessionKey.GetSessionId(),
+						ptr->_IP.c_str(),
+						header->Len);
+
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
 				}
 
 				//메시지 페이로드 길이 읽기
@@ -629,13 +680,20 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			{
 				if (!pServer->SendPost(clientaddr, ptr))
 				{
-					__debugbreak();
-					//안에서 세션 삭제가 일어난 경우 바로 GQCS 대기 루틴
-					//ptr->sendBuf->UnLockBuffer();
+					// SendPost 실패 시 _IsSending 원복
+					InterlockedExchange(&ptr->_IsSending, 0);
 					ptr->_sendBuf->UnLock();
+
+					//완료된 WSASend에 대한 DecreaseIO는 반드시 해줘야 함
+					SessionKey origin = ptr->_sessionKey;
+					if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+					{
+						pServer->OnClientLeave(origin);
+					}
 					continue;
 				}
 			}
+
 			ptr->_sendBuf->UnLock();
 
 			//ptr->sendBuf->UnLockBuffer();

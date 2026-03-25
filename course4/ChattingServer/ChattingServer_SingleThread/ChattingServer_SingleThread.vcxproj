@@ -139,6 +139,7 @@
     <ClCompile Include="CPacketRingBuffer.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="CSessionMap.cpp" />
+    <ClCompile Include="CSystemLog.cpp" />
     <ClCompile Include="errlog.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MessageQueue.cpp" />
@@ -156,6 +157,7 @@
     <ClInclude Include="CPacketRingBuffer.h" />
     <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="cSessionMap.h" />
+    <ClInclude Include="CSystemLog.h" />
     <ClInclude Include="errlog.h" />
     <ClInclude Include="MemoryPool.h" />
     <ClInclude Include="MemoryPoolForLockFree.h" />
