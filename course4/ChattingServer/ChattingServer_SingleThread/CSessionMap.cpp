@@ -116,13 +116,21 @@ SOCKETINFO* cSessionMap::GetSessionptr(SessionKey key)
 
 	SOCKETINFO* ptr = &_sessionMap[index];
 
-	//이 작업을 하지 않더라도 3번에서 삭제된 세션을 검증하므로 보장이되지만
-	//IncreaseIO에 있는 interlock의 비용이 비싸다고 판단하여 거를수 있으면 미리 거르게 만들 수 있음.
-	if (ptr->_sessionKey.GetSessionId() != sessionId)
-		return nullptr;
-
+	//먼저 IO를 올려서 해제를 막는다
 	if (!IncreaseSessionIO(ptr))
 		return nullptr;
+
+	//IO를 올린 상태에서 세션 ID를 검증
+	if (ptr->_sessionKey.GetSessionId() != sessionId)
+	{
+		//다른 세션이므로 IO 되돌리기
+		if (DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			//새 세션이 이 사이에 IO가 0이 된 경우 - 해제 처리
+			FreeSession(ptr);
+		}
+		return nullptr;
+	}
 
 	return ptr;
 }

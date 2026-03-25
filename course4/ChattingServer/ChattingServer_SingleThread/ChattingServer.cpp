@@ -4,8 +4,9 @@
 #include "CommonProtocol.h"
 #include "MemoryPoolForLockFree.h"
 
-#define SERVERPORT (6000)
-#define BUFSIZE (1024 * 1024)
+//이거 지금 lan.cpp에도 있음. 중복임.
+#define SERVERPORT (21501)
+#define BUFSIZE (1024 * 16)
 #define MSG_SIZE (8)
 
 //채팅 서버에 로그인한 캐릭터를 저장해둔 맵
@@ -188,6 +189,7 @@ bool ChattingServer::DeleteCharacter(SessionKey sessionkey)
 
 	// 3. 메모리 풀로 반환
 	characterpool.Free(pcharacter);
+	return true;
 }
 
 bool ChattingServer::CreateCharacter(SessionKey sessionkey)
@@ -198,6 +200,7 @@ bool ChattingServer::CreateCharacter(SessionKey sessionkey)
 	Character* pcharacter = characterpool.Alloc();
 	pcharacter->OnReuse();
 	pcharacter->_sessionkey = sessionkey;
+	pcharacter->_lastRecvTime = GetTickCount64();
 
 	umapCharacter.emplace(sessionkey.GetSessionId(), pcharacter);
 	return true;
@@ -218,14 +221,15 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		//비동기 입출력 완료 기다리기
 		DWORD cbTransferred;
 		SOCKET client_sock;
-		SessionKey sessionkey;
+		
+		ULONG_PTR completionKey = 0;
 
 		CPacket* pPacket = nullptr;
-		retval = GetQueuedCompletionStatus(pServer->hContentCompletionPort, &cbTransferred, (PULONG_PTR)&sessionkey, (LPOVERLAPPED*)&pPacket, INFINITE);
+		retval = GetQueuedCompletionStatus(pServer->hContentCompletionPort, &cbTransferred, &completionKey, (LPOVERLAPPED*)&pPacket, INFINITE);
 
 
 		//컨텐츠 스레드 종료
-		if (cbTransferred == 0 && (&sessionkey) == nullptr && pPacket == nullptr)
+		if (cbTransferred == 0 && completionKey == 0 && pPacket == nullptr)
 		{
 			//모든 섹터 정리
 			for (int i = 0; i < 50; i++)
@@ -256,6 +260,9 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 				printf("[Contents] 비동기 함수를 호출하지 않고는 나올 수 없는 경우\n");
 			}
 		}
+
+		SessionKey sessionkey;
+		sessionkey.value = completionKey;
 
 		//if (pPacket->GetDataSize() <= 0)
 		//{
@@ -329,7 +336,6 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		case en_PACKET_CS_CHAT_REQ_SECTOR_MOVE:
 		{
 
-
 			//1. 플레이어가 맵에 있는지 확인
 			Character* pcharacter = pServer->FindCharacter(sessionkey);
 			if (pcharacter == nullptr)
@@ -390,17 +396,27 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			Character* pcharacter = pServer->FindCharacter(sessionkey);
 			if (pcharacter == nullptr)
 			{
-				__debugbreak();
+				pPacket->SubRef();
+				break;
 			}
 
 			pcharacter->_lastRecvTime = GetTickCount64();
 
-			// 2. 메시지를 주위 섹터 플레이어에게 보내기
-			INT64	AccountNo;
+			INT64 AccountNo;
 			WORD messageLen;
-			char Message[500];
 			*pPacket >> AccountNo;
 			*pPacket >> messageLen;
+
+			// 버퍼 크기 검증
+			if (messageLen > 500 || messageLen == 0)
+			{
+				// 비정상 패킷 → 연결 끊기
+				pPacket->SubRef();
+				pServer->Disconnect(pcharacter->_sessionkey);
+				break;
+			}
+
+			char Message[500];
 			pPacket->GetData(Message, messageLen);
 
 			CPacket* packetToSend = CPacket::Alloc();
@@ -466,22 +482,22 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			uint64_t now = GetTickCount64();
 
-			std::vector<Character*> expiredList;
+			std::vector<SessionKey> expiredList;
 			expiredList.reserve(128);
 
-			// 1단계: 삭제 대상 수집
 			for (auto& [key, ch] : umapCharacter)
 			{
 				if (now - ch->_lastRecvTime >= 40000)
 				{
-					expiredList.push_back(ch);
+					expiredList.push_back(ch->_sessionkey);
 				}
 			}
 
-			// 2단계: 실제 삭제
-			for (Character* ch : expiredList)
+			for (SessionKey& sk : expiredList)
 			{
-				pServer->DeleteCharacter(ch->_sessionkey);
+				// 네트워크 세션부터 끊어야 함
+				// Disconnect → OnClientLeave → PQCS(Session_Release) → DeleteCharacter 순서로 흐름
+				pServer->Disconnect(sk);
 			}
 
 			break;

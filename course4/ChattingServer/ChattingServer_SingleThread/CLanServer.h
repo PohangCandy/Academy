@@ -24,6 +24,7 @@
 #pragma once
 #include "stdafx.h"
 #include "SessionKey.h"
+#include <atomic>
 
 class CPacket;
 class SOCKETINFO;
@@ -106,9 +107,16 @@ public:
 	int _sessionCount;
 
 	//모니터링 항목 :
-	int _acceptTPS;
+	//int _acceptTPS;
 	int _recvMessageTPS;
 	int _sendMessageTPS;
+
+private:
+	std::atomic<int> _acceptCount{ 0 };  // 누적 Accept 카운트
+	std::atomic<int> _acceptTPS{ 0 };    // 초당 Accept 수
+	HANDLE _hMonitorThread = NULL;
+
+	static unsigned int __stdcall MonitorThread(void* arg);
 
 };
 
