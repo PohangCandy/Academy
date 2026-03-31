@@ -20,7 +20,7 @@ int main()
 	chatserver.ConnectMonitor(MONITOR_SERVER_IP, MONITOR_SERVER_PORT, CHAT_SERVER_NO);
 
 	// Start()는 non-blocking (accept가 별도 스레드)
-	chatserver.Start(21501, 15000);
+	chatserver.Start(21501, 20000);
 
 	// 메인 스레드 대기
 	while (true)

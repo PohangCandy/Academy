@@ -50,7 +50,7 @@ struct PacketHeader
 // 서버 포트
 //--------------------------------------------------------------
 #define dfLAN_SERVER_PORT	(20000)	// 내부 서버용 LAN 포트
-#define dfNET_SERVER_PORT	(10001)	// 모니터링 클라이언트용 WAN 포트
+#define dfNET_SERVER_PORT	(21510)	// 모니터링 클라이언트용 WAN 포트
 
 //--------------------------------------------------------------
 // Release Flag / IOCount 비트 연산
