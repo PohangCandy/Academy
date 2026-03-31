@@ -148,6 +148,7 @@
     <ClCompile Include="MonitoringServer.cpp" />
     <ClCompile Include="OVERLAPPED_CONTEXT.cpp" />
     <ClCompile Include="Session.cpp" />
+    <ClCompile Include="SystemMonitor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CLanServer.h" />
@@ -166,6 +167,7 @@
     <ClInclude Include="Session.h" />
     <ClInclude Include="SessionKey.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="SystemMonitor.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

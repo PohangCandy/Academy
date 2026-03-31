@@ -3,9 +3,12 @@
 #include "MonitorProtocol.h"
 #include "CommonProtocol.h"
 #include "CSystemLog.h"
+#include "SystemMonitor.h"
 #include <ws2tcpip.h>
 #include <cstring>
 #include <conio.h>
+
+#define dfSERVER_NO_MACHINE 0
 
 CMonitoringServer::CMonitoringServer()
 	: _lanServer(this), _netServer(this)
@@ -35,10 +38,21 @@ bool CMonitoringServer::Start()
 		return false;
 	}
 
+	if (!SystemMonitor::Initialize())
+	{
+		printf("[MonitoringServer] SystemMonitor Initialize failed\n");
+		return false;
+	}
+
+	//pc데이터 송신 시작
+	_bMonitorAlive = true;
+	unsigned int tid;
+	_hMonitorThread = (HANDLE)_beginthreadex(NULL, 0, MonitorThread, this, 0, &tid);
+
 	// 화면 갱신 스레드 시작
 	_bDisplayAlive = true;
-	unsigned int tid;
-	_hDisplayThread = (HANDLE)_beginthreadex(NULL, 0, DisplayThread, this, 0, &tid);
+	unsigned int tid2;
+	_hDisplayThread = (HANDLE)_beginthreadex(NULL, 0, DisplayThread, this, 0, &tid2);
 
 	return true;
 }
@@ -417,6 +431,39 @@ unsigned int __stdcall CMonitoringServer::DisplayThread(LPVOID arg)
 	// 커서 복원
 	cursorInfo.bVisible = TRUE;
 	SetConsoleCursorInfo(hConsole, &cursorInfo);
+
+	return 0;
+}
+
+unsigned int __stdcall CMonitoringServer::MonitorThread(LPVOID arg)
+{
+	CMonitoringServer* pServer = (CMonitoringServer*)arg;
+
+	const BYTE MACHINE_NO = dfSERVER_NO_MACHINE;
+
+	while (pServer->_bMonitorAlive)
+	{
+		Sleep(1000);
+
+		// 1️ 시스템 상태 갱신
+		SystemMonitor::Update();
+
+		// 2️ 값 가져오기
+		int cpu = SystemMonitor::GetCpuTotal();
+		int nonPaged = SystemMonitor::GetNonPagedMemory();
+		int netRecv = SystemMonitor::GetNetworkRecvBytes();
+		int netSend = SystemMonitor::GetNetworkSendBytes();
+		int availMem = SystemMonitor::GetAvailableMemory();
+
+		int timeStamp = GetTickCount64();
+
+		// 3️ 브로드캐스트
+		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL, cpu, timeStamp);
+		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY, nonPaged, timeStamp);
+		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV, netRecv, timeStamp);
+		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND, netSend, timeStamp);
+		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY, availMem, timeStamp);
+	}
 
 	return 0;
 }

@@ -41,7 +41,7 @@ bool CLanServer::Start(int port, int maxSession)
 	HANDLE hThread = NULL;
 	unsigned int uiThreadID;
 
-	for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
+	for (int i = 0; i < (int)si.dwNumberOfProcessors; i++)
 	{
 		hThread = (HANDLE)_beginthreadex(NULL, 0, WorkerThread, this, 0, &uiThreadID);
 		if (hThread == NULL) return false;

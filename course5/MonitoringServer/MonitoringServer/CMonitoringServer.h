@@ -96,6 +96,13 @@ private:
 	volatile bool _bDisplayAlive = false;
 
 	//------------------------------------------------------------
+	// 서버 데이터 출력 스레드
+	//------------------------------------------------------------
+	static unsigned int __stdcall MonitorThread(LPVOID arg);
+	HANDLE _hMonitorThread = NULL;
+	bool _bMonitorAlive = false;
+
+	//------------------------------------------------------------
 	// 진단 카운터
 	//------------------------------------------------------------
 	volatile long _lanRecvCount = 0;
