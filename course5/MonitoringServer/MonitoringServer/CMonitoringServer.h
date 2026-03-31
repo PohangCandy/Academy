@@ -18,6 +18,8 @@
 #define dfLOGIN_KEY		"ajfw@!cv980dSZ[fje#@fdj123948djf"
 #define dfLOGIN_KEY_LEN	(32)
 
+#define dfMAX_SERVER_NO	(64)
+
 class CMonitoringServer
 {
 public:
@@ -85,6 +87,26 @@ private:
 
 	CLanServerImpl _lanServer;
 	CNetServerImpl _netServer;
+
+	//------------------------------------------------------------
+	// 화면 갱신 스레드
+	//------------------------------------------------------------
+	static unsigned int __stdcall DisplayThread(LPVOID arg);
+	HANDLE _hDisplayThread = NULL;
+	volatile bool _bDisplayAlive = false;
+
+	//------------------------------------------------------------
+	// 진단 카운터
+	//------------------------------------------------------------
+	volatile long _lanRecvCount = 0;
+	volatile long _netBroadcastCount = 0;
+	volatile long _netSendFailCount = 0;
+
+	//------------------------------------------------------------
+	// 서버별 수신 카운터 (serverNo 인덱스)
+	//------------------------------------------------------------
+	alignas(64) volatile long _serverRecvCount[dfMAX_SERVER_NO] = {};
+	volatile bool _serverConnected[dfMAX_SERVER_NO] = {};
 
 	//------------------------------------------------------------
 	// LAN 세션 → ServerNo 매핑

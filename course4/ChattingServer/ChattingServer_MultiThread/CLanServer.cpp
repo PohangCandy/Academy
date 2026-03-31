@@ -23,10 +23,6 @@ CLanServer::~CLanServer()
 	Stop();
 }
 
-//------------------------------------------------------------
-// [변경] Accept를 별도 스레드로 분리 → Start()가 즉시 반환
-// [변경] 자체 cSessionMap 인스턴스 생성
-//------------------------------------------------------------
 bool CLanServer::Start(int port, int maxSession)
 {
 	int retval;
@@ -72,9 +68,9 @@ bool CLanServer::Start(int port, int maxSession)
 	retval = listen(_listenSock, SOMAXCONN);
 	if (retval == SOCKET_ERROR) { err_quit("LanServer listen()"); return false; }
 
-	printf("[LanServer] Listening on port %d\n", port);
+	// Listening started
 
-	// Accept 스레드 (별도 스레드로 분리)
+	// Accept 스레드
 	hThread = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, &uiThreadID);
 	if (hThread == NULL) return false;
 	CloseHandle(hThread);
@@ -101,9 +97,6 @@ int CLanServer::GetSessionCount()
 	return _sessionCount;
 }
 
-//------------------------------------------------------------
-// Accept 스레드 (기존 Start() 내부 while 루프를 스레드로 분리)
-//------------------------------------------------------------
 unsigned int __stdcall CLanServer::AcceptThread(LPVOID arg)
 {
 	CLanServer* pServer = (CLanServer*)arg;
@@ -184,12 +177,13 @@ unsigned int __stdcall CLanServer::AcceptThread(LPVOID arg)
 		}
 	}
 
-	printf("[LanServer] AcceptThread ended\n");
+	// AcceptThread ended
 	return 0;
 }
 
 //------------------------------------------------------------
-// Worker 스레드 - LAN용 (단순 WORD Len 헤더, 암호화 없음)
+// Worker 스레드 - NET 5바이트 암호화 헤더
+// [MultiThread] 디버그 printf 제거
 //------------------------------------------------------------
 unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 {
@@ -221,16 +215,25 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			CRingBuffer* rb = ptr->_recvBuf;
 			if (rb->MoveRear(cbTransferred) == 0)
 			{
-				printf("[LanServer] Recv buffer full\n");
 				__debugbreak();
 			}
 
-			// LAN 패킷 파싱 (단순 WORD Len 헤더)
-			while (rb->GetUseSize() >= dfLAN_HEADERSIZE)
+			// NET 패킷 파싱 (5바이트 암호화 헤더)
+			while (rb->GetUseSize() >= dfPACKET_HEADERSIZE)
 			{
-				char tempHead[dfLAN_HEADERSIZE];
-				rb->Peek(tempHead, dfLAN_HEADERSIZE);
-				LanPacketHeader* header = (LanPacketHeader*)tempHead;
+				char tempHead[dfPACKET_HEADERSIZE];
+				rb->Peek(tempHead, dfPACKET_HEADERSIZE);
+				PacketHeader* header = (PacketHeader*)tempHead;
+
+				// 패킷 코드 검증
+				if (header->Code != dfPACKET_CODE)
+				{
+					LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] Invalid PacketCode: 0x%02X (expected: 0x%02X)",
+						ptr->_sessionKey.GetSessionId(), header->Code, dfPACKET_CODE);
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
+				}
 
 				if (header->Len > 500)
 				{
@@ -241,16 +244,27 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 					break;
 				}
 
-				if (rb->GetUseSize() < dfLAN_HEADERSIZE + header->Len)
+				if (rb->GetUseSize() < dfPACKET_HEADERSIZE + header->Len)
 					break;
 
-				rb->MoveFront(dfLAN_HEADERSIZE);
+				rb->MoveFront(dfPACKET_HEADERSIZE);
 
 				char tempBuf[500];
 				rb->Dequeue(tempBuf, header->Len);
 
 				CPacket* contentPacket = CPacket::Alloc();
 				contentPacket->PutData(tempBuf, header->Len);
+
+				// NET 복호화
+				if (!contentPacket->DecodeForNet(header, dfPACKET_KEY))
+				{
+					LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] DecodeForNet failed (checksum mismatch)",
+						ptr->_sessionKey.GetSessionId());
+					contentPacket->SubRef();
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
+				}
 
 				contentPacket->AddRef();
 				pServer->OnRecv(ptr->_sessionKey, contentPacket);
@@ -313,7 +327,6 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		}
 		else
 		{
-			printf("[LanServer] Unknown overlapped op\n");
 			__debugbreak();
 		}
 	}
@@ -328,6 +341,7 @@ bool CLanServer::Disconnect(SessionKey sessionkey)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
 	{
+		// 재활용된 세션 — IOCount 증가분만 되돌림, Release 로직 금지
 		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
 		return false;
 	}
@@ -350,20 +364,28 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
 	{
+		// 재활용된 세션 — IOCount 증가분만 되돌림, Release 로직 금지
 		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
 		return false;
 	}
 
-	// LAN 인코딩 (단순 WORD Len 헤더)
-	cp->EncodeForLan();
+	// NET 인코딩 (5바이트 암호화 헤더)
+	cp->EncodeForNet(dfPACKET_CODE, dfPACKET_KEY);
 
 	cp->AddRef();
 	ptr->_sendBuf->Lock();
 	int ret = ptr->_sendBuf->Enqueue(cp);
 	if (!ret)
 	{
-		printf("[LanServer] SendBuf Enqueue failed\n");
-		__debugbreak();
+		ptr->_sendBuf->UnLock();
+		cp->SubRef();
+		SessionKey origin = ptr->_sessionKey;
+		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+			OnClientLeave(origin);
+		}
+		return false;
 	}
 
 	if (!CanSend(ptr))
@@ -380,7 +402,6 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 
 	if (!SendPost(ptr))
 	{
-		InterlockedExchange(&ptr->_IsSending, 0);
 		SessionKey origin = ptr->_sessionKey;
 		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 		{

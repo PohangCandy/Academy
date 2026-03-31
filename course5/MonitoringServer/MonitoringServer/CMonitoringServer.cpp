@@ -5,12 +5,15 @@
 #include "CSystemLog.h"
 #include <ws2tcpip.h>
 #include <cstring>
+#include <conio.h>
 
 CMonitoringServer::CMonitoringServer()
 	: _lanServer(this), _netServer(this)
 {
 	InitializeSRWLock(&_lanSessionLock);
 	InitializeSRWLock(&_netSessionLock);
+	memset((void*)_serverRecvCount, 0, sizeof(_serverRecvCount));
+	memset((void*)_serverConnected, 0, sizeof(_serverConnected));
 }
 
 CMonitoringServer::~CMonitoringServer()
@@ -32,12 +35,23 @@ bool CMonitoringServer::Start()
 		return false;
 	}
 
-	printf("[MonitoringServer] Started (LAN:%d, NET:%d)\n", dfLAN_SERVER_PORT, dfNET_SERVER_PORT);
+	// 화면 갱신 스레드 시작
+	_bDisplayAlive = true;
+	unsigned int tid;
+	_hDisplayThread = (HANDLE)_beginthreadex(NULL, 0, DisplayThread, this, 0, &tid);
+
 	return true;
 }
 
 void CMonitoringServer::Stop()
 {
+	_bDisplayAlive = false;
+	if (_hDisplayThread)
+	{
+		WaitForSingleObject(_hDisplayThread, 3000);
+		CloseHandle(_hDisplayThread);
+		_hDisplayThread = NULL;
+	}
 	_lanServer.Stop();
 	_netServer.Stop();
 }
@@ -53,18 +67,24 @@ bool CMonitoringServer::CLanServerImpl::OnConnectionRequest(std::string IP, int 
 
 void CMonitoringServer::CLanServerImpl::OnClientJoin(SOCKADDR_IN Client, SessionKey s)
 {
-	char ipStr[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &Client.sin_addr, ipStr, sizeof(ipStr));
-	printf("[LAN] Server connected: %s:%d (Session:%llu)\n", ipStr, ntohs(Client.sin_port), s.GetSessionId());
 }
 
 void CMonitoringServer::CLanServerImpl::OnClientLeave(SessionKey s)
 {
-	printf("[LAN] Server disconnected (Session:%llu)\n", s.GetSessionId());
-
+	int serverNo = -1;
 	AcquireSRWLockExclusive(&_pOwner->_lanSessionLock);
-	_pOwner->_lanSessionToServerNo.erase(s.GetSessionId());
+	auto it = _pOwner->_lanSessionToServerNo.find(s.GetSessionId());
+	if (it != _pOwner->_lanSessionToServerNo.end())
+	{
+		serverNo = it->second;
+		_pOwner->_lanSessionToServerNo.erase(it);
+	}
 	ReleaseSRWLockExclusive(&_pOwner->_lanSessionLock);
+
+	if (serverNo >= 0 && serverNo < dfMAX_SERVER_NO)
+	{
+		_pOwner->_serverConnected[serverNo] = false;
+	}
 }
 
 void CMonitoringServer::CLanServerImpl::OnRecv(SessionKey s, CPacket* pPacket)
@@ -91,7 +111,6 @@ void CMonitoringServer::CLanServerImpl::OnRecv(SessionKey s, CPacket* pPacket)
 
 void CMonitoringServer::CLanServerImpl::OnError(int errorcode, const char* msg)
 {
-	printf("[LAN Error] %d: %s\n", errorcode, msg);
 }
 
 //=============================================================
@@ -105,16 +124,10 @@ bool CMonitoringServer::CNetServerImpl::OnConnectionRequest(std::string IP, int 
 
 void CMonitoringServer::CNetServerImpl::OnClientJoin(SOCKADDR_IN Client, SessionKey s)
 {
-	char ipStr[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &Client.sin_addr, ipStr, sizeof(ipStr));
-	printf("[NET] Monitor client connected: %s:%d (Session:%llu)\n", ipStr, ntohs(Client.sin_port), s.GetSessionId());
 }
 
 void CMonitoringServer::CNetServerImpl::OnClientLeave(SessionKey s)
 {
-	printf("[NET] Monitor client disconnected (Session:%llu)\n", s.GetSessionId());
-
-	// 인증 목록에서 제거
 	AcquireSRWLockExclusive(&_pOwner->_netSessionLock);
 	auto& v = _pOwner->_authedNetSessions;
 	for (auto it = v.begin(); it != v.end(); ++it)
@@ -148,7 +161,6 @@ void CMonitoringServer::CNetServerImpl::OnRecv(SessionKey s, CPacket* pPacket)
 
 void CMonitoringServer::CNetServerImpl::OnError(int errorcode, const char* msg)
 {
-	printf("[NET Error] %d: %s\n", errorcode, msg);
 }
 
 //=============================================================
@@ -164,7 +176,10 @@ void CMonitoringServer::Handle_SS_MONITOR_LOGIN(SessionKey lanSession, CPacket* 
 	_lanSessionToServerNo[lanSession.GetSessionId()] = serverNo;
 	ReleaseSRWLockExclusive(&_lanSessionLock);
 
-	printf("[LAN] Server login: ServerNo=%d (Session:%llu)\n", serverNo, lanSession.GetSessionId());
+	if (serverNo >= 0 && serverNo < dfMAX_SERVER_NO)
+	{
+		_serverConnected[serverNo] = true;
+	}
 }
 
 void CMonitoringServer::Handle_SS_MONITOR_DATA_UPDATE(SessionKey lanSession, CPacket* pPacket)
@@ -189,12 +204,15 @@ void CMonitoringServer::Handle_SS_MONITOR_DATA_UPDATE(SessionKey lanSession, CPa
 
 	if (serverNo == -1)
 	{
-		LOG(L"MonitoringServer", CSystemLog::LEVEL_ERROR,
-			L"[LAN] Data update from unregistered session:%llu", lanSession.GetSessionId());
 		return;
 	}
 
-	// 인증된 모니터링 클라이언트에 브로드캐스트
+	InterlockedIncrement(&_lanRecvCount);
+	if (serverNo >= 0 && serverNo < dfMAX_SERVER_NO)
+	{
+		InterlockedIncrement(&_serverRecvCount[serverNo]);
+	}
+
 	BroadcastToMonitorClients((BYTE)serverNo, dataType, dataValue, timeStamp);
 }
 
@@ -213,21 +231,19 @@ void CMonitoringServer::Handle_CS_MONITOR_TOOL_REQ_LOGIN(SessionKey netSession, 
 	{
 		loginResult = dfMONITOR_TOOL_LOGIN_OK;
 
-		// 인증 목록에 추가
 		AcquireSRWLockExclusive(&_netSessionLock);
 		_authedNetSessions.push_back(netSession);
 		ReleaseSRWLockExclusive(&_netSessionLock);
-
-		printf("[NET] Monitor client login OK (Session:%llu)\n", netSession.GetSessionId());
 	}
 	else
 	{
 		loginResult = dfMONITOR_TOOL_LOGIN_ERR_SESSIONKEY;
-		printf("[NET] Monitor client login FAILED (Session:%llu)\n", netSession.GetSessionId());
 	}
 
-	// 로그인 응답 전송
 	CPacket* resPacket = CPacket::Alloc();
+	resPacket->_MsgheaderSize = dfNET_HEADERSIZE;
+	char dummy[dfNET_HEADERSIZE] = {};
+	resPacket->PutData(dummy, dfNET_HEADERSIZE);
 	WORD type = en_PACKET_CS_MONITOR_TOOL_RES_LOGIN;
 	*resPacket << type;
 	*resPacket << loginResult;
@@ -251,6 +267,9 @@ void CMonitoringServer::BroadcastToMonitorClients(BYTE serverNo, BYTE dataType, 
 	}
 
 	CPacket* pPacket = CPacket::Alloc();
+	pPacket->_MsgheaderSize = dfNET_HEADERSIZE;
+	char dummy[dfNET_HEADERSIZE] = {};
+	pPacket->PutData(dummy, dfNET_HEADERSIZE);
 	WORD type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 	*pPacket << type;
 	*pPacket << serverNo;
@@ -261,9 +280,143 @@ void CMonitoringServer::BroadcastToMonitorClients(BYTE serverNo, BYTE dataType, 
 	for (auto& session : _authedNetSessions)
 	{
 		pPacket->AddRef();
-		_netServer.SendPacket(session, pPacket);
+		if (_netServer.SendPacket(session, pPacket))
+		{
+			InterlockedIncrement(&_netBroadcastCount);
+		}
+		else
+		{
+			InterlockedIncrement(&_netSendFailCount);
+		}
 	}
 
 	ReleaseSRWLockShared(&_netSessionLock);
 	pPacket->SubRef();
+}
+
+//=============================================================
+// 화면 갱신 스레드 (1초마다 콘솔 전체 갱신)
+//=============================================================
+
+unsigned int __stdcall CMonitoringServer::DisplayThread(LPVOID arg)
+{
+	CMonitoringServer* pServer = (CMonitoringServer*)arg;
+
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	// 커서 숨기기
+	CONSOLE_CURSOR_INFO cursorInfo;
+	GetConsoleCursorInfo(hConsole, &cursorInfo);
+	cursorInfo.bVisible = FALSE;
+	SetConsoleCursorInfo(hConsole, &cursorInfo);
+
+	const int LINE_WIDTH = 70;
+	char buf[4096];
+
+	while (pServer->_bDisplayAlive)
+	{
+		Sleep(1000);
+
+		// 카운터 스냅샷 (초당 값)
+		long lanRecv = InterlockedExchange(&pServer->_lanRecvCount, 0);
+		long netBroadcast = InterlockedExchange(&pServer->_netBroadcastCount, 0);
+		long netFail = InterlockedExchange(&pServer->_netSendFailCount, 0);
+
+		int lanSessionCount = pServer->_lanServer.GetSessionCount();
+		int netSessionCount = pServer->_netServer.GetSessionCount();
+
+		int authedCount = 0;
+		AcquireSRWLockShared(&pServer->_netSessionLock);
+		authedCount = (int)pServer->_authedNetSessions.size();
+		ReleaseSRWLockShared(&pServer->_netSessionLock);
+
+		// 서버별 초당 수신량 스냅샷
+		long serverRecv[dfMAX_SERVER_NO];
+		for (int i = 0; i < dfMAX_SERVER_NO; i++)
+		{
+			serverRecv[i] = InterlockedExchange(&pServer->_serverRecvCount[i], 0);
+		}
+
+		// 화면 버퍼 생성
+		int pos = 0;
+
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
+			"%-*s\n", LINE_WIDTH,
+			"=== Monitoring Server ===");
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
+			"%-*s\n", LINE_WIDTH,
+			"  Press 'q' to quit");
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
+			"%-*s\n", LINE_WIDTH,
+			"----------------------------------------------------------------------");
+
+		// 접속 현황
+		char line[128];
+		sprintf_s(line, sizeof(line),
+			"  LAN Servers: %d   |   NET Clients: %d (Auth: %d)",
+			lanSessionCount, netSessionCount, authedCount);
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
+			"%-*s\n", LINE_WIDTH,
+			"----------------------------------------------------------------------");
+
+		// 서버별 상태
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
+			"%-*s\n", LINE_WIDTH,
+			"  [Connected Servers]");
+
+		bool anyServer = false;
+		for (int i = 0; i < dfMAX_SERVER_NO; i++)
+		{
+			if (pServer->_serverConnected[i])
+			{
+				anyServer = true;
+				sprintf_s(line, sizeof(line),
+					"    Server #%-3d   Recv/s: %ld", i, serverRecv[i]);
+				pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+			}
+		}
+		if (!anyServer)
+		{
+			pos += sprintf_s(buf + pos, sizeof(buf) - pos,
+				"%-*s\n", LINE_WIDTH,
+				"    (none)");
+		}
+
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
+			"%-*s\n", LINE_WIDTH,
+			"----------------------------------------------------------------------");
+
+		// 전체 통계
+		sprintf_s(line, sizeof(line),
+			"  LAN Recv/s: %ld", lanRecv);
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
+		sprintf_s(line, sizeof(line),
+			"  NET Send/s: %ld   |   NET Fail/s: %ld", netBroadcast, netFail);
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
+			"%-*s\n", LINE_WIDTH,
+			"----------------------------------------------------------------------");
+
+		// 빈 줄로 나머지 채우기 (이전 출력 잔상 제거)
+		for (int i = 0; i < 5; i++)
+		{
+			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, "");
+		}
+
+		// 콘솔에 한번에 출력
+		COORD origin = { 0, 0 };
+		SetConsoleCursorPosition(hConsole, origin);
+		DWORD written;
+		WriteConsoleA(hConsole, buf, pos, &written, NULL);
+	}
+
+	// 커서 복원
+	cursorInfo.bVisible = TRUE;
+	SetConsoleCursorInfo(hConsole, &cursorInfo);
+
+	return 0;
 }

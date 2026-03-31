@@ -345,12 +345,7 @@ bool CNetServer::Disconnect(SessionKey sessionkey)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
 	{
-		SessionKey origin = ptr->_sessionKey;
-		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-		{
-			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
-			OnClientLeave(origin);
-		}
+		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
 		return false;
 	}
 
@@ -372,12 +367,7 @@ bool CNetServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
 	{
-		SessionKey origin = ptr->_sessionKey;
-		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-		{
-			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
-			OnClientLeave(origin);
-		}
+		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
 		return false;
 	}
 
@@ -407,6 +397,7 @@ bool CNetServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 
 	if (!SendPost(ptr))
 	{
+		InterlockedExchange(&ptr->_IsSending, 0);
 		SessionKey origin = ptr->_sessionKey;
 		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 		{
@@ -459,7 +450,7 @@ bool CNetServer::SendPost(SOCKETINFO* ptr)
 	int rbCapacity = prb->GetBufferSize();
 	CPacket** cpacket = prb->GetBufPtr();
 
-	if (remain > dfSEND_WSABUF_MAX) { __debugbreak(); }
+	if (remain > dfSEND_WSABUF_MAX) remain = dfSEND_WSABUF_MAX;
 
 	for (int i = 0; i < remain; i++)
 	{
@@ -486,8 +477,8 @@ bool CNetServer::SendPost(SOCKETINFO* ptr)
 			{
 				_sessionCount.fetch_sub(1, std::memory_order_relaxed);
 				OnClientLeave(origin);
-				return false;
 			}
+			return false;
 		}
 	}
 	return true;

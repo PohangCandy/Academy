@@ -225,12 +225,25 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 				__debugbreak();
 			}
 
-			// LAN 패킷 파싱 (단순 WORD Len 헤더)
-			while (rb->GetUseSize() >= dfLAN_HEADERSIZE)
+			// NET 패킷 파싱 (5바이트 암호화 헤더)
+			printf("[WorkerThread] ERecv: %d bytes, session:%llu\n", cbTransferred, ptr->_sessionKey.GetSessionId());
+			while (rb->GetUseSize() >= dfPACKET_HEADERSIZE)
 			{
-				char tempHead[dfLAN_HEADERSIZE];
-				rb->Peek(tempHead, dfLAN_HEADERSIZE);
-				LanPacketHeader* header = (LanPacketHeader*)tempHead;
+				char tempHead[dfPACKET_HEADERSIZE];
+				rb->Peek(tempHead, dfPACKET_HEADERSIZE);
+				PacketHeader* header = (PacketHeader*)tempHead;
+
+				printf("[WorkerThread] Header: Code=0x%02X, Len=%d, RandKey=%d\n", header->Code, header->Len, header->RandKey);
+
+				// 패킷 코드 검증
+				if (header->Code != dfPACKET_CODE)
+				{
+					LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] Invalid PacketCode: 0x%02X (expected: 0x%02X)",
+						ptr->_sessionKey.GetSessionId(), header->Code, dfPACKET_CODE);
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
+				}
 
 				if (header->Len > 500)
 				{
@@ -241,10 +254,10 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 					break;
 				}
 
-				if (rb->GetUseSize() < dfLAN_HEADERSIZE + header->Len)
+				if (rb->GetUseSize() < dfPACKET_HEADERSIZE + header->Len)
 					break;
 
-				rb->MoveFront(dfLAN_HEADERSIZE);
+				rb->MoveFront(dfPACKET_HEADERSIZE);
 
 				char tempBuf[500];
 				rb->Dequeue(tempBuf, header->Len);
@@ -252,6 +265,19 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 				CPacket* contentPacket = CPacket::Alloc();
 				contentPacket->PutData(tempBuf, header->Len);
 
+				// NET 복호화
+				printf("[WorkerThread] Decoding payload %d bytes...\n", header->Len);
+				if (!contentPacket->DecodeForNet(header, dfPACKET_KEY))
+				{
+					LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] DecodeForNet failed (checksum mismatch)",
+						ptr->_sessionKey.GetSessionId());
+					contentPacket->SubRef();
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
+				}
+
+				printf("[WorkerThread] Decode OK, forwarding to OnRecv\n");
 				contentPacket->AddRef();
 				pServer->OnRecv(ptr->_sessionKey, contentPacket);
 				contentPacket->SubRef();
@@ -328,7 +354,12 @@ bool CLanServer::Disconnect(SessionKey sessionkey)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
 	{
-		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
+		SessionKey origin = ptr->_sessionKey;
+		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+			OnClientLeave(origin);
+		}
 		return false;
 	}
 
@@ -350,12 +381,17 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
 	{
-		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
+		SessionKey origin = ptr->_sessionKey;
+		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+			OnClientLeave(origin);
+		}
 		return false;
 	}
 
-	// LAN 인코딩 (단순 WORD Len 헤더)
-	cp->EncodeForLan();
+	// NET 인코딩 (5바이트 암호화 헤더)
+	cp->EncodeForNet(dfPACKET_CODE, dfPACKET_KEY);
 
 	cp->AddRef();
 	ptr->_sendBuf->Lock();
@@ -380,7 +416,6 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 
 	if (!SendPost(ptr))
 	{
-		InterlockedExchange(&ptr->_IsSending, 0);
 		SessionKey origin = ptr->_sessionKey;
 		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 		{
@@ -433,7 +468,7 @@ bool CLanServer::SendPost(SOCKETINFO* ptr)
 	int rbCapacity = prb->GetBufferSize();
 	CPacket** cpacket = prb->GetBufPtr();
 
-	if (remain > dfSEND_WSABUF_MAX) remain = dfSEND_WSABUF_MAX;
+	if (remain > dfSEND_WSABUF_MAX) { __debugbreak(); }
 
 	for (int i = 0; i < remain; i++)
 	{
@@ -460,8 +495,8 @@ bool CLanServer::SendPost(SOCKETINFO* ptr)
 			{
 				_sessionCount.fetch_sub(1, std::memory_order_relaxed);
 				OnClientLeave(origin);
+				return false;
 			}
-			return false;
 		}
 	}
 	return true;

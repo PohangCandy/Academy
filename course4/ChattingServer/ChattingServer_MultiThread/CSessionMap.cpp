@@ -76,8 +76,6 @@ void cSessionMap::FreeSession(SOCKETINFO* psession)
 	session_key = psession->_sessionKey;
 	index_Bit = session_key.GetIndex();
 
-	_sessionArray[index_Bit]._Active = false;
-
 	// SendBuf 잔여 패킷 정리
 	psession->_sendBuf->Lock();
 	int remain = psession->_sendBuf->GetUseSize();
@@ -91,6 +89,8 @@ void cSessionMap::FreeSession(SOCKETINFO* psession)
 	}
 	psession->_sendBuf->MoveFront(remain);
 	psession->_sendBuf->UnLock();
+
+	_sessionArray[index_Bit]._Active = false;
 
 	closesocket(psession->_sock);
 

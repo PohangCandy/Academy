@@ -7,8 +7,6 @@ int main()
 {
 	CSystemLog::GetInstance()->SetLogLevel(CSystemLog::LEVEL_DEBUG);
 
-	printf("=== Monitoring Server ===\n\n");
-
 	CMonitoringServer server;
 
 	if (!server.Start())
@@ -17,16 +15,17 @@ int main()
 		return 1;
 	}
 
-	printf("\nPress 'q' to quit.\n\n");
-
 	while (1)
 	{
-		char ch = _getch();
-		if (ch == 'q' || ch == 'Q')
-			break;
+		if (_kbhit())
+		{
+			char ch = _getch();
+			if (ch == 'q' || ch == 'Q')
+				break;
+		}
+		Sleep(100);
 	}
 
 	server.Stop();
-	printf("Server stopped.\n");
 	return 0;
 }

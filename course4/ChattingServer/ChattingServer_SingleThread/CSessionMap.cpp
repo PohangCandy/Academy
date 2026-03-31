@@ -2,7 +2,6 @@
 #include "SessionKey.h"
 #include "Session.h"
 #include "CPacketRingBuffer.h"
-#include "CPacketForMultiThread.h"
 #include "CommonProtocol.h"
 
 #define RELEASE_FLAGBIT 31
@@ -78,20 +77,6 @@ void cSessionMap::FreeSession(SOCKETINFO* psession)
 
 	_sessionArray[index_Bit]._Active = false;
 
-	// SendBuf 잔여 패킷 정리
-	psession->_sendBuf->Lock();
-	int remain = psession->_sendBuf->GetUseSize();
-	int front = psession->_sendBuf->GetFront();
-	int cap = psession->_sendBuf->GetBufferSize();
-	CPacket** buf = psession->_sendBuf->GetBufPtr();
-	for (int i = 0; i < remain; i++)
-	{
-		buf[front]->SubRef();
-		front = (front + 1) % cap;
-	}
-	psession->_sendBuf->MoveFront(remain);
-	psession->_sendBuf->UnLock();
-
 	closesocket(psession->_sock);
 
 	EnterCriticalSection(&_sessionMap_cs);
@@ -114,8 +99,10 @@ SOCKETINFO* cSessionMap::GetSessionptr(SessionKey key)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionId)
 	{
-		// 재활용된 세션 — IOCount 증가분만 되돌림, Release 로직 금지
-		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
+		if (DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			FreeSession(ptr);
+		}
 		return nullptr;
 	}
 
