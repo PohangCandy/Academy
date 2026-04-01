@@ -11,9 +11,12 @@
 #include "CLanServer.h"
 #include "CNetServer.h"
 #include "SessionKey.h"
+#include "C:\Program Files\MySQL\MySQL Server 8.0\include\mysql.h"
 #include <unordered_map>
 #include <vector>
 #include <string>
+
+#pragma comment(lib, "libmysql.lib")
 
 #define dfLOGIN_KEY		"ajfw@!cv980dSZ[fje#@fdj123948djf"
 #define dfLOGIN_KEY_LEN	(32)
@@ -101,6 +104,53 @@ private:
 	static unsigned int __stdcall MonitorThread(LPVOID arg);
 	HANDLE _hMonitorThread = NULL;
 	bool _bMonitorAlive = false;
+
+	//------------------------------------------------------------
+	// DB 저장 스레드 (10분마다)
+	//------------------------------------------------------------
+	static unsigned int __stdcall DBWriteThread(LPVOID arg);
+	HANDLE _hDBWriteThread = NULL;
+	volatile bool _bDBWriteAlive = false;
+	MYSQL _dbConn;
+	bool _bDBConnected = false;
+
+	bool ConnectDB();
+	void DisconnectDB();
+	void SaveMonitorDataToDB(int serverNo, int dataType, int avg, int vmin, int vmax);
+
+	//------------------------------------------------------------
+	// DB 저장용 데이터 수집 (서버별, 타입별 min/max/sum/count)
+	//------------------------------------------------------------
+	struct MonitorDataAccum
+	{
+		long long sum = 0;
+		int vmin = INT_MAX;
+		int vmax = INT_MIN;
+		int count = 0;
+
+		void Add(int val)
+		{
+			sum += val;
+			if (val < vmin) vmin = val;
+			if (val > vmax) vmax = val;
+			count++;
+		}
+
+		void Reset()
+		{
+			sum = 0;
+			vmin = INT_MAX;
+			vmax = INT_MIN;
+			count = 0;
+		}
+	};
+
+	// [serverNo][dataType] → 누적 데이터
+	static const int dfMAX_DATA_TYPE = 80;
+	MonitorDataAccum _accumData[dfMAX_SERVER_NO][dfMAX_DATA_TYPE];
+	SRWLOCK _accumLock;
+
+	void AccumulateMonitorData(int serverNo, int dataType, int dataValue);
 
 	//------------------------------------------------------------
 	// 진단 카운터

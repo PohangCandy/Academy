@@ -19,7 +19,7 @@ enum {
 	dfMONITOR_DATA_TYPE_CHAT_UPDATEMSG_POOL	= 37,
 };
 
-myMemorypool::CMemoryPool<Character> characterpool(10000, true);
+myMemorypool::CMemoryPool<Character> characterpool(20000, true);
 
 ChattingServer::ChattingServer()
 {
@@ -581,7 +581,7 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 				updateTPS, acceptTPS, totalAccept);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
-			// 패킷풀 + 캐릭터풀
+			// 패킷풀 + 캐릭터풀 + 세션
 			int packetPoolTotal = (int)CPacket::packetPool.GetCapacityCount();
 			int charPoolUse = (int)characterpool.GetUseCount();
 			int charPoolTotal = (int)characterpool.GetCapacityCount();
@@ -589,6 +589,11 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 			sprintf_s(line, sizeof(line),
 				"  PacketPool: %d/%d   CharPool: %d/%d",
 				packetPoolUse, packetPoolTotal, charPoolUse, charPoolTotal);
+			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
+			sprintf_s(line, sizeof(line),
+				"  Session Use: %d    Player: %d",
+				sessionCount, playerCount);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos,

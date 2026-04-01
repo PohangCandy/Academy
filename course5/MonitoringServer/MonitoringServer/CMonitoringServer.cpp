@@ -16,8 +16,19 @@ CMonitoringServer::CMonitoringServer()
 {
 	InitializeSRWLock(&_lanSessionLock);
 	InitializeSRWLock(&_netSessionLock);
+	InitializeSRWLock(&_accumLock);
 	memset((void*)_serverRecvCount, 0, sizeof(_serverRecvCount));
 	memset((void*)_serverConnected, 0, sizeof(_serverConnected));
+	memset(_accumData, 0, sizeof(_accumData));
+
+	// accumData의 min/max 초기화
+	for (int s = 0; s < dfMAX_SERVER_NO; s++)
+	{
+		for (int t = 0; t < dfMAX_DATA_TYPE; t++)
+		{
+			_accumData[s][t].Reset();
+		}
+	}
 }
 
 CMonitoringServer::~CMonitoringServer()
@@ -55,18 +66,48 @@ bool CMonitoringServer::Start()
 	unsigned int tid2;
 	_hDisplayThread = (HANDLE)_beginthreadex(NULL, 0, DisplayThread, this, 0, &tid2);
 
+	// DB 연결 및 저장 스레드 시작
+	if (ConnectDB())
+	{
+		_bDBWriteAlive = true;
+		unsigned int tid3;
+		_hDBWriteThread = (HANDLE)_beginthreadex(NULL, 0, DBWriteThread, this, 0, &tid3);
+	}
+	else
+	{
+		printf("[MonitoringServer] DB Connect failed - DB logging disabled\n");
+	}
+
 	return true;
 }
 
 void CMonitoringServer::Stop()
 {
 	_bDisplayAlive = false;
+	_bMonitorAlive = false;
+	_bDBWriteAlive = false;
+
 	if (_hDisplayThread)
 	{
 		WaitForSingleObject(_hDisplayThread, 3000);
 		CloseHandle(_hDisplayThread);
 		_hDisplayThread = NULL;
 	}
+	if (_hMonitorThread)
+	{
+		WaitForSingleObject(_hMonitorThread, 3000);
+		CloseHandle(_hMonitorThread);
+		_hMonitorThread = NULL;
+	}
+	if (_hDBWriteThread)
+	{
+		WaitForSingleObject(_hDBWriteThread, 15000);
+		CloseHandle(_hDBWriteThread);
+		_hDBWriteThread = NULL;
+	}
+
+	DisconnectDB();
+
 	_lanServer.Stop();
 	_netServer.Stop();
 }
@@ -229,6 +270,9 @@ void CMonitoringServer::Handle_SS_MONITOR_DATA_UPDATE(SessionKey lanSession, CPa
 	{
 		InterlockedIncrement(&_serverRecvCount[serverNo]);
 	}
+
+	// DB 저장용 데이터 누적
+	AccumulateMonitorData(serverNo, dataType, dataValue);
 
 	BroadcastToMonitorClients((BYTE)serverNo, dataType, dataValue, timeStamp);
 }
@@ -469,12 +513,191 @@ unsigned int __stdcall CMonitoringServer::MonitorThread(LPVOID arg)
 
 		int timeStamp = (int)time(NULL);
 
-		// 3️ 브로드캐스트
+		// 3️ DB 저장용 데이터 누적
+		pServer->AccumulateMonitorData(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL, cpu);
+		pServer->AccumulateMonitorData(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY, nonPaged);
+		pServer->AccumulateMonitorData(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV, netRecv);
+		pServer->AccumulateMonitorData(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND, netSend);
+		pServer->AccumulateMonitorData(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY, availMem);
+
+		// 4️ 브로드캐스트
 		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL, cpu, timeStamp);
 		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY, nonPaged, timeStamp);
 		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV, netRecv, timeStamp);
 		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND, netSend, timeStamp);
 		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY, availMem, timeStamp);
+	}
+
+	return 0;
+}
+
+//=============================================================
+// DB 연결 / 해제
+//=============================================================
+
+bool CMonitoringServer::ConnectDB()
+{
+	mysql_init(&_dbConn);
+
+	// 먼저 DB 지정 없이 접속하여 logdb와 템플릿 테이블 생성
+	if (!mysql_real_connect(&_dbConn, "127.0.0.1", "root", "vmfh1234!", NULL, 3306, NULL, 0))
+	{
+		printf("[MonitoringServer] DB Connect failed: %s\n", mysql_error(&_dbConn));
+		_bDBConnected = false;
+		return false;
+	}
+
+	mysql_query(&_dbConn, "CREATE DATABASE IF NOT EXISTS `logdb`");
+	mysql_query(&_dbConn, "USE `logdb`");
+	mysql_query(&_dbConn,
+		"CREATE TABLE IF NOT EXISTS `monitorlog_template` ("
+		"  `no`       BIGINT NOT NULL AUTO_INCREMENT,"
+		"  `logtime`  DATETIME NOT NULL,"
+		"  `serverno` INT NOT NULL,"
+		"  `type`     INT NOT NULL,"
+		"  `avr`      INT NOT NULL DEFAULT 0,"
+		"  `min`      INT NOT NULL DEFAULT 0,"
+		"  `max`      INT NOT NULL DEFAULT 0,"
+		"  PRIMARY KEY (`no`),"
+		"  KEY `idx_logtime` (`logtime`),"
+		"  KEY `idx_serverno_type` (`serverno`, `type`)"
+		")");
+
+	_bDBConnected = true;
+	printf("[MonitoringServer] DB Connected (logdb ready)\n");
+	return true;
+}
+
+void CMonitoringServer::DisconnectDB()
+{
+	if (_bDBConnected)
+	{
+		mysql_close(&_dbConn);
+		_bDBConnected = false;
+	}
+}
+
+//=============================================================
+// 모니터링 데이터 누적 (워커/모니터 스레드에서 호출)
+//=============================================================
+
+void CMonitoringServer::AccumulateMonitorData(int serverNo, int dataType, int dataValue)
+{
+	if (serverNo < 0 || serverNo >= dfMAX_SERVER_NO) return;
+	if (dataType < 0 || dataType >= dfMAX_DATA_TYPE) return;
+
+	AcquireSRWLockExclusive(&_accumLock);
+	_accumData[serverNo][dataType].Add(dataValue);
+	ReleaseSRWLockExclusive(&_accumLock);
+}
+
+//=============================================================
+// DB에 한 건 저장 (테이블 없으면 자동 생성)
+//=============================================================
+
+void CMonitoringServer::SaveMonitorDataToDB(int serverNo, int dataType, int avg, int vmin, int vmax)
+{
+	if (!_bDBConnected) return;
+
+	// 현재 년월로 테이블명 생성
+	time_t now = time(NULL);
+	struct tm t;
+	localtime_s(&t, &now);
+
+	char tableName[64];
+	sprintf_s(tableName, "monitorlog_%04d%02d", t.tm_year + 1900, t.tm_mon + 1);
+
+	char query[512];
+	sprintf_s(query,
+		"INSERT INTO `%s` (`logtime`, `serverno`, `type`, `avr`, `min`, `max`) "
+		"VALUES (NOW(), %d, %d, %d, %d, %d)",
+		tableName, serverNo, dataType, avg, vmin, vmax);
+
+	if (mysql_query(&_dbConn, query) != 0)
+	{
+		unsigned int errNo = mysql_errno(&_dbConn);
+
+		// 1146: Table doesn't exist → 템플릿으로 생성 후 재시도
+		if (errNo == 1146)
+		{
+			char createQuery[256];
+			sprintf_s(createQuery, "CREATE TABLE `%s` LIKE `monitorlog_template`", tableName);
+
+			if (mysql_query(&_dbConn, createQuery) != 0)
+			{
+				printf("[DB] Create table failed: %s\n", mysql_error(&_dbConn));
+				return;
+			}
+
+			printf("[DB] Created new table: %s\n", tableName);
+
+			// 재시도
+			if (mysql_query(&_dbConn, query) != 0)
+			{
+				printf("[DB] Insert retry failed: %s\n", mysql_error(&_dbConn));
+			}
+		}
+		else
+		{
+			printf("[DB] Insert failed: %s\n", mysql_error(&_dbConn));
+		}
+	}
+}
+
+//=============================================================
+// DB 저장 스레드 (10분마다)
+//=============================================================
+
+unsigned int __stdcall CMonitoringServer::DBWriteThread(LPVOID arg)
+{
+	CMonitoringServer* pServer = (CMonitoringServer*)arg;
+
+	// 10분 = 600초, 1초 단위로 Sleep하며 종료 체크
+	const int DB_WRITE_INTERVAL = 600;
+	int sleepCount = 0;
+
+	while (pServer->_bDBWriteAlive)
+	{
+		Sleep(1000);
+		sleepCount++;
+
+		if (sleepCount < DB_WRITE_INTERVAL)
+			continue;
+
+		sleepCount = 0;
+
+		// 누적 데이터 스냅샷 획득 후 리셋
+		MonitorDataAccum snapshot[dfMAX_SERVER_NO][dfMAX_DATA_TYPE];
+
+		AcquireSRWLockExclusive(&pServer->_accumLock);
+		memcpy(snapshot, pServer->_accumData, sizeof(snapshot));
+		for (int s = 0; s < dfMAX_SERVER_NO; s++)
+		{
+			for (int t = 0; t < dfMAX_DATA_TYPE; t++)
+			{
+				pServer->_accumData[s][t].Reset();
+			}
+		}
+		ReleaseSRWLockExclusive(&pServer->_accumLock);
+
+		// DB에 저장
+		int insertCount = 0;
+		for (int s = 0; s < dfMAX_SERVER_NO; s++)
+		{
+			for (int t = 0; t < dfMAX_DATA_TYPE; t++)
+			{
+				if (snapshot[s][t].count == 0) continue;
+
+				int avg = (int)(snapshot[s][t].sum / snapshot[s][t].count);
+				pServer->SaveMonitorDataToDB(s, t, avg, snapshot[s][t].vmin, snapshot[s][t].vmax);
+				insertCount++;
+			}
+		}
+
+		if (insertCount > 0)
+		{
+			printf("[DB] Saved %d monitor records\n", insertCount);
+		}
 	}
 
 	return 0;

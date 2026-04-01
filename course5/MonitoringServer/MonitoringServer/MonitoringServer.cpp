@@ -2,9 +2,11 @@
 #include <conio.h>
 #include "CMonitoringServer.h"
 #include "CSystemLog.h"
+#include "CrashDump.h"
 
 int main()
 {
+	CCrashDump::Init();
 	CSystemLog::GetInstance()->SetLogLevel(CSystemLog::LEVEL_DEBUG);
 
 	CMonitoringServer server;

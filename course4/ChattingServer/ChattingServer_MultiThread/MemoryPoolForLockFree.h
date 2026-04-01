@@ -106,6 +106,7 @@ namespace myMemorypool
 					}
 					newtop->owner = this;
 
+					InterlockedIncrement((long*)&_iUseCount);
 					return &newtop->d;
 				}
 

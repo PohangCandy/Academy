@@ -32,16 +32,22 @@ bool CLanServer::Start(int port, int maxSession)
 
 	_pSessionMap = new cSessionMap(maxSession);
 
-	_hWorkerThreadIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-	if (_hWorkerThreadIOCP == NULL) return false;
-
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
+
+	// 물리 코어 수 기반 스레드 설정 (논리 프로세서 / 2)
+	int numCores = (int)si.dwNumberOfProcessors / 2;
+	if (numCores < 1) numCores = 1;
+	int concurrency = numCores;      // IOCP 동시 실행 스레드 제한
+	int workerCount = numCores * 2;  // 워커 스레드 수 (I/O 대기 여유분 포함)
+
+	_hWorkerThreadIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, concurrency);
+	if (_hWorkerThreadIOCP == NULL) return false;
 
 	HANDLE hThread = NULL;
 	unsigned int uiThreadID;
 
-	for (int i = 0; i < (int)si.dwNumberOfProcessors; i++)
+	for (int i = 0; i < workerCount; i++)
 	{
 		hThread = (HANDLE)_beginthreadex(NULL, 0, WorkerThread, this, 0, &uiThreadID);
 		if (hThread == NULL) return false;
