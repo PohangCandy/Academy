@@ -6,434 +6,441 @@
 #include "cSessionMap.h"
 #include "Session.h"
 #include "CRingBuffer.h"
-#include  "CPacketRingBuffer.h"
+#include "CPacketRingBuffer.h"
 #include "OVERLAPPED_CONTEXT.h"
-#include "MessageQueue.h"
 #include "errlog.h"
 #include "CPacketForMultiThread.h"
 #include "CSystemLog.h"
 #include <ws2tcpip.h>
 
-//ÀÌ°Å Áö±İ chtting.cpp¿¡µµ ÀÖÀ½. Áßº¹ÀÓ.
-#define SERVERPORT (21501)
-#define BUFSIZE (1024 * 16)
-#define MSG_SIZE (8)
-#define WSASEND_MAX_BUFFER_COUNT (128)
-
-#define RELEASE_FLAGBIT 31
-#define RELEASE_FLAG      (1u << RELEASE_FLAGBIT)  
-#define RELEASE_FLAG_MASK (RELEASE_FLAG - 1)       
-
-//------------------------------------
-//¸Ş½ÃÁö ÇÁ·ÎÅäÄİ
-// Çì´õ 2Byte (±æÀÌ)
-// µ¥ÀÌÅÍ 8Byte(¿¡ÄÚ)
-//------------------------------------
-//struct Msg {
-//	short header = 0;
-//	char payload[MSG_SIZE] = {};
-//};
-
-
-
-bool CLanServer::Decode(PacketHeader* pHeader, char* pc)
+CLanServer::CLanServer()
+	: _hWorkerThreadIOCP(NULL), _listenSock(INVALID_SOCKET), _pSessionMap(nullptr)
 {
-	unsigned int checksum = 0;
-	unsigned char beforeparaP = 0;
-	unsigned char afterparaP = 0;
-	unsigned char encodeP = 0;
-
-
-	int payLoadSize = pHeader->Len;
-
-	int checkSumSize = sizeof(PacketHeader::CheckSum);
-	char* pPacketChar = &pc[sizeof(PacketHeader) - checkSumSize];
-
-	afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + 1);
-	encodeP = *pPacketChar;
-
-	*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + 1);
-	beforeparaP = afterparaP;
-
-	for (int i = 0; i < payLoadSize; i++)
-	{
-		pPacketChar = &pc[sizeof(PacketHeader) + i];
-
-		afterparaP = *pPacketChar ^ (encodeP + dfPACKET_KEY + (i + 2));
-		encodeP = *pPacketChar;
-
-		*pPacketChar = afterparaP ^ (beforeparaP + pHeader->RandKey + (i + 2));
-		beforeparaP = afterparaP;
-
-		checksum += *pPacketChar % 256;
-		checksum %= 256;
-	}
-
-
-
-	//º¹È£È­°¡ Á¦´ë·Î ÀÌ·ç¾îÁ³´ÂÁö È®ÀÎ
-	if (pHeader->CheckSum != checksum)
-	{
-		printf("[Decode] checksumÀÌ ÀÏÄ¡ÇÏÁö ¾ÊÀ½. º¹È£È­°¡ Á¦´ë·Î ÀÌ·ç¾îÁöÁö ¾ÊÀ½.\n");
-		return false;
-	}
-	return true;
 }
 
-bool CLanServer::Start()
+CLanServer::~CLanServer()
 {
-		// ----------------------------------------------------
-		// 1. ´©¼ö °¨Áö ÇÃ·¡±× ¹× º¸°í¼­ ¸ğµå ¼³Á¤
-		// ----------------------------------------------------
-		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+	Stop();
+}
 
-		// ¿À·ù/¾î¼³¼Ç/°æ°í º¸°í¼­¸¦ µğ¹ö±× Ãâ·Â Ã¢À¸·Î º¸³¿
-		_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
-		_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_DEBUG);
-		_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
-		// ----------------------------------------------------
+//------------------------------------------------------------
+// [ë³€ê²½] Acceptë¥¼ ë³„ë„ ìŠ¤ë ˆë“œë¡œ ë¶„ë¦¬ â†’ Start()ê°€ ì¦‰ì‹œ ë°˜í™˜
+// [ë³€ê²½] ìì²´ cSessionMap ì¸ìŠ¤í„´ìŠ¤ ìƒì„±
+//------------------------------------------------------------
+bool CLanServer::Start(int port, int maxSession)
+{
+	int retval;
 
-		int retval;
+	WSADATA wsa;
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
 
-		//À©¼Ó ÃÊ±âÈ­
-		WSADATA wsa;
-		if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
+	_pSessionMap = new cSessionMap(maxSession);
 
-		_hWorkerThreadIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-		if (_hWorkerThreadIOCP == NULL) return false;
+	_hWorkerThreadIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+	if (_hWorkerThreadIOCP == NULL) return false;
 
-		//CPU °³¼ö È®ÀÎ
-		SYSTEM_INFO si;
-		GetSystemInfo(&si);
+	SYSTEM_INFO si;
+	GetSystemInfo(&si);
 
-		//(cpu °³¼ö * 2)°³ÀÇ ³×Æ®¿öÅ© ÀÛ¾÷ÀÚ ½º·¹µå »ı¼º
-		HANDLE hThread;
-		unsigned int uiThreadID;
+	HANDLE hThread = NULL;
+	unsigned int uiThreadID;
 
-		for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
-			//for (int i = 0; i < 1; i++)
-		{
-			hThread = (HANDLE)_beginthreadex(
-				NULL,           // Security attributes (NULL = µğÆúÆ®)
-				0,              // Stack size (0 = µğÆúÆ®)
-				WorkerThread,   // Thread function
-				this,    // Argument list to be passed to thread function
-				0,              // Initial state (0 = Áï½Ã ½ÇÇà)
-				&uiThreadID     // Pointer to thread ID
-			);
+	for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
+	{
+		hThread = (HANDLE)_beginthreadex(NULL, 0, WorkerThread, this, 0, &uiThreadID);
+		if (hThread == NULL) return false;
+		CloseHandle(hThread);
+	}
 
-			if (hThread == NULL) return false;
+	// ëª¨ë‹ˆí„° ìŠ¤ë ˆë“œ
+	hThread = (HANDLE)_beginthreadex(NULL, 0, MonitorThread, this, 0, &uiThreadID);
+	if (hThread == NULL) return false;
+	CloseHandle(hThread);
 
-			CloseHandle(hThread);
-		}
+	// Listen ì†Œì¼“
+	_listenSock = socket(AF_INET, SOCK_STREAM, 0);
+	if (_listenSock == INVALID_SOCKET) { err_quit("LanServer socket()"); return false; }
 
-		// ¿öÄ¿ ½º·¹µå »ı¼º ·çÇÁ Á÷ÈÄ¿¡ Ãß°¡
-		unsigned int uiMonitorID;
-		_hMonitorThread = (HANDLE)_beginthreadex(
-			NULL, 0, MonitorThread, this, 0, &uiMonitorID
-		);
-		if (_hMonitorThread == NULL) return false;
-		CloseHandle(_hMonitorThread);
+	SOCKADDR_IN serveraddr;
+	ZeroMemory(&serveraddr, sizeof(serveraddr));
+	serveraddr.sin_family = AF_INET;
+	serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serveraddr.sin_port = htons(port);
+	retval = bind(_listenSock, (SOCKADDR*)&serveraddr, sizeof(serveraddr));
+	if (retval == SOCKET_ERROR) { err_quit("LanServer bind()"); return false; }
 
-		//socket()
-		SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
-		if (listen_sock == INVALID_SOCKET) err_quit("socket()");
+	retval = listen(_listenSock, SOMAXCONN);
+	if (retval == SOCKET_ERROR) { err_quit("LanServer listen()"); return false; }
 
-		//bind()
-		SOCKADDR_IN serveraddr;
-		ZeroMemory(&serveraddr, sizeof(serveraddr));
-		serveraddr.sin_family = AF_INET;
-		serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-		serveraddr.sin_port = htons(SERVERPORT);
-		retval = bind(listen_sock, (SOCKADDR*)&serveraddr, sizeof(serveraddr));
-		if (retval == SOCKET_ERROR) err_quit("bind()");
+	printf("[LanServer] Listening on port %d\n", port);
 
-		//listen()
-		retval = listen(listen_sock, SOMAXCONN);
-		if (retval == SOCKET_ERROR) err_quit("listen()");
-		printf("¼­¹ö ½ÃÀÛ Æ÷Æ® : %d\n", SERVERPORT);
+	// Accept ìŠ¤ë ˆë“œ (ë³„ë„ ìŠ¤ë ˆë“œë¡œ ë¶„ë¦¬)
+	hThread = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, &uiThreadID);
+	if (hThread == NULL) return false;
+	CloseHandle(hThread);
 
-		//µ¥ÀÌÅÍ Åë½Å¿¡ »ç¿ëÇÒ º¯¼ö
-		SOCKET client_sock;
-		SOCKADDR_IN clientaddr;
-		int addrlen;
-		DWORD recvbytes, flags;
-
-		cSessionMap* sessionMap = cSessionMap::GetSessionMap();
-
-
-		while (1)
-		{
-			//accept()
-			addrlen = sizeof(clientaddr);
-			client_sock = accept(listen_sock, (SOCKADDR*)&clientaddr, &addrlen);
-			if (client_sock == INVALID_SOCKET) {
-				err_display("accept()");
-				break;
-			}
-
-			_acceptCount.fetch_add(1, std::memory_order_relaxed); // ¡ç Ãß°¡
-
-			//RST¸¦ º¸³»±âÀ§ÇÑ ¼ÒÄÏ ¿É¼Ç
-			LINGER optval;
-			optval.l_onoff = 1;
-			optval.l_linger = 0;
-			retval = setsockopt(client_sock, SOL_SOCKET, SO_LINGER, (char*)&optval, sizeof(optval));
-			if (retval == SOCKET_ERROR) {
-				err_quit("setsockopt()");
-				break;
-			}
-
-			//Å¬¶óÀÌ¾ğÆ® IP Â÷´Ü
-			if (!OnConnectionRequest(inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port)))
-			{
-				closesocket(client_sock);
-				continue;
-			}
-
-			
-			//¿©±â¼­ ¼¼¼ÇÀÇ ³×Æ®¿öÅ© Á¤º¸¸¦ ³Ñ°Ü¼­ ¼¼ÆÃÇÏ°Ô ¸¸µç´Ù.
-			SOCKETINFO* ptr = sessionMap->AllocSessionptr(client_sock);
-
-			char ipStr[INET_ADDRSTRLEN];
-			inet_ntop(AF_INET, &clientaddr.sin_addr, ipStr, sizeof(ipStr));
-			ptr->_IP = ipStr;
-			ptr->_PORT = ntohs(clientaddr.sin_port);
-
-
-			uint64_t id_bit = ptr->_sessionKey.GetSessionId();
-			WSABUF wsabuf;
-			wsabuf.buf = ptr->_recvBuf->GetFrontBufferPtr();
-			wsabuf.len = ptr->_recvBuf->GetFreeSize();
-
-			//printf("[TCP ¼­¹ö] Å¬¶óÀÌ¾ğÆ® Á¢¼Ó : ID = %lld\n", id_bit);
-			OnClientJoin(clientaddr, ptr->_sessionKey);
-
-			//¼ÒÄÏ°ú ÀÔÃâ·Â ¿Ï·á Æ÷Æ® ¿¬°á
-			CreateIoCompletionPort((HANDLE)client_sock, _hWorkerThreadIOCP, (ULONG_PTR)ptr, 0);
-
-			//ºñµ¿±â ÀÔÃâ·Â ½ÃÀÛ
-			flags = 0;
-			if (!sessionMap->IncreaseSessionIO(ptr))
-			{
-				__debugbreak();
-			}
-			retval = WSARecv(client_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->_recvOverlapped, NULL);
-			if (retval == SOCKET_ERROR)
-			{
-				if (WSAGetLastError() != ERROR_IO_PENDING) {
-					err_display("WSARECV()");
-
-					//¿©±â¼­ IOCountÀÇ ÃÖ»óÀ§ ºñÆ®¸¦ SessionReleaseFlag·Î »ç¿ëÇÑ´Ù¸é??
-					//IOCount°¡ 0ÀÌ¸é ºñÆ®¿¡ 1³Ö±â
-					SessionKey origin = ptr->_sessionKey;
-					if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-					{
-						//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-						OnClientLeave(origin);
-						continue;
-					}
-				}
-			}
-		}
-
-
-
-		//À©¼Ó Á¾·á
-		WSACleanup();
-		return true;
+	return true;
 }
 
 void CLanServer::Stop()
 {
+	if (_listenSock != INVALID_SOCKET)
+	{
+		closesocket(_listenSock);
+		_listenSock = INVALID_SOCKET;
+	}
+	if (_pSessionMap != nullptr)
+	{
+		delete _pSessionMap;
+		_pSessionMap = nullptr;
+	}
 }
 
 int CLanServer::GetSessionCount()
 {
-    return _sessionCount;
+	return _sessionCount;
 }
 
-bool CLanServer::Disconnect(SessionKey sessionkey)
+//------------------------------------------------------------
+// Accept ìŠ¤ë ˆë“œ (ê¸°ì¡´ Start() ë‚´ë¶€ while ë£¨í”„ë¥¼ ìŠ¤ë ˆë“œë¡œ ë¶„ë¦¬)
+//------------------------------------------------------------
+unsigned int __stdcall CLanServer::AcceptThread(LPVOID arg)
 {
-	SOCKETINFO* ptr;
-	cSessionMap* sessionMap = cSessionMap::GetSessionMap();
+	CLanServer* pServer = (CLanServer*)arg;
 
-	ptr = sessionMap->GetSessionptr(sessionkey);
-
-	//¼¼¼ÇÀÌ ÀÌ¹Ì »èÁ¦µÈ °æ¿ì
-	if (ptr == nullptr)
-	{
-		return false;
-	}
-
-	//»èÁ¦°¡ ÀÏ¾î³­ ÈÄ Àß¸øµÈ ¼¼¼ÇÀ» ÀĞ¾î¿Â °æ¿ì
-	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
-	{
-		SessionKey origin = ptr->_sessionKey;
-		if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-		{
-			//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-			OnClientLeave(origin);
-		}
-		return false;
-	}
-
-	if (shutdown(ptr->_sock, SD_RECEIVE) != 0)
-	{
-		__debugbreak();
-		SessionKey origin = ptr->_sessionKey;
-		if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-		{
-			//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-			OnClientLeave(origin);
-		}
-		return false;
-	}
-
-	SessionKey origin = ptr->_sessionKey;
-	if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-	{
-		//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-		OnClientLeave(origin);
-	}
-    return true;
-}
-
-bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
-{
-	//1. ¼¼¼Ç °Ë»ö
-	SOCKETINFO* ptr;
-	cSessionMap* sessionMap = cSessionMap::GetSessionMap();
-
-	ptr = sessionMap->GetSessionptr(sessionkey);
-	if (ptr == nullptr)
-	{
-		//printf("[Network] »èÁ¦µÈ ¼¼¼ÇÀÔ´Ï´Ù~ Á¢±Ù ºÒ°¡´É~ ID = %lld \n", sessionkey.GetSessionId());
-		return false;
-	}
-
-	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
-	{
-		SessionKey origin = ptr->_sessionKey;
-		if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-		{
-			//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-			OnClientLeave(origin);
-		}
-		return false;
-	}
-
-	//---------------ÀÌ ¾Æ·¡¿¡¼­ ¼¼¼ÇÀÇ »èÁ¦°¡ ÀÌ·ïÁöÁö ¾ÊÀ½ÀÌ º¸ÀåµÊ.-------------
-
-	//2. ÀÎÄÚµù
-	//ÇÔ¼ö ¾È¿¡¼­ ³×Æ®¿öÅ© Çì´õ±îÁö ¼¼ÆÃ
-	cp->Encode();
-
-	//3. ¸µ¹öÆÛ »ğÀÔ
-	cp->AddRef();
-	ptr->_sendBuf->Lock();
-	int ret = ptr->_sendBuf->Enqueue(cp);
-
-	if (ret == 0)
-	{
-		printf("[Network]  Enqueue ½ÇÆĞ\n");
-		__debugbreak();
-	}
-
-	//¿©±â¿¡¼­ SessionÀÇ Send¸¦ ¹ß»ı½ÃÄÑ¾ß SessionÀÌ »èÁ¦µÇÁö ¾Ê´Â´Ù.
-	//Å¬¶óÀÌ¾ğÆ® Á¤º¸ ¾ò±â
+	SOCKET client_sock;
 	SOCKADDR_IN clientaddr;
-	int addrlen = sizeof(clientaddr);
-	getpeername(ptr->_sock, (SOCKADDR*)&clientaddr, &addrlen);
-	
-	//½ÇÆĞÇÏ´Â °æ¿ì
-	// ÀÌ¹Ì ³×Æ®¿öÅ©¿¡¼­ ¼Û½Å ¸µ¹öÆÛ¿¡ ÀÖ´Â ³»¿ëÀ» ¸ğµÎ Send ÇØ¹ö¸².
-	// ÀÌ¹Ì ³×Æ®¿öÅ©¿¡¼­ »èÁ¦µÈ ¼¼¼ÇÀÏ °¡´É¼º? = 0
-	// getSessionptrÀ» ÇÏ¸é¼­ ReleaseFlag ºñ±³¿Í IOCount Áõ°¡¸¦ ÁøÇàÇÏ¿´À¸¹Ç·Î, ±×·² °¡´É¼º 0
-	if (!CanSend(ptr))
-	{
-		//__debugbreak();
-		SessionKey origin = ptr->_sessionKey;
-		if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-		{
-			//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì°¡ ³ª¿Í¼± ¾ÈµÊ.
-			//³×Æ®¿öÅ©°¡ ¼Û½Å ÁßÀÌ¹Ç·Î IOÁõ°¡½ÃÅ´
-			__debugbreak();
-			OnClientLeave(origin);
-		}
-		ptr->_sendBuf->UnLock();
-		return true;
-	}
-
-	if (!SendPost(clientaddr, ptr))
-	{
-		//¾È¿¡¼­ ¼¼¼Ç »èÁ¦°¡ ÀÏ¾î³­ °æ¿ì ¹Ù·Î GQCS ´ë±â ·çÆ¾
-		printf("[Network] WsaSendSession ½ÇÆĞÇß¾î¿ä~ ID = %lld\n", ptr->_sessionKey.GetSessionId());
-		__debugbreak();
-		SessionKey origin = ptr->_sessionKey;
-		if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-		{
-			//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-			OnClientLeave(origin);
-		}
-		ptr->_sendBuf->UnLock();
-		return false;
-	}
-
-	//PostQueuedCompletionStatus(pIOCPHandle->netHcp, len, (ULONG_PTR)ptr, (LPWSAOVERLAPPED)&ptr->contentsOverlapped);
-	//ptr->UnLockSession();
-	SessionKey origin = ptr->_sessionKey;
-	if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-	{
-		//__debugbreak();
-		//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-		OnClientLeave(origin);
-	}
-	ptr->_sendBuf->UnLock();
-    return true;
-}
-
-int CLanServer::getAcceptTPS()
-{
-    return _acceptTPS;
-}
-
-int CLanServer::getRecvMessageTPS()
-{
-    return _recvMessageTPS;
-}
-
-int CLanServer::getSendMessageTPS()
-{
-    return _sendMessageTPS;
-}
-
-unsigned int __stdcall CLanServer::MonitorThread(void* arg)
-{
-	CLanServer* server = reinterpret_cast<CLanServer*>(arg);
+	int addrlen;
+	int retval;
+	DWORD recvbytes, flags;
 
 	while (1)
 	{
-		Sleep(1000);
+		addrlen = sizeof(clientaddr);
+		client_sock = accept(pServer->_listenSock, (SOCKADDR*)&clientaddr, &addrlen);
+		if (client_sock == INVALID_SOCKET)
+		{
+			break;
+		}
 
-		// 1ÃÊ¸¶´Ù Ä«¿îÅÍ¸¦ ÀĞ°í ÃÊ±âÈ­
-		int count = server->_acceptCount.exchange(0, std::memory_order_relaxed);
-		server->_acceptTPS.store(count, std::memory_order_relaxed);
+		pServer->_acceptCount.fetch_add(1, std::memory_order_relaxed);
 
-		printf("[Monitor] AcceptTPS : %d\n", count);
+		LINGER optval;
+		optval.l_onoff = 1;
+		optval.l_linger = 0;
+		retval = setsockopt(client_sock, SOL_SOCKET, SO_LINGER, (char*)&optval, sizeof(optval));
+		if (retval == SOCKET_ERROR)
+		{
+			closesocket(client_sock);
+			continue;
+		}
+
+		char ipStr[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &clientaddr.sin_addr, ipStr, sizeof(ipStr));
+
+		if (!pServer->OnConnectionRequest(ipStr, ntohs(clientaddr.sin_port)))
+		{
+			closesocket(client_sock);
+			continue;
+		}
+
+		SOCKETINFO* ptr = pServer->_pSessionMap->AllocSessionptr(client_sock);
+		if (ptr == nullptr)
+		{
+			closesocket(client_sock);
+			continue;
+		}
+
+		ptr->_IP = ipStr;
+		ptr->_PORT = ntohs(clientaddr.sin_port);
+
+		pServer->_sessionCount.fetch_add(1, std::memory_order_relaxed);
+
+		pServer->OnClientJoin(clientaddr, ptr->_sessionKey);
+
+		CreateIoCompletionPort((HANDLE)client_sock, pServer->_hWorkerThreadIOCP, (ULONG_PTR)ptr, 0);
+
+		if (!pServer->_pSessionMap->IncreaseSessionIO(ptr))
+		{
+			__debugbreak();
+		}
+
+		WSABUF wsabuf;
+		wsabuf.buf = ptr->_recvBuf->GetRearBufferPtr();
+		wsabuf.len = ptr->_recvBuf->DirectEnqueueSize();
+		flags = 0;
+		retval = WSARecv(client_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->_recvOverlapped, NULL);
+		if (retval == SOCKET_ERROR)
+		{
+			if (WSAGetLastError() != ERROR_IO_PENDING)
+			{
+				SessionKey origin = ptr->_sessionKey;
+				if (pServer->_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+				{
+					pServer->_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+					pServer->OnClientLeave(origin);
+				}
+			}
+		}
+	}
+
+	printf("[LanServer] AcceptThread ended\n");
+	return 0;
+}
+
+//------------------------------------------------------------
+// Worker ìŠ¤ë ˆë“œ - LANìš© (ë‹¨ìˆœ WORD Len í—¤ë”, ì•”í˜¸í™” ì—†ìŒ)
+//------------------------------------------------------------
+unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
+{
+	CLanServer* pServer = (CLanServer*)arg;
+	cSessionMap* sessionMap = pServer->_pSessionMap;
+
+	while (1)
+	{
+		DWORD cbTransferred;
+		SOCKETINFO* ptr;
+		OVERLAPPED_CONTEXT* lpOverlapped;
+		int retval = GetQueuedCompletionStatus(pServer->_hWorkerThreadIOCP, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
+
+		if (ptr == nullptr) continue;
+
+		if (cbTransferred == 0 || retval == 0)
+		{
+			SessionKey origin = ptr->_sessionKey;
+			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+			{
+				pServer->_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+				pServer->OnClientLeave(origin);
+			}
+			continue;
+		}
+
+		if (lpOverlapped->op == ERecv)
+		{
+			CRingBuffer* rb = ptr->_recvBuf;
+			if (rb->MoveRear(cbTransferred) == 0)
+			{
+				printf("[LanServer] Recv buffer full\n");
+				__debugbreak();
+			}
+
+			// NET íŒ¨í‚· íŒŒì‹± (5ë°”ì´íŠ¸ ì•”í˜¸í™” í—¤ë”)
+			printf("[WorkerThread] ERecv: %d bytes, session:%llu\n", cbTransferred, ptr->_sessionKey.GetSessionId());
+			while (rb->GetUseSize() >= dfPACKET_HEADERSIZE)
+			{
+				char tempHead[dfPACKET_HEADERSIZE];
+				rb->Peek(tempHead, dfPACKET_HEADERSIZE);
+				PacketHeader* header = (PacketHeader*)tempHead;
+
+				printf("[WorkerThread] Header: Code=0x%02X, Len=%d, RandKey=%d\n", header->Code, header->Len, header->RandKey);
+
+				// íŒ¨í‚· ì½”ë“œ ê²€ì¦
+				if (header->Code != dfPACKET_CODE)
+				{
+					LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] Invalid PacketCode: 0x%02X (expected: 0x%02X)",
+						ptr->_sessionKey.GetSessionId(), header->Code, dfPACKET_CODE);
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
+				}
+
+				if (header->Len > 500)
+				{
+					LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] Oversized Packet Len: %d",
+						ptr->_sessionKey.GetSessionId(), header->Len);
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
+				}
+
+				if (rb->GetUseSize() < dfPACKET_HEADERSIZE + header->Len)
+					break;
+
+				rb->MoveFront(dfPACKET_HEADERSIZE);
+
+				char tempBuf[500];
+				rb->Dequeue(tempBuf, header->Len);
+
+				CPacket* contentPacket = CPacket::Alloc();
+				contentPacket->PutData(tempBuf, header->Len);
+
+				// NET ë³µí˜¸í™”
+				printf("[WorkerThread] Decoding payload %d bytes...\n", header->Len);
+				if (!contentPacket->DecodeForNet(header, dfPACKET_KEY))
+				{
+					LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+						L"[Session:%llu] DecodeForNet failed (checksum mismatch)",
+						ptr->_sessionKey.GetSessionId());
+					contentPacket->SubRef();
+					pServer->Disconnect(ptr->_sessionKey);
+					break;
+				}
+
+				printf("[WorkerThread] Decode OK, forwarding to OnRecv\n");
+				contentPacket->AddRef();
+				pServer->OnRecv(ptr->_sessionKey, contentPacket);
+				contentPacket->SubRef();
+			}
+
+			if (!pServer->WsaRecvSession(ptr))
+				continue;
+
+			SessionKey origin = ptr->_sessionKey;
+			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+			{
+				pServer->_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+				pServer->OnClientLeave(origin);
+			}
+		}
+		else if (lpOverlapped->op == ESend)
+		{
+			ptr->_sendBuf->Lock();
+			int sendPacketNum = ptr->_sendPacketNum;
+			int srfront = ptr->_sendBuf->GetFront();
+			int srCapacity = ptr->_sendBuf->GetBufferSize();
+			CPacket** ppacket = ptr->_sendBuf->GetBufPtr();
+
+			for (int i = 0; i < sendPacketNum; i++)
+			{
+				ppacket[srfront]->SubRef();
+				srfront = (srfront + 1) % srCapacity;
+			}
+			ptr->_sendBuf->MoveFront(sendPacketNum);
+
+			if (InterlockedCompareExchange(&ptr->_IsSending, 0, 1) != 1)
+			{
+				__debugbreak();
+			}
+
+			if (pServer->CanSend(ptr))
+			{
+				if (!pServer->SendPost(ptr))
+				{
+					InterlockedExchange(&ptr->_IsSending, 0);
+					ptr->_sendBuf->UnLock();
+					SessionKey origin = ptr->_sessionKey;
+					if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+					{
+						pServer->_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+						pServer->OnClientLeave(origin);
+					}
+					continue;
+				}
+			}
+			ptr->_sendBuf->UnLock();
+
+			SessionKey origin = ptr->_sessionKey;
+			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+			{
+				pServer->_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+				pServer->OnClientLeave(origin);
+			}
+		}
+		else
+		{
+			printf("[LanServer] Unknown overlapped op\n");
+			__debugbreak();
+		}
 	}
 
 	return 0;
 }
 
+bool CLanServer::Disconnect(SessionKey sessionkey)
+{
+	SOCKETINFO* ptr = _pSessionMap->GetSessionptr(sessionkey);
+	if (ptr == nullptr) return false;
+
+	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
+	{
+		SessionKey origin = ptr->_sessionKey;
+		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+			OnClientLeave(origin);
+		}
+		return false;
+	}
+
+	shutdown(ptr->_sock, SD_BOTH);
+
+	SessionKey origin = ptr->_sessionKey;
+	if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+	{
+		_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+		OnClientLeave(origin);
+	}
+	return true;
+}
+
+bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
+{
+	SOCKETINFO* ptr = _pSessionMap->GetSessionptr(sessionkey);
+	if (ptr == nullptr) return false;
+
+	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
+	{
+		SessionKey origin = ptr->_sessionKey;
+		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+			OnClientLeave(origin);
+		}
+		return false;
+	}
+
+	// NET ì¸ì½”ë”© (5ë°”ì´íŠ¸ ì•”í˜¸í™” í—¤ë”)
+	cp->EncodeForNet(dfPACKET_CODE, dfPACKET_KEY);
+
+	cp->AddRef();
+	ptr->_sendBuf->Lock();
+	int ret = ptr->_sendBuf->Enqueue(cp);
+	if (!ret)
+	{
+		printf("[LanServer] SendBuf Enqueue failed\n");
+		__debugbreak();
+	}
+
+	if (!CanSend(ptr))
+	{
+		SessionKey origin = ptr->_sessionKey;
+		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+			OnClientLeave(origin);
+		}
+		ptr->_sendBuf->UnLock();
+		return true;
+	}
+
+	if (!SendPost(ptr))
+	{
+		SessionKey origin = ptr->_sessionKey;
+		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+			OnClientLeave(origin);
+		}
+		ptr->_sendBuf->UnLock();
+		return false;
+	}
+
+	SessionKey origin = ptr->_sessionKey;
+	if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+	{
+		_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+		OnClientLeave(origin);
+	}
+	ptr->_sendBuf->UnLock();
+	return true;
+}
 
 bool CLanServer::CanSend(SOCKETINFO* ptr)
 {
-	// ÀÌ¹Ì ´©±º°¡ Send ÁßÀÌ¸é Àı´ë Çã¿ë X
 	if (InterlockedCompareExchange(&ptr->_IsSending, 1, 0) != 0)
 		return false;
 
-	// ³»°¡ Send ´ã´çÀÚ°¡ µÆ´Âµ¥ º¸³¾ °Ô ¾ø´Ù?
 	ptr->_sendBuf->Lock();
 	if (ptr->_sendBuf->GetUseSize() == 0)
 	{
@@ -441,328 +448,79 @@ bool CLanServer::CanSend(SOCKETINFO* ptr)
 		ptr->_sendBuf->UnLock();
 		return false;
 	}
-
 	ptr->_sendBuf->UnLock();
 	return true;
 }
 
-//ÀÛ¾÷ÀÚ ½º·¹µå ÇÔ¼ö
-unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
+bool CLanServer::SendPost(SOCKETINFO* ptr)
 {
-	int retval;
+	CPacketRingBuffer* prb = ptr->_sendBuf;
 
-	cSessionMap* sessionMap = cSessionMap::GetSessionMap();
+	ptr->_sendOverlapped->op = ESend;
+	ZeroMemory(ptr->_sendOverlapped, sizeof(OVERLAPPED));
 
-	CLanServer* pServer = (CLanServer*)arg;
+	int remain = prb->GetUseSize();
+	if (remain == 0) { __debugbreak(); }
 
+	WSABUF wsabuf[dfSEND_WSABUF_MAX] = {};
+	int bufIndex = 0;
+	int rbFront = prb->GetFront();
+	int rbCapacity = prb->GetBufferSize();
+	CPacket** cpacket = prb->GetBufPtr();
 
-	while (1) {
-		//ºñµ¿±â ÀÔÃâ·Â ¿Ï·á ±â´Ù¸®±â
-		DWORD cbTransferred;
-		SOCKET client_sock;
-		SOCKETINFO* ptr;
-		OVERLAPPED_CONTEXT* lpOverlapped;
-		retval = GetQueuedCompletionStatus(pServer->_hWorkerThreadIOCP, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
+	if (remain > dfSEND_WSABUF_MAX) { __debugbreak(); }
 
-		//»èÁ¦µÈ ¼¼¼Ç¿¡ ´ëÇÑ ¿Ï·á ÅëÁö°¡ ¿Â´Ù¸é ¹«½ÃÇÏµµ·Ï ÇÑ´Ù.
-		if (ptr == nullptr) continue;
-
-		//Å¬¶óÀÌ¾ğÆ® Á¤º¸ ¾ò±â
-		SOCKADDR_IN clientaddr;
-		int addrlen = sizeof(clientaddr);
-		getpeername(ptr->_sock, (SOCKADDR*)&clientaddr, &addrlen);
-
-		//ºñµ¿±â ÀÔÃâ·Â °á°ú È®ÀÎ
-		if (cbTransferred == 0)
-		{
-			//__debugbreak();
-			//Å¬¶ó°¡ Á¾·á½ÅÈ£ FINº¸³¿.
-			//printf("[Network] Å¬¶óÀÌ¾ğÆ® Á¾·á ½ÅÈ£ ¼ö½Å: IP ÁÖ¼Ò = %s, Æ÷Æ®¹øÈ£ = %d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-			SessionKey origin = ptr->_sessionKey;
-			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-			{
-				pServer->OnClientLeave(origin);
-				continue;
-			}
-
-			continue;
-		}
-		else if (retval == 0)
-		{
-			__debugbreak();
-			DWORD lpcbTransfer, temp2;
-			bool isIOSuccess = WSAGetOverlappedResult(ptr->_sock, (LPWSAOVERLAPPED)&lpOverlapped, &lpcbTransfer, false, &temp2);
-			if (isIOSuccess && lpcbTransfer > 0)
-			{
-				//GQCS ½ÇÆĞ
-				printf("[Network] ");
-				err_display("WSAGetOverlappedResult()");
-
-				SessionKey origin = ptr->_sessionKey;
-				if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-				{
-					//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-					pServer->OnClientLeave(origin);
-					continue;
-				}
-			}
-			else
-			{
-				//IO ½ÇÆĞ
-				printf("[Network] IO ½ÇÆĞ\n");
-				SessionKey origin = ptr->_sessionKey;
-				if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-				{
-					//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-					pServer->OnClientLeave(origin);
-					continue;
-				}
-
-			}
-
-			continue;
-		}
-
-		if (lpOverlapped->op == ERecv)
-		{
-			//printf("[Network] Å¬¶óÀÌ¾ğÆ® ¼ö½Å, Æ÷Æ®¹øÈ£ = %d\n", ntohs(clientaddr.sin_port));
-
-			CRingBuffer* rb = ptr->_recvBuf;
-			if (rb->MoveRear(cbTransferred) == 0)
-			{
-				//¼ö½Å ¸µ¹öÆÛ°¡ °¡µæÂ÷¼­ ´õÀÌ»ó µ¥ÀÌÅÍ¸¦ ¹ŞÀ» ¼ö ¾ø´Â »óÈ²
-				//cpu 100%ÀÎÁö È®ÀÎÇÏ±â -> ¾Æ´Ï¶ó¸é ·ÎÁ÷ ¿À·ù, ¸ÂÀ» °æ¿ì AcceptThreadÀÇ ºÎÇÏ ÁÙÀÏ ¼ö ÀÖ´Â ¹æ¹ı °í·ÁÇØ¾ß ÇÔ.
-				printf("[Network] ¼ö½Å ¸µ¹öÆÛ ²Ë Ã¡À½.\n");
-				__debugbreak();
-			}
-
-			//Recv ¹öÆÛ¿¡ ÀÖ´Â ³»¿ë ÀĞ¾î¼­, send¸µ¹öÆÛ¿¡ ´ã±â
-
-			//ÀÌÁ¦ ¸Ş½ÃÁö ±æÀÌ ´ÜÀ§·Î ÀĞ¾î¼­ ÄÁÅÙÃ÷ ½º·¹µå¿¡ ³Ñ°Ü¾ß ÇÑ´Ù.
-			//±×·¡¾ß ¸Ş½ÃÁö ¼ø¼­°¡ º¸ÀåµÊ.
-			//¼ö½Å ¸µ¹öÆÛ¿¡ ÀÖ´Â µ¥ÀÌÅÍ Áß Çì´õ ±æÀÌ¸¸Å­ ÀÖ´Â ¸Ş½ÃÁö´Â ¸ğµÎ ÀĞ¾î¼­ Ã³¸®
-			//------------------------------------------------------
-			// 1. ¸µ ¹öÆÛ¿¡¼­ Dequeue
-			// ¸ÕÀú ¸Ş½ÃÁö ±æÀÌ¸¸Å­ ÀĞÀ» ÈÄ, ÇØ´ç ¸Ş½ÃÁö ±æÀÌ¸¦ Dequeue
-			//------------------------------------------------------
-
-			//¸Ş½ÃÁö Çì´õ ¸ÕÀú ÀĞ±â
-			while (rb->GetUseSize() >= sizeof(PacketHeader))
-			{
-				//Çì´õ ÀĞÀ»¶§µµ ÀÓ½Ã ¹öÆÛ¿¡ ´ã¾Æ¼­ °¡Á®¿Í¾ß ÇÔ.
-				char tempHead[dfPACKET_HEADERSIZE];
-				rb->Peek(tempHead, dfPACKET_HEADERSIZE);
-				PacketHeader* header = (PacketHeader*)tempHead;
-
-				if (header->Code != dfPACKET_CODE)
-				{
-					LOG(L"Network", CSystemLog::LEVEL_ERROR,
-						L"[Session:%llu] [IP:%S] Invalid Packet Code: 0x%02X (expected: 0x%02X)",
-						ptr->_sessionKey.GetSessionId(),
-						ptr->_IP.c_str(),
-						header->Code,
-						dfPACKET_CODE);
-
-					pServer->Disconnect(ptr->_sessionKey);
-					break;
-				}
-
-				// ºñÁ¤»ó ÆĞÅ¶ Å©±â
-				if (header->Len > 500)
-				{
-					LOG(L"Network", CSystemLog::LEVEL_ERROR,
-						L"[Session:%llu] [IP:%S] Oversized Packet Len: %d",
-						ptr->_sessionKey.GetSessionId(),
-						ptr->_IP.c_str(),
-						header->Len);
-
-					pServer->Disconnect(ptr->_sessionKey);
-					break;
-				}
-
-				//¸Ş½ÃÁö ÆäÀÌ·Îµå ±æÀÌ ÀĞ±â
-				if (rb->GetUseSize() < dfPACKET_HEADERSIZE + header->Len)
-				{
-					break;
-				}
-				rb->MoveFront(dfPACKET_HEADERSIZE);
-
-				//¼ö½Å¿¡¼­ Copy°¡ ¹ß»ıÇÒ ¼ö ¹Û¿¡ ¾øÀ½.
-				//¸µ¹öÆÛ¿¡¼­ rear > frontÀÎ »óÈ²¿¡ ¸µ¹öÆÛ¿¡ 2°³·Î ³ª´²Á®ÀÖ´Â µ¥ÀÌÅÍ¸¦ ¾ÈÀüÇÏ°Ô ²¨³»¿À·Á¸é ¸µ¹öÆÛ ÇÔ¼ö¸¦ »ç¿ëÇØ¾ß ÇÔ.
-				char tempBuf[500];
-				rb->Dequeue(tempBuf, header->Len);
-
-				//³×Æ®¿öÅ© Çì´õ Á¦°ÅÇÑ ³ª¸ÓÁö ÄÁÅÙÃ÷¿¡°Ô ÆĞÅ¶¿¡ ´ã¾Æ¼­ ÄÁÅÙÃ÷¿¡ ³Ñ°ÜÁÖ±â
-				CPacket* contentPacket = CPacket::Alloc();
-				int ret = contentPacket->PutData(tempBuf, header->Len);
-				if (ret != header->Len)
-				{
-					printf("[Network] Á÷·ÄÈ­ ¹öÆÛ »ğÀÔ ¿À·ù: ¿äÃ» %d, ½ÇÁ¦ %d\n", header->Len, ret);
-					__debugbreak();
-				}
-
-				//µğÄÚµù
-				if (!contentPacket->Decode(header))
-				{
-					//µğÄÚµù ½ÇÆĞ
-					__debugbreak();
-				}
-
-				contentPacket->AddRef();
-				
-				pServer->OnRecv(ptr->_sessionKey, contentPacket);
-				contentPacket->SubRef();
-			}
-
-			//ÇöÀç ½º·¹µå¸¦ ´Ù½Ã Recv µî·ÏÇÏ±â
-			//printf("[Network] ´Ù½Ã recv ´ë±âÇÏ±â, Æ÷Æ®¹øÈ£ = %d\n", ntohs(clientaddr.sin_port));
-			if (!pServer->WsaRecvSession(clientaddr, ptr))
-			{
-				//¾È¿¡¼­ ¼¼¼Ç »èÁ¦°¡ ÀÏ¾î³­ °æ¿ì ¹Ù·Î GQCS ´ë±â ·çÆ¾
-				continue;
-			}
-
-			//GQCS Recv ¿Ï·áÅëÁö¿¡ ´ëÇÑ IO °¨¼Ò
-			SessionKey origin = ptr->_sessionKey;
-			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-			{
-				//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-				pServer->OnClientLeave(origin);
-				continue;
-			}
-		}
-		//ÇöÀç´Â »ç¿ëÇÏÁö ¾Ê´Â´Ù.
-		// ³ªÁß¿¡ SendPacketÀÌ³ª GetPacket¿¡¼­ ¸µ¹öÆÛ¿¡ Á÷Á¢ Á¢±ÙÇÏ°Ô ¸¸µé°æ¿ì »ç¿ëÇØº»´Ù. 
-		//ÄÁÅÙÃ÷ ½º·¹µå·ÎºÎÅÍ ¿Ï·á ÅëÁö¸¦ ¹ŞÀº °æ¿ì
-		//else if (lpOverlapped->op == EContents)
-		//{
-		//	//¼Û½Å ¸µ¹öÆÛ¿¡ ³²Àº µ¥ÀÌÅÍ¸¦ Send
-		//	if (!WsaSendSession(clientaddr, ptr))
-		//	{
-		//		//¾È¿¡¼­ ¼¼¼Ç »èÁ¦°¡ ÀÏ¾î³­ °æ¿ì ¹Ù·Î GQCS ´ë±â ·çÆ¾
-		//		continue;
-		//	}
-
-		//}
-		else if (lpOverlapped->op == ESend)
-		{
-			//¶ô Ç®±âÀü¿¡ SendÇÑ Å©±â¸¸Å­ ¼Û½Å ¹öÆÛ¿¡¼­ movefront
-			//long l = 0;
-			//InterlockedExchange(&l, 1);
-			ptr->_sendBuf->Lock();
-			int sendPacketNum = ptr->_sendPacketNum;
-			int srfront = ptr->_sendBuf->GetFront();
-			int cpysrfront = srfront;
-			int srCapacity = ptr->_sendBuf->GetBufferSize();
-			CPacket** ppacket = ptr->_sendBuf->GetBufPtr();
-
-			//ÆĞÅ¶ ÇØÁ¦
-			for (int i = 0; i < sendPacketNum; i++)
-			{
-				ppacket[cpysrfront]->SubRef();
-				cpysrfront = (cpysrfront + 1) % srCapacity;
-			}
-
-			//ptr->GetSessionLock();
-			ptr->_sendBuf->MoveFront(sendPacketNum);
-			//ptr->UnLockSession();
-			
-			//¼Û½Å ¿Ï·á, ¼Û½Å ÇÃ·¡±× ÇØÁ¦
-			if (InterlockedCompareExchange(&ptr->_IsSending, 0, 1) != 1)
-			{
-				printf("Send ÁßÃ¸ ¹ß»ı, ¼¼¼Ç ID = %llu\n", ptr->_sessionKey.GetSessionId());
-				__debugbreak();
-			}
-
-			//ptr->GetSessionLock();
-			//¼Û½Å ¸µ¹öÆÛ¿¡ ³²Àº µ¥ÀÌÅÍ¸¦ Send
-			if (pServer->CanSend(ptr))
-			{
-				if (!pServer->SendPost(clientaddr, ptr))
-				{
-					// SendPost ½ÇÆĞ ½Ã _IsSending ¿øº¹
-					InterlockedExchange(&ptr->_IsSending, 0);
-					ptr->_sendBuf->UnLock();
-
-					//¿Ï·áµÈ WSASend¿¡ ´ëÇÑ DecreaseIO´Â ¹İµå½Ã ÇØÁà¾ß ÇÔ
-					SessionKey origin = ptr->_sessionKey;
-					if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-					{
-						pServer->OnClientLeave(origin);
-					}
-					continue;
-				}
-			}
-
-			ptr->_sendBuf->UnLock();
-
-			//ptr->sendBuf->UnLockBuffer();
-			//ptr->UnLockSession();
-
-			//GQCS Send ¿Ï·áÅëÁö¿¡ ´ëÇÑ IO °¨¼Ò
-			SessionKey origin = ptr->_sessionKey;
-			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-			{
-				//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-				pServer->OnClientLeave(origin);
-				continue;
-			}
-		}
-		else
-		{
-			printf("[Network] : lpOverlapped ¸Ş½ÃÁö Å¸ÀÔÀÌ ¸»µµ ¾ÈµÇ´Â°Ô ³ª¿È.\n");
-			__debugbreak();
-		}
+	for (int i = 0; i < remain; i++)
+	{
+		CPacket* frontpacket = cpacket[rbFront];
+		wsabuf[bufIndex].buf = frontpacket->GetBufferPtr();
+		wsabuf[bufIndex].len = frontpacket->GetDataSize();
+		bufIndex++;
+		rbFront = (rbFront + 1) % rbCapacity;
 	}
 
-	return 0;
+	if (!_pSessionMap->IncreaseSessionIO(ptr))
+		return false;
+
+	DWORD sendBytes = 0;
+	ptr->_sendPacketNum = remain;
+	int retval = WSASend(ptr->_sock, wsabuf, remain, &sendBytes, 0, (LPWSAOVERLAPPED)ptr->_sendOverlapped, NULL);
+
+	if (retval == SOCKET_ERROR)
+	{
+		if (WSAGetLastError() != WSA_IO_PENDING)
+		{
+			SessionKey origin = ptr->_sessionKey;
+			if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+			{
+				_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+				OnClientLeave(origin);
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
-
-bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
+bool CLanServer::WsaRecvSession(SOCKETINFO* ptr)
 {
-	int retval;
-
 	ptr->_recvOverlapped->op = ERecv;
 	ZeroMemory(ptr->_recvOverlapped, sizeof(OVERLAPPED));
-	
 
-	cSessionMap* sessionMap = cSessionMap::GetSessionMap();
-
-	//Direct·Î ³ÖÀ» ¼ö ÀÖ³Ä ¾ø³Ä¿¡ µû¶ó ¿©·¯ ¹öÆÛ·Î ³ª´²¼­ ¹Ş¾Æ¾ß ÇÔ.
 	int recvlen = ptr->_recvBuf->GetFreeSize();
+	int retval;
+
 	if (recvlen > ptr->_recvBuf->DirectEnqueueSize())
 	{
 		WSABUF wsabuf[2];
 		wsabuf[0].buf = ptr->_recvBuf->GetRearBufferPtr();
 		wsabuf[0].len = ptr->_recvBuf->DirectEnqueueSize();
-		int frontSize = ptr->_recvBuf->GetFreeSize() - ptr->_recvBuf->DirectEnqueueSize();
-		wsabuf[1].buf = ptr->_recvBuf->GetFrontBufferPtr() - frontSize;
-		wsabuf[1].len = frontSize;
+		wsabuf[1].buf = ptr->_recvBuf->GetBufPtr();
+		wsabuf[1].len = recvlen - ptr->_recvBuf->DirectEnqueueSize();
 		DWORD recvbytes;
 		DWORD flags = 0;
-		if (!sessionMap->IncreaseSessionIO(ptr))
-		{
-			__debugbreak();
-		}
+		if (!_pSessionMap->IncreaseSessionIO(ptr)) { __debugbreak(); }
 		retval = WSARecv(ptr->_sock, wsabuf, 2, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->_recvOverlapped, NULL);
-
-		if (retval == SOCKET_ERROR)
-		{
-			if (WSAGetLastError() != WSA_IO_PENDING)
-			{
-				//printf("[Network] ");
-				//err_display("WSARecv()");
-				SessionKey origin = ptr->_sessionKey;
-				if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-				{
-					//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-					OnClientLeave(origin);
-					return false;
-				}
-			}
-		}
-
 	}
 	else
 	{
@@ -771,202 +529,34 @@ bool CLanServer::WsaRecvSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
 		wsabuf.len = ptr->_recvBuf->DirectEnqueueSize();
 		DWORD recvbytes;
 		DWORD flags = 0;
-		if (!sessionMap->IncreaseSessionIO(ptr))
-		{
-			__debugbreak();
-		}
+		if (!_pSessionMap->IncreaseSessionIO(ptr)) { __debugbreak(); }
 		retval = WSARecv(ptr->_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->_recvOverlapped, NULL);
-
-		if (retval == SOCKET_ERROR)
-		{
-			if (WSAGetLastError() != WSA_IO_PENDING)
-			{
-				//printf("[Network] ");
-				//err_display("WSARecv()");
-				SessionKey origin = ptr->_sessionKey;
-				if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
-				{
-					//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
-					OnClientLeave(origin);
-					return false;
-				}
-			}
-		}
 	}
-
-	return true;
-}
-
-bool CLanServer::SendPost(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
-{
-	if (ptr == nullptr)
-	{
-		//ºÒ°¡´É
-		printf("[WsaSendSession] ¼Û½Å ½ÃµµÁßÀÎ ¼¼¼ÇÀÌ ÀÌ¹Ì »èÁ¦µÈ ¼¼¼Ç\n");
-		__debugbreak();
-	}
-
-	CPacketRingBuffer* prb = ptr->_sendBuf;
-	int retval;
-	//Send ÁßÀÌ ¾Æ´Ï¶ó¸é
-	//Send ¸µ¹öÆÛ¿¡ ÀÖ´Â ÀÖ´Â ³»¿ë ÀüºÎ Send
-
-	ptr->_sendOverlapped->op = ESend;
-	ZeroMemory(ptr->_sendOverlapped, sizeof(OVERLAPPED));
-
-	int remain = prb->GetUseSize();
-
-	if (remain == 0)
-	{
-		printf("[WsaSendSession] ¹ÌÄ£ Áö±İ 0Â¥¸® º¸³¾»·\n");
-		__debugbreak();
-	}
-
-	WSABUF wsabuf[WSASEND_MAX_BUFFER_COUNT] = { 0, };
-
-	int bufIndex = 0;
-	int rbFront = prb->GetFront();
-	int rbCpacity = prb->GetBufferSize();
-	CPacket** cpacket = prb->GetBufPtr();
-
-	if (remain > WSASEND_MAX_BUFFER_COUNT)
-	{
-		printf("[WsaSendSession] wsabuf ¿ë·®º¸´Ù sendlen°¡ ´õ Å« °æ¿ì\n");
-		__debugbreak();
-	}
-
-	for (int i = 0; i < remain; i++)
-	{
-		CPacket* frontpacket = cpacket[rbFront];
-
-		wsabuf[bufIndex].buf = frontpacket->GetBufferPtr();
-		wsabuf[bufIndex].len = frontpacket->GetDataSize();
-
-		bufIndex++;
-		rbFront = (rbFront + 1) % rbCpacity;
-	}
-
-	cSessionMap* sessionMap = cSessionMap::GetSessionMap();
-	if (!sessionMap->IncreaseSessionIO(ptr))
-	{
-		printf("[Network] ´©±º°¡ Á¤¸® ÁßÀÎ °ÍÀ¸·Î º¸ÀÓ. ¼Û½Å ÁøÇà ºÒ°¡. Æ÷Æ®¹øÈ£ = %d\n", ntohs(clientaddr.sin_port));
-		__debugbreak();
-		return false;
-	}
-
-	if (wsabuf[0].len == 0)
-	{
-		printf("[WsaSendSession] wsabuf ¿¡ ¾Æ¹« °ªµµ ¾Èµé¾î°¬À½.\n");
-		__debugbreak();
-	}
-
-	DWORD sendBytes = 0;
-	//printf("[Network] µ¥ÀÌÅÍ ¼Û½Å  Æ÷Æ®¹øÈ£ = %d\n", ntohs(clientaddr.sin_port));
-
-	ptr->_sendPacketNum = remain;
-	retval = WSASend(ptr->_sock, wsabuf, remain, (LPDWORD)&sendBytes, 0, (LPWSAOVERLAPPED)ptr->_sendOverlapped, NULL);
 
 	if (retval == SOCKET_ERROR)
 	{
 		if (WSAGetLastError() != WSA_IO_PENDING)
 		{
 			SessionKey origin = ptr->_sessionKey;
-			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+			if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{
-				//¼¼¼ÇÀÌ »èÁ¦µÈ °æ¿ì
+				_sessionCount.fetch_sub(1, std::memory_order_relaxed);
 				OnClientLeave(origin);
 				return false;
 			}
 		}
 	}
-
-
 	return true;
 }
 
-//void CLanServer::ReleaseSession(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
-//{
-//	cSessionMap* psm = cSessionMap::GetSessionMap();
-//	psm->FreeSession(ptr, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-//}
-//
-//bool CLanServer::DecreaseSessionIO(SOCKADDR_IN& clientaddr, SOCKETINFO* ptr)
-//{
-//	unsigned long oldVal;
-//	unsigned long newVal;
-//
-//	while (true)
-//	{
-//		oldVal = ptr->IOCount;
-//
-//		// ÀÌ¹Ì Release »óÅÂ¸é ¾Æ¹«°Íµµ ÇÏÁö ¾ÊÀ½
-//		if (oldVal & RELEASE_FLAG)
-//			return false;
-//
-//		unsigned long io = oldVal & RELEASE_FLAG_MASK;
-//		if (io == 0)
-//		{
-//			__debugbreak(); // underflow
-//			return false;
-//		}
-//
-//		newVal = oldVal - 1;
-//
-//		// IOCount °¨¼Ò ¼º°ø?
-//		if (InterlockedCompareExchange(
-//			(unsigned long*)&ptr->IOCount,
-//			newVal,
-//			oldVal) == oldVal)
-//		{
-//			break;
-//		}
-//	}
-//
-//	// °¨¼Ò ÈÄ IOCount == 0 ÀÌ°í ReleaseFlag == 0 ÀÌ¸é
-//	if ((newVal & RELEASE_FLAG_MASK) == 0)
-//	{
-//		// ReleaseFlag ¼¼ÆÃ ½Ãµµ
-//		if (InterlockedCompareExchange(
-//			(unsigned long*)&ptr->IOCount,
-//			newVal | RELEASE_FLAG,
-//			newVal) == newVal)
-//		{
-//			ReleaseSession(clientaddr, ptr);
-//			return false;
-//		}
-//	}
-//
-//	return true;
-//}
-//
-//bool CLanServer::IncreaseSessionIO(SOCKETINFO* ptr)
-//{
-//	unsigned long oldVal;
-//	unsigned long newVal;
-//
-//	while (true)
-//	{
-//		oldVal = ptr->IOCount;
-//
-//		// ÀÌ¹Ì Release »óÅÂ¸é IO Ãß°¡ ºÒ°¡
-//		if (oldVal & RELEASE_FLAG)
-//			return false;
-//
-//		unsigned long io = oldVal & RELEASE_FLAG_MASK;
-//		if (io == RELEASE_FLAG_MASK)
-//		{
-//			__debugbreak(); // overflow
-//			return false;
-//		}
-//
-//		newVal = oldVal + 1;
-//
-//		if (InterlockedCompareExchange(
-//			(unsigned long*)&ptr->IOCount,
-//			newVal,
-//			oldVal) == oldVal)
-//		{
-//			return true;
-//		}
-//	}
-//}
+unsigned int __stdcall CLanServer::MonitorThread(void* arg)
+{
+	CLanServer* server = reinterpret_cast<CLanServer*>(arg);
+	while (1)
+	{
+		Sleep(1000);
+		int count = server->_acceptCount.exchange(0, std::memory_order_relaxed);
+		server->_acceptTPS.store(count, std::memory_order_relaxed);
+	}
+	return 0;
+}

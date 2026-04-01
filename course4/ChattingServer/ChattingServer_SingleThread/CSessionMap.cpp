@@ -1,60 +1,35 @@
 #include "cSessionMap.h"
 #include "SessionKey.h"
 #include "Session.h"
-#include "MemoryPoolForLockFree.h"
-#include "CommonProtocol.h"
 #include "CPacketRingBuffer.h"
-
-//#include "CLockFreeStack.h"
-
-#define SESSION_ID_BIT (44) 
-#define SESSION_INDEX_BIT  (20)//¥Î√Ê «— πÈ∏∏?
-
-#define SESSION_ID_BITMASK ((1ULL << SESSION_ID_BIT) - 1)
-#define SESSION_INDEX_BITMASK  (((1ULL << SESSION_INDEX_BIT) - 1) << SESSION_ID_BITMASK)
+#include "CommonProtocol.h"
 
 #define RELEASE_FLAGBIT 31
-#define RELEASE_FLAG      (1u << RELEASE_FLAGBIT)  
-#define RELEASE_FLAG_MASK (RELEASE_FLAG - 1)    
+#define RELEASE_FLAG      (1u << RELEASE_FLAGBIT)
+#define RELEASE_FLAG_MASK (RELEASE_FLAG - 1)
 
-	//--------------------------------
-	// ººº«∞˙ ººº« ID∏¶ ¿˙¿Â«œ±‚ ¿ß«— ∏  
-	// ¿⁄∑·±∏¡∂ : πËø≠
-	// √÷¥Îƒ° : 8byte ≈©±‚
-	//--------------------------------
-	//SOCKETINFO* _sessionMap[1 << 24] = {};
-	//ººº«¿« ø¨∞·¿Ã ≤˜∞Â¥Ÿ∞Ì «ÿº≠ πŸ∑Œ ººº«¿ª ¡æ∑·Ω√≈∞¥¬∞‘ æ∆¥‘.
-	// IOƒ´øÓ∆√¿Ã ≤˜≥™æﬂ ººº«¿ª ¡æ∑·Ω√≈∞π«∑Œ ¥Î√Ê «— 10∏∏∏Ì πﬁ¿ª ºˆ ¿÷µµ∑œ ∏∏µÈæÓµ÷æﬂ
-	// ¿Ø¥œ≈©«— ººº« IDøÕ ¿Œµ¶Ω∫∏¶ ¡∂«’Ω√ƒ—æﬂ «œπ«∑Œ
-	// ººº« ID¥¬ long long -> 8πŸ¿Ã∆Æ = æ‡ 64∫Ò∆Æ
-	// ¿Œµ¶Ω∫∑Œ ¿˚¥Á»˜ «— 20∫Ò∆Æ ªÁøÎ, sessionid 44∫Ò∆Æ¥¬ 
-SOCKETINFO _sessionMap[dfSESSEIONMAPSIZE] = {};
+//------------------------------------------------------------
+// [Î≥ÄÍ≤ΩÏÇ¨Ìï≠] Ïã±Í∏ÄÌÑ¥ ‚Üí Ïù∏Ïä§ÌÑ¥Ïä§ Í∏∞Î∞ò
+// ÏÑ∏ÏÖò Î∞∞Ïó¥ÏùÑ Ï†ÑÏó≠Ïù¥ ÏïÑÎãå heapÏóê ÎèôÏ†Å Ìï†Îãπ
+// capacityÎ•º ÏÉùÏÑ±Ïûê Ïù∏ÏûêÎ°ú Î∞õÏïÑ ÏÑúÎ≤ÑÎ≥Ñ Ï†ÅÌï©Ìïú ÌÅ¨Í∏∞ ÏÇ¨Ïö©
+//------------------------------------------------------------
 
-//CLockFreeStack _deletedIdStack;
-
-cSessionMap* cSessionMap::sessionMapInstance = nullptr;
-
-cSessionMap* cSessionMap::GetSessionMap()
+cSessionMap::cSessionMap(int capacity)
+	: _capacity(capacity), _nextSessionID(0), _nextIndex(0)
 {
-	if (sessionMapInstance == nullptr)
-	{
-		sessionMapInstance = new cSessionMap;
-		atexit(Destroy);
-	}
-	return sessionMapInstance;
+	InitializeCriticalSection(&_sessionMap_cs);
+	_sessionArray = new SOCKETINFO[capacity];
 }
 
-void cSessionMap::Destroy()
+cSessionMap::~cSessionMap()
 {
-	delete sessionMapInstance;
-	sessionMapInstance = nullptr;
+	delete[] _sessionArray;
+	_sessionArray = nullptr;
+	DeleteCriticalSection(&_sessionMap_cs);
 }
-
 
 SOCKETINFO* cSessionMap::AllocSessionptr(SOCKET sock)
 {
-	//AcceptThread∞° ø©∑Ø∞≥¿÷¥Ÿ∏È ∏ ø° √ﬂ∞°«œ¥¬ ∞˙¡§µµ ∂Ù/∂Ù«¡∏Æ∏¶ ≈Î«ÿ ¿Ã∑Ô¡Ææﬂ «—¥Ÿ.
-
 	SessionKey session_key;
 	uint32_t id_Bit;
 	long long index_Bit;
@@ -65,47 +40,47 @@ SOCKETINFO* cSessionMap::AllocSessionptr(SOCKET sock)
 		index_Bit = _deletedSessionIndex.top();
 		_deletedSessionIndex.pop();
 
-		if (_sessionMap[index_Bit]._Active == true)
+		if (_sessionArray[index_Bit]._Active == true)
 		{
-			printf("[session Map] ªË¡¶µ«¡ˆ æ æ“¥¬µ• ∏ÆΩ∫∆Æø° «“¥Áµ . \n");
+			printf("[SessionMap] Active session in deleted stack.\n");
 			__debugbreak();
 		}
-
-		
 	}
 	else
 	{
-		index_Bit = _InterlockedIncrement64(&_nextIndex);
+		index_Bit = _nextIndex++;
+
+		if (index_Bit >= _capacity)
+		{
+			printf("[SessionMap] Session capacity exceeded! (capacity=%d)\n", _capacity);
+			LeaveCriticalSection(&_sessionMap_cs);
+			__debugbreak();
+			return nullptr;
+		}
 	}
-	id_Bit = _InterlockedIncrement64(&_nextSessionID);
-	
-	session_key = SessionKey::MakeKey(index_Bit, id_Bit);
-	_sessionMap[index_Bit].Inintialize(sock, session_key);
+	id_Bit = (uint32_t)(++_nextSessionID);
+
+	session_key = SessionKey::MakeKey((uint32_t)index_Bit, id_Bit);
+	_sessionArray[index_Bit].Inintialize(sock, session_key);
 	LeaveCriticalSection(&_sessionMap_cs);
 
-	return &_sessionMap[index_Bit];
+	return &_sessionArray[index_Bit];
 }
 
 void cSessionMap::FreeSession(SOCKETINFO* psession)
 {
 	SessionKey session_key;
-	uint64_t id_Bit;
 	uint32_t index_Bit;
 
 	session_key = psession->_sessionKey;
-	id_Bit = session_key.GetSessionId();
 	index_Bit = session_key.GetIndex();
 
-	_sessionMap[index_Bit]._Active = false;
+	_sessionArray[index_Bit]._Active = false;
 
 	closesocket(psession->_sock);
-	//printf("[Network] ≈¨∂Û¿Ãæ∆Æ ¡æ∑·: IP ¡÷º“ = %s, ∆˜∆Æπ¯»£ = %d\n", s_ip, i_port);
 
 	EnterCriticalSection(&_sessionMap_cs);
 	_deletedSessionIndex.push(index_Bit);
-
-	//printf("[Network] ≈¨∂Û¿Ãæ∆Æ ¡æ∑·: ID  = %lld\n", id_Bit);
-
 	LeaveCriticalSection(&_sessionMap_cs);
 }
 
@@ -114,19 +89,18 @@ SOCKETINFO* cSessionMap::GetSessionptr(SessionKey key)
 	uint32_t index = key.GetIndex();
 	uint64_t sessionId = key.GetSessionId();
 
-	SOCKETINFO* ptr = &_sessionMap[index];
+	if (index >= (uint32_t)_capacity)
+		return nullptr;
 
-	//∏’¿˙ IO∏¶ ø√∑¡º≠ «ÿ¡¶∏¶ ∏∑¥¬¥Ÿ
+	SOCKETINFO* ptr = &_sessionArray[index];
+
 	if (!IncreaseSessionIO(ptr))
 		return nullptr;
 
-	//IO∏¶ ø√∏∞ ªÛ≈¬ø°º≠ ººº« ID∏¶ ∞À¡ı
 	if (ptr->_sessionKey.GetSessionId() != sessionId)
 	{
-		//¥Ÿ∏• ººº«¿Ãπ«∑Œ IO µ«µπ∏Æ±‚
 		if (DecreaseSessionIO(ptr) == ReleaseResult::Released)
 		{
-			//ªı ººº«¿Ã ¿Ã ªÁ¿Ãø° IO∞° 0¿Ã µ» ∞ÊøÏ - «ÿ¡¶ √≥∏Æ
 			FreeSession(ptr);
 		}
 		return nullptr;
@@ -145,20 +119,18 @@ ReleaseResult cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 	{
 		oldVal = ptr->_IOCount;
 
-		// ¿ÃπÃ Release ªÛ≈¬∏È æ∆π´∞Õµµ «œ¡ˆ æ ¿Ω
 		if (oldVal & RELEASE_FLAG)
 			return ReleaseResult::Fail;
 
 		unsigned long io = oldVal & RELEASE_FLAG_MASK;
 		if (io == 0)
 		{
-			__debugbreak(); // underflow
+			__debugbreak();
 			return ReleaseResult::Fail;
 		}
 
 		newVal = oldVal - 1;
 
-		// IOCount ∞®º“ º∫∞¯?
 		if (InterlockedCompareExchange(
 			(unsigned long*)&ptr->_IOCount,
 			newVal,
@@ -168,22 +140,13 @@ ReleaseResult cSessionMap::DecreaseSessionIO(SOCKETINFO* ptr)
 		}
 	}
 
-	// ∞®º“ »ƒ IOCount == 0 ¿Ã∞Ì ReleaseFlag == 0 ¿Ã∏È
 	if ((newVal & RELEASE_FLAG_MASK) == 0)
 	{
-		// ReleaseFlag ºº∆√ Ω√µµ
 		if (InterlockedCompareExchange(
 			(unsigned long*)&ptr->_IOCount,
 			newVal | RELEASE_FLAG,
 			newVal) == newVal)
 		{
-			ptr->_sendBuf->Lock();
-			if (ptr->_sendBuf->GetUseSize() > 0)
-			{
-				__debugbreak();
-			}
-			ptr->_sendBuf->UnLock();
-
 			FreeSession(ptr);
 			return ReleaseResult::Released;
 		}
@@ -201,14 +164,13 @@ bool cSessionMap::IncreaseSessionIO(SOCKETINFO* ptr)
 	{
 		oldVal = ptr->_IOCount;
 
-		// ¿ÃπÃ Release ªÛ≈¬∏È IO √ﬂ∞° ∫“∞°
 		if (oldVal & RELEASE_FLAG)
 			return false;
 
 		unsigned long io = oldVal & RELEASE_FLAG_MASK;
 		if (io == RELEASE_FLAG_MASK)
 		{
-			__debugbreak(); // overflow
+			__debugbreak();
 			return false;
 		}
 
@@ -228,23 +190,3 @@ long long cSessionMap::GetnextSessionKey()
 {
 	return _nextSessionID;
 }
-
-cSessionMap::cSessionMap()
-{
-	InitializeCriticalSection(&_sessionMap_cs);
-}
-
-cSessionMap::~cSessionMap()
-{
-	DeleteCriticalSection(&_sessionMap_cs);
-}
-
-//void cSessionMap::GetMapLock()
-//{
-//	EnterCriticalSection(&_sessionMap_cs);
-//}
-//
-//void cSessionMap::UnLockMap()
-//{
-//	LeaveCriticalSection(&_sessionMap_cs);
-//}

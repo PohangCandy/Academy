@@ -132,9 +132,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ChattingServer.cpp" />
+    <ClCompile Include="CLanClient.cpp" />
     <ClCompile Include="CLanServer.cpp" />
-    <ClCompile Include="CLockFreeStack.cpp" />
-    <ClCompile Include="CMemoryViewer.cpp" />
+    <ClCompile Include="CMonitorClient.cpp" />
     <ClCompile Include="CPacketForMultiThread.cpp" />
     <ClCompile Include="CPacketRingBuffer.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
@@ -142,7 +142,6 @@
     <ClCompile Include="CSystemLog.cpp" />
     <ClCompile Include="errlog.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="MessageQueue.cpp" />
     <ClCompile Include="OVERLAPPED_CONTEXT.cpp" />
     <ClCompile Include="Session.cpp" />
   </ItemGroup>
@@ -150,8 +149,7 @@
     <ClInclude Include="ChattingServer.h" />
     <ClInclude Include="CLanClient.h" />
     <ClInclude Include="CLanServer.h" />
-    <ClInclude Include="CLockFreeStack.h" />
-    <ClInclude Include="CMemoryViewer.h" />
+    <ClInclude Include="CMonitorClient.h" />
     <ClInclude Include="CommonProtocol.h" />
     <ClInclude Include="CPacketForMultiThread.h" />
     <ClInclude Include="CPacketRingBuffer.h" />
@@ -161,7 +159,6 @@
     <ClInclude Include="errlog.h" />
     <ClInclude Include="MemoryPool.h" />
     <ClInclude Include="MemoryPoolForLockFree.h" />
-    <ClInclude Include="MessageQueue.h" />
     <ClInclude Include="OVERLAPPED_CONTEXT.h" />
     <ClInclude Include="Session.h" />
     <ClInclude Include="SessionKey.h" />

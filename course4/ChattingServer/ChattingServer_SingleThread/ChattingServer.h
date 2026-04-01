@@ -1,8 +1,13 @@
 #pragma once
 #include "CLanServer.h"
+#include "CMonitorClient.h"
+#include <Pdh.h>
+#include <Psapi.h>
 #include <map>
 #include <list>
 #include <unordered_map>
+
+#pragma comment(lib, "Pdh.lib")
 
 enum EServerMode {
 	None,
@@ -15,9 +20,9 @@ public:
 	void OnReuse();
 
 	INT64	_AccountNo;
-	WCHAR	_ID[20];	// null Æ÷ÇÔ
-	WCHAR	_Nickname[20];	// null Æ÷ÇÔ
-	char	_Token[64];		// ÀÎÁõÅäÅ«
+	WCHAR	_ID[20];	// null í¬í•¨
+	WCHAR	_Nickname[20];	// null í¬í•¨
+	char	_Token[64];		// ì„¸ì…˜í† í°
 
 	WORD	_SectorX = -1;
 	WORD	_SectorY = -1;
@@ -43,12 +48,18 @@ public:
 
 	bool CreateCharacter(SessionKey sessionkey);
 
+	//------------------------------------------------------------
+	// [ì¶”ê°€] ëª¨ë‹ˆí„°ë§ ì„œë²„ ì ‘ì†
+	//------------------------------------------------------------
+	bool ConnectMonitor(const char* monitorIP, int monitorPort, int serverNo);
+	CMonitorClient* GetMonitorClient() { return &_monitorClient; }
+
 private:
 
-	//ÄÁÅÙÃ÷ ½º·¹µå ÇÔ¼ö
+	//ì»¨í…ì¸  ìŠ¤ë ˆë“œ í•¨ìˆ˜
 	static unsigned int __stdcall ContentsThread(LPVOID arg);
 
-	//Å¸ÀÌ¸Ó ½º·¹µå ÇÔ¼ö
+	//íƒ€ì´ë¨¸ ìŠ¤ë ˆë“œ í•¨ìˆ˜
 	static unsigned int __stdcall TimerThread(LPVOID arg);
 
 	HANDLE hContentCompletionPort = {};
@@ -58,26 +69,31 @@ private:
 	bool _bIsTimerThreadAlive = true;
 
 	virtual bool OnConnectionRequest(std::string IP, int Port) override;
-	//< accept Á÷ÈÄ
-	//return false; //½Ã Å¬¶óÀÌ¾ğÆ® °ÅºÎ.
-	//return true; //½Ã Á¢¼Ó Çã¿ë
 
-	virtual void	OnClientJoin(SOCKADDR_IN clientaddr, SessionKey s) override;/// ±âÅ¸µîµî
-	//< Accept ÈÄ Á¢¼ÓÃ³¸® ¿Ï·á ÈÄ È£Ãâ.
-	//OnAccept(..)
+	virtual void	OnClientJoin(SOCKADDR_IN clientaddr, SessionKey s) override;
 
 	virtual void 	OnClientLeave(SessionKey s) override;
-	//< Release ÈÄ È£Ãâ
-	//OnRelease(..)
 
 	virtual void 	OnRecv(SessionKey s, CPacket* pPacket)  override;
-	//< ÆĞÅ¶ ¼ö½Å ¿Ï·á ÈÄ
-	//OnMessage(..)
-	//	virtual void OnSend(g_SessionCounter, int sendsize) = 0;           < ÆĞÅ¶ ¼Û½Å ¿Ï·á ÈÄ
-	//	virtual void OnWorkerThreadBegin() = 0;                    < ¿öÄ¿½º·¹µå GQCS ¹Ù·Î ÇÏ´Ü¿¡¼­ È£Ãâ
-	//	virtual void OnWorkerThreadEnd() = 0;                      < ¿öÄ¿½º·¹µå 1·çÇÁ Á¾·á ÈÄ
 
-	virtual void OnError(int errorcode, char*) override;
+	virtual void OnError(int errorcode, const char* msg) override;
 
 	EServerMode _serverMode = None;
+
+	//------------------------------------------------------------
+	// [ì¶”ê°€] ëª¨ë‹ˆí„°ë§ í´ë¼ì´ì–¸íŠ¸
+	//------------------------------------------------------------
+	CMonitorClient _monitorClient;
+
+	//------------------------------------------------------------
+	// [ì¶”ê°€] CPU/ë©”ëª¨ë¦¬ ìˆ˜ì§‘ìš©
+	//------------------------------------------------------------
+	PDH_HQUERY		_cpuQuery = NULL;
+	PDH_HCOUNTER	_cpuCounter = NULL;
+
+	//------------------------------------------------------------
+	// [ì¶”ê°€] TPS / ë©”ì‹œì§€í ì¹´ìš´í„°
+	//------------------------------------------------------------
+	alignas(64) long _updateCount = 0;		// ContentsThreadì—ì„œ ì²˜ë¦¬í•œ ë©”ì‹œì§€ ìˆ˜ (1ì´ˆë§ˆë‹¤ ë¦¬ì…‹)
+	alignas(64) long _msgQueueSize = 0;		// ì»¨í…ì¸  IOCP íì— ëŒ€ê¸° ì¤‘ì¸ ë©”ì‹œì§€ ìˆ˜
 };

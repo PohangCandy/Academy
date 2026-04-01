@@ -3,76 +3,92 @@
 #include "CPacketForMultiThread.h"
 #include "CommonProtocol.h"
 #include "MemoryPoolForLockFree.h"
+#include <ctime>
 
-//ÀÌ°Å Áö±İ lan.cpp¿¡µµ ÀÖÀ½. Áßº¹ÀÓ.
+//ì´ê±° ì¤‘ë³µ lan.cppì—ì„œë„ ì •ì˜. ì¤‘ë³µë¨.
 #define SERVERPORT (21501)
 #define BUFSIZE (1024 * 16)
 #define MSG_SIZE (8)
 
-//Ã¤ÆÃ ¼­¹ö¿¡ ·Î±×ÀÎÇÑ Ä³¸¯ÅÍ¸¦ ÀúÀåÇØµĞ ¸Ê
+//------------------------------------------------------------
+// ëª¨ë‹ˆí„°ë§ ë°ì´í„° íƒ€ì… (MonitorProtocol.h ì—ì„œ ë°œì·Œ)
+//------------------------------------------------------------
+enum {
+	dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN		= 30,
+	dfMONITOR_DATA_TYPE_CHAT_SERVER_CPU		= 31,
+	dfMONITOR_DATA_TYPE_CHAT_SERVER_MEM		= 32,
+	dfMONITOR_DATA_TYPE_CHAT_SESSION		= 33,
+	dfMONITOR_DATA_TYPE_CHAT_PLAYER			= 34,
+	dfMONITOR_DATA_TYPE_CHAT_UPDATE_TPS		= 35,
+	dfMONITOR_DATA_TYPE_CHAT_PACKET_POOL	= 36,
+	dfMONITOR_DATA_TYPE_CHAT_UPDATEMSG_POOL	= 37,
+};
+
+//ì±„íŒ… ì„œë²„ì— ë¡œê·¸ì¸í•œ ìºë¦­í„°ë¥¼ ë³´ê´€í•´ë‘˜ ë§µ
 std::unordered_map<uint64_t, Character*> umapCharacter;
 
-//Ä³¸¯ÅÍ ¸®½ºÆ®¸¦ ´ã¾ÆµĞ ¼½ÅÍ ¸Ê
+//ìºë¦­í„° ë¦¬ìŠ¤íŠ¸ë¥¼ ë‹´ì•„ë‘˜ ì„¹í„° ë§µ
 std::unordered_map<uint64_t, Character*> umapCharcterSector[50][50];
 
 myMemorypool::CMemoryPool<Character> characterpool(10000,true);
 
 ChattingServer::ChattingServer()
 {
-	//³×Æ®¿öÅ©, ÄÁÅÙÃ÷ ½º·¹µå ÀÔÃâ·Â ¿Ï·á Æ÷Æ® »ı¼º
+	//ë„¤íŠ¸ì›Œí¬, ì»¨í…ì¸  ìŠ¤ë ˆë“œ ì‚¬ì´ì˜ ì™„ë£Œ í¬íŠ¸ ìƒì„±
 	hContentCompletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 	if (hContentCompletionPort == NULL)
 	{
-		printf("[ChattingServer] ÄÁÅÙÃ÷ ½º·¹µå IOCP »ı¼º ½ÇÆĞ");
+		printf("[ChattingServer] ì»¨í…ì¸  ìŠ¤ë ˆë“œ IOCP ìƒì„± ì‹¤íŒ¨");
 		__debugbreak();
 		return;
 	}
 
-	//ServerAndHandle* sah = new ServerAndHandle;
-	//sah->handle = hContentCompletionPort;
-	//sah->thisptr = this;
-
-	//ÄÁÅÙÃ÷ ½º·¹µå »ı¼º
+	//ì»¨í…ì¸  ìŠ¤ë ˆë“œ ìƒì„±
 	unsigned int uiThreadID;
 	hContentThread = (HANDLE)_beginthreadex(
-		NULL,          
-		0,              
-		ContentsThread,   
-		this,    // ½º·¹µå¿¡°Ô thisÆ÷ÀÎÅÍ¿Í IOCPÇÚµé ÀÎÀÚ·Î Àü´Ş
-		0,              
-		&uiThreadID    
+		NULL,
+		0,
+		ContentsThread,
+		this,
+		0,
+		&uiThreadID
 		);
 
 		if (hContentThread == NULL)
 		{
-			printf("[ChattingServer] ÄÁÅÙÃ÷ ½º·¹µå »ı¼º ½ÇÆĞ");
+			printf("[ChattingServer] ì»¨í…ì¸  ìŠ¤ë ˆë“œ ìƒì„± ì‹¤íŒ¨");
 			__debugbreak();
 			return;
 		}
 
-		//Å¸ÀÌ¸Ó ½º·¹µå »ı¼º
+		//íƒ€ì´ë¨¸ ìŠ¤ë ˆë“œ ìƒì„±
 		hTimerThread = (HANDLE)_beginthreadex(
 			NULL,
 			0,
 			TimerThread,
-			this,    // ½º·¹µå¿¡°Ô thisÆ÷ÀÎÅÍ¿Í ÄÁÅÙÃ÷ ½º·¹µåÀÇ IOCPÇÚµé ÀÎÀÚ·Î Àü´Ş
+			this,
 			0,
 			&uiThreadID
 		);
 
 		if (hTimerThread == NULL)
 		{
-			printf("[ChattingServer] Å¸ÀÌ¸Ó ½º·¹µå »ı¼º ½ÇÆĞ");
+			printf("[ChattingServer] íƒ€ì´ë¨¸ ìŠ¤ë ˆë“œ ìƒì„± ì‹¤íŒ¨");
 			__debugbreak();
 			return;
 		}
 
 		_bIsTimerThreadAlive = true;
+
+		// PDH ì´ˆê¸°í™” (í”„ë¡œì„¸ìŠ¤ CPU ì‚¬ìš©ë¥ )
+		PdhOpenQuery(NULL, 0, &_cpuQuery);
+		PdhAddEnglishCounter(_cpuQuery, L"\\Process(ChattingServer_SingleThread)\\% Processor Time", 0, &_cpuCounter);
+		PdhCollectQueryData(_cpuQuery);
 }
 
 ChattingServer::~ChattingServer()
 {
-	//ÄÁÅÙÃ÷ ½º·¹µå Á¾·á À¯µµ
+	//ì»¨í…ì¸  ìŠ¤ë ˆë“œ ì¢…ë£Œ ì‹ í˜¸
 	PostQueuedCompletionStatus(
 		hContentCompletionPort,
 		0,
@@ -80,35 +96,35 @@ ChattingServer::~ChattingServer()
 		nullptr
 	);
 
-	//ÄÁÅÙÃ÷ ½º·¹µå Á¾·á ´ë±â
+	//ì»¨í…ì¸  ìŠ¤ë ˆë“œ ì¢…ë£Œ ëŒ€ê¸°
 	WaitForSingleObject(hContentThread, INFINITE);
 	CloseHandle(hContentThread);
 
-	//ÄÁÅÙÃ÷ IOCP ÇÚµé ¹İ³³
+	//ì»¨í…ì¸  IOCP í•¸ë“¤ ë°˜ë‚©
 	CloseHandle(hContentCompletionPort);
 
-	//Å¸ÀÌ¸Ó ½º·¹µå Á¾·á À¯µµ
+	//íƒ€ì´ë¨¸ ìŠ¤ë ˆë“œ ì¢…ë£Œ ì‹ í˜¸
 	_bIsTimerThreadAlive = false;
 
-	//Å¸ÀÌ¸Ó ½º·¹µå Á¾·á ´ë±â
+	//íƒ€ì´ë¨¸ ìŠ¤ë ˆë“œ ì¢…ë£Œ ëŒ€ê¸°
 	WaitForSingleObject(hTimerThread, INFINITE);
 	CloseHandle(hTimerThread);
 }
 
+//------------------------------------------------------------
+// [ì¶”ê°€] ëª¨ë‹ˆí„°ë§ ì„œë²„ ì ‘ì†
+//------------------------------------------------------------
+bool ChattingServer::ConnectMonitor(const char* monitorIP, int monitorPort, int serverNo)
+{
+	return _monitorClient.ConnectToMonitor(monitorIP, monitorPort, serverNo);
+}
+
 //----------------------
-// Æ¯Á¤ ´ë¿ªÀÇ IP¸¦ Â÷´ÜÇÏ°í ½ÍÀ»¶§, µé¾î¿Â IP¿Í ÀÏÄ¡ÇÏ¸é block
-// Æ¯Á¤ ´ë¿ªÀÇ IP¸¸ Çã¿ë½ÃÅ°°í ½ÍÀ»¶§, µé¾î¿Â IP¿Í ÀÏÄ¡ÇÏ¸é true
+// íŠ¹ì • ëŒ€ì—­ì˜ IPë¥¼ ì°¨ë‹¨í•˜ê³  ì‹¶ìœ¼ë©´, í•´ë‹¹ IPì™€ ë§¤ì¹­í•˜ë©´ block
+// íŠ¹ì • ëŒ€ì—­ì˜ IPë¥¼ í—ˆìš©í‚¤ê³  ì‹¶ìœ¼ë©´, í•´ë‹¹ IPì™€ ë§¤ì¹­í•˜ë©´ true
 //----------------------
 bool ChattingServer::OnConnectionRequest(std::string IP, int Port)
 {
-    //if (_serverMode == QA)
-    //{
-
-    //}
-    //else
-    //{
-
-    //}
     return true;
 }
 
@@ -117,43 +133,44 @@ void ChattingServer::OnClientJoin(SOCKADDR_IN clientaddr,SessionKey sessionkey)
 	CPacket* pPacket = CPacket::Alloc();
 	pPacket->AddRef();
 	*pPacket << en_PACKET_SS_Create_Character;
+	InterlockedIncrement(&_msgQueueSize);
 	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), (ULONG_PTR)sessionkey.GetSessionKey(), (LPWSAOVERLAPPED)pPacket))
 	{
-		printf("[OnClientJoin] ÄÁÅÙÃ÷ IOCP¿¡ PQCS½ÇÆĞ!\n");
+		InterlockedDecrement(&_msgQueueSize);
+		printf("[OnClientJoin] ì»¨í…ì¸  IOCPì— PQCSì‹¤íŒ¨!\n");
 		__debugbreak();
 	}
 }
 
 void ChattingServer::OnClientLeave(SessionKey sessionkey)
 {
-    //Ä³¸¯ÅÍ »èÁ¦
-	//Å¥¿¡ Ä³¸¯ÅÍ »èÁ¦ ¸Ş½ÃÁö¸¦ ³Ö¾î ÄÁÅÙÃ÷ ½º·¹µå°¡ ÇØ´ç Ä³¸¯ÅÍ¸¦ »èÁ¦ÇÏµµ·Ï ¸¸µç´Ù.
-	//¹Ì¸® »èÁ¦ÇØ¹ö¸®¸é ÄÁÅÙÃ÷ ½º·¹µå Å¥¿¡ ³²¾ÆÀÖ´Â ¸Ş½ÃÁö·Î ÀÎÇØ »èÁ¦µÈ Ä³¸¯ÅÍ¿¡ Á¢±ÙÇÏ°Ô µÇ¹ö¸± ¼ö ÀÖ´Ù.
-	//-> ¿¡ÄÚ´Â µû·Î ½º·¹µå°¡ ¾ø¾î¼­ ¹®Á¦°¡ ¾ø¾ú³×..
 	CPacket* pPacket = CPacket::Alloc();
 	pPacket->AddRef();
 	*pPacket << en_PACKET_SS_Session_Release;
-	//printf("[OnClientLeave] ID = %lld\n", sessionkey.GetSessionId());
+	InterlockedIncrement(&_msgQueueSize);
 	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), (ULONG_PTR)sessionkey.GetSessionKey(), (LPWSAOVERLAPPED)pPacket))
 	{
-		printf("[OnClientLeave] ÄÁÅÙÃ÷ IOCP¿¡ PQCS½ÇÆĞ!\n");
+		InterlockedDecrement(&_msgQueueSize);
+		printf("[OnClientLeave] ì»¨í…ì¸  IOCPì— PQCSì‹¤íŒ¨!\n");
 		__debugbreak();
 	}
 }
 
-//ÄÁÅÙÃ÷ ½º·¹µå ±ú¿ì±â
+//ì»¨í…ì¸  ìŠ¤ë ˆë“œë¡œ ë˜ì§€ê¸°
 void ChattingServer::OnRecv(SessionKey sessionkey, CPacket* pPacket)
 {
 	pPacket->AddRef();
 
+	InterlockedIncrement(&_msgQueueSize);
 	if (!PostQueuedCompletionStatus(hContentCompletionPort, pPacket->GetDataSize(), (ULONG_PTR)sessionkey.GetSessionKey(), (LPWSAOVERLAPPED)pPacket))
 	{
-		printf("[OnRecv] ÄÁÅÙÃ÷ IOCP¿¡ PQCS½ÇÆĞ!\n");
+		InterlockedDecrement(&_msgQueueSize);
+		printf("[OnRecv] ì»¨í…ì¸  IOCPì— PQCSì‹¤íŒ¨!\n");
 		__debugbreak();
 	}
 }
 
-void ChattingServer::OnError(int errorcode, char*)
+void ChattingServer::OnError(int errorcode, const char* msg)
 {
 
 }
@@ -163,7 +180,6 @@ Character* ChattingServer::FindCharacter(SessionKey sessionkey)
 	auto a = umapCharacter.find(sessionkey.GetSessionId());
 	if (a == umapCharacter.end())
 	{
-		//·Î±×ÀÎ ¿äÃ»Çß´Âµ¥ Ä³¸¯ÅÍ°¡ ¾ø´Â °æ¿ì? ÀÖÀ» ¼ö ¾øÀ½.
 		__debugbreak();
 		return nullptr;
 	}
@@ -177,26 +193,24 @@ bool ChattingServer::DeleteCharacter(SessionKey sessionkey)
 	if (pcharacter == nullptr)
 		return false;
 
-	// 1. ¼½ÅÍ ¸Ê¿¡¼­ Á¦°Å
+	// 1. ì„¹í„° ë§µì—ì„œ ì œê±°
 	if (pcharacter->_SectorY != 0xffff)
 	{
 		auto& sectorMap = umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX];
 		sectorMap.erase(pcharacter->_sessionkey.GetSessionId());
 	}
 
-	// 2. ÀüÃ¼ Ä³¸¯ÅÍ ¸Ê¿¡¼­ Á¦°Å
+	// 2. ì „ì²´ ìºë¦­í„° ë§µì—ì„œ ì œê±°
 	umapCharacter.erase(pcharacter->_sessionkey.GetSessionId());
 
-	// 3. ¸Ş¸ğ¸® Ç®·Î ¹İÈ¯
+	// 3. ë©”ëª¨ë¦¬ í’€ì— ë°˜í™˜
 	characterpool.Free(pcharacter);
 	return true;
 }
 
 bool ChattingServer::CreateCharacter(SessionKey sessionkey)
 {
-	//ÀÌ°Å ³×Æ®¿öÅ© ½º·¹µå°¡ µ¹·Áµµ µÇ³ª? °æÇÕ Á¶½ÉÇØ¾ß°Ú´Âµ¥
-	//ÄÁÅÙÃ÷°¡ ¸¸µé°Ô ÇØÁà¾ß°Ú´Âµ¥?
-	// 1. Ä³¸¯ÅÍ »ı¼º
+	// 1. ìºë¦­í„° ìƒì„±
 	Character* pcharacter = characterpool.Alloc();
 	pcharacter->OnReuse();
 	pcharacter->_sessionkey = sessionkey;
@@ -206,32 +220,32 @@ bool ChattingServer::CreateCharacter(SessionKey sessionkey)
 	return true;
 }
 
-//ÄÁÅÙÃ÷ ½º·¹µå ÇÔ¼ö
+//ì»¨í…ì¸  ìŠ¤ë ˆë“œ í•¨ìˆ˜
 unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 {
 	int retval;
 
 	ChattingServer* pServer = (ChattingServer*)arg;
 
-	//bool bremoveDieCharacter = false;
-
 	PacketHeader header;
 
 	while (1) {
-		//ºñµ¿±â ÀÔÃâ·Â ¿Ï·á ±â´Ù¸®±â
 		DWORD cbTransferred;
 		SOCKET client_sock;
-		
+
 		ULONG_PTR completionKey = 0;
 
 		CPacket* pPacket = nullptr;
 		retval = GetQueuedCompletionStatus(pServer->hContentCompletionPort, &cbTransferred, &completionKey, (LPOVERLAPPED*)&pPacket, INFINITE);
 
 
-		//ÄÁÅÙÃ÷ ½º·¹µå Á¾·á
+		InterlockedDecrement(&pServer->_msgQueueSize);
+		InterlockedIncrement(&pServer->_updateCount);
+
+		//ì»¨í…ì¸  ìŠ¤ë ˆë“œ ì¢…ë£Œ
 		if (cbTransferred == 0 && completionKey == 0 && pPacket == nullptr)
 		{
-			//¸ğµç ¼½ÅÍ Á¤¸®
+			//ëª¨ë“  ì„¹í„° í´ë¦¬ì–´
 			for (int i = 0; i < 50; i++)
 			{
 				for (int j = 0; j < 50; j++)
@@ -240,16 +254,14 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 				}
 			}
 
-			//¸ğµç Ä³¸¯ÅÍ Á¤¸®
+			//ëª¨ë“  ìºë¦­í„° ì‚­ì œ
 			for (auto it = umapCharacter.begin(); it != umapCharacter.end(); )
 			{
 				Character* pcharacter = it->second;
 				characterpool.Free(pcharacter);
 				++it;
 			}
-			//¸ğµç ¸Ê Á¤¸®
 			umapCharacter.clear();
-
 
 			break;
 		}
@@ -257,54 +269,37 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		{
 			while (1)
 			{
-				printf("[Contents] ºñµ¿±â ÇÔ¼ö¸¦ È£ÃâÇÏÁö ¾Ê°í´Â ³ª¿Ã ¼ö ¾ø´Â °æ¿ì\n");
+				printf("[Contents] ë¹„ë™ê¸° í•¨ìˆ˜ê°€ í˜¸ì¶œë˜ì§€ ì•Šê³ ë„ ì‹¤íŒ¨ í•  ìˆ˜ëŠ” ì—†ëŠ”ë°\n");
 			}
 		}
 
 		SessionKey sessionkey;
 		sessionkey.value = completionKey;
 
-		//if (pPacket->GetDataSize() <= 0)
-		//{
-		//	while (1)
-		//	{
-		//		printf("[Contents] ¾Æ¹«°Íµµ ¾ø´Â ÆĞÅ¶ÀÌ ³Ñ¾î¿È\n");
-		//	}
-		//}
-
 		WORD type;
 		*pPacket >> type;
-
-		
 
 		switch (type)
 		{
 		//------------------------------------------------------------
-		// Ã¤ÆÃ¼­¹ö ·Î±×ÀÎ ¿äÃ»
-		// 1. Ä³¸¯ÅÍ °Ë»ö
-		// 2. ÅäÅ« È®ÀÎ(¾Æ¸¶ ÃßÈÄ)
-		// 3. ·Î±×ÀÎ È®ÀÎ ¸Ş½ÃÁö Àü¼Û
+		// ì±„íŒ…ì„œë²„ ë¡œê·¸ì¸ ìš”ì²­
 		//------------------------------------------------------------
 		case en_PACKET_CS_CHAT_REQ_LOGIN:
 		{
-			//1. Ä³¸¯ÅÍ °Ë»ö
 			Character* pcharacter = pServer->FindCharacter(sessionkey);
 			if (pcharacter == nullptr)
 			{
 				__debugbreak();
 			}
 
-			*pPacket >> pcharacter->_AccountNo; 
+			*pPacket >> pcharacter->_AccountNo;
 			pPacket->GetData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));
 			pPacket->GetData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));
 			pPacket->GetData(pcharacter->_Token, sizeof(pcharacter->_Token));
 			pPacket->SubRef();
 
-			// 2. ÅäÅ« È®ÀÎ(¾Æ¸¶ ÃßÈÄ)
-			BYTE	Status = 1;			// Ã¤ÆÃ¼­¹ö ·Î±×ÀÎ ÀÀ´ä 0:½ÇÆĞ	1:¼º°ø
-			//¿©±â¿¡ ¹ß±ŞµÈ ÅäÅ«À» ºñ±³ÇÏ´Â ÀÛ¾÷ÀÌ µé¾î°¡°í ½ÇÆĞÇÏ¸é 0ÀÎµí? ÀÏ´Ü Áö±İÀº ¹«Á¶°Ç 1
+			BYTE	Status = 1;
 
-			// 3. ·Î±×ÀÎ È®ÀÎ ¸Ş½ÃÁö Àü¼Û
 			CPacket* packetToSend = CPacket::Alloc();
 			packetToSend->_MsgheaderSize = sizeof(PacketHeader);
 			packetToSend->PutData((char*)&header, sizeof(PacketHeader));
@@ -318,39 +313,26 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			if (!ret)
 			{
-				printf("[Contents] SendPacket ½ÇÆĞ, ¼¼¼Ç ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
-				//__debugbreak();
+				printf("[Contents] SendPacket ì‹¤íŒ¨, ì„¸ì…˜ ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
 			}
 			break;
 		}
 
-
 		//------------------------------------------------------------
-		// Ã¤ÆÃ¼­¹ö ¼½ÅÍ ÀÌµ¿ ¿äÃ»
-		// 1. ÇÃ·¹ÀÌ¾î°¡ ¸Ê¿¡ ÀÖ´ÂÁö È®ÀÎ
-		// 2. ¼½ÅÍ °á°ú ´ëÀÔ
-		//   a. ¿ø·¡ ÀÖ´ø ¼½ÅÍ¿¡¼­ ÇÃ·¹ÀÌ¾î »èÁ¦
-		//   b. »õ·Î¿î ¼½ÅÍ¿¡ ÇÃ·¹ÀÌ¾î ´ëÀÔ
-		// 3. ¼½ÅÍ ÀÌµ¿ °á°ú ¼Û½Å ÆĞÅ¶¿¡ »ğÀÔ
+		// ì±„íŒ…ì„œë²„ ì„¹í„° ì´ë™ ìš”ì²­
 		//------------------------------------------------------------
 		case en_PACKET_CS_CHAT_REQ_SECTOR_MOVE:
 		{
-
-			//1. ÇÃ·¹ÀÌ¾î°¡ ¸Ê¿¡ ÀÖ´ÂÁö È®ÀÎ
 			Character* pcharacter = pServer->FindCharacter(sessionkey);
 			if (pcharacter == nullptr)
 			{
 				__debugbreak();
 			}
-			// 2. ¼½ÅÍ °á°ú ´ëÀÔ
-
 
 			pcharacter->_lastRecvTime = GetTickCount64();
 
-			// Á¦ÀÏ Ã³À½ »ı¼ºµÈ ÇÃ·¹ÀÌ¾îÀÎ °æ¿ì ¼½ÅÍ ¸®½ºÆ® Á¦¿Ü °Ç³Ê¶Ù±â
 			if (pcharacter->_SectorX != 0xffff)
 			{
-				//2-a. ¿ø·¡ ÀÖ´ø ¼½ÅÍ¿¡¼­ ÇÃ·¹ÀÌ¾î »èÁ¦
 				auto a = umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].find(pcharacter->_sessionkey.GetSessionId());
 				if (a != umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].end())
 				{
@@ -358,7 +340,6 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 				}
 			}
 
-			//2-b. »õ·Î¿î ¼½ÅÍ¿¡ ÇÃ·¹ÀÌ¾î ´ëÀÔ
 			INT64	AccountNo;
 			*pPacket >> AccountNo;
 			*pPacket >> pcharacter->_SectorX;
@@ -366,7 +347,6 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			umapCharcterSector[pcharacter->_SectorY][pcharacter->_SectorX].emplace(pcharacter->_sessionkey.GetSessionId(), pcharacter);
 			pPacket->SubRef();
 
-			// 3.¼½ÅÍ ÀÌµ¿ °á°ú ¼Û½Å ÆĞÅ¶¿¡ »ğÀÔ
 			CPacket* packetToSend = CPacket::Alloc();
 			packetToSend->_MsgheaderSize = sizeof(PacketHeader);
 			packetToSend->PutData((char*)&header, sizeof(PacketHeader));
@@ -380,16 +360,13 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			packetToSend->SubRef();
 			if (!ret)
 			{
-				printf("[Contents] SendPacket ½ÇÆĞ, ¼¼¼Ç ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
-				//__debugbreak();
+				printf("[Contents] SendPacket ì‹¤íŒ¨, ì„¸ì…˜ ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
 			}
 
 			break;
 		}
 		//------------------------------------------------------------
-		// Ã¤ÆÃ¼­¹ö Ã¤ÆÃº¸³»±â ¿äÃ»
-		// 1. °èÁ¤À» ÇÃ·¹ÀÌ¾î ¸Ê¿¡¼­ È®ÀÎ
-		// 2. ¸Ş½ÃÁö¸¦ ÁÖÀ§ ¼½ÅÍ ÇÃ·¹ÀÌ¾î¿¡°Ô º¸³»±â
+		// ì±„íŒ…ì„œë²„ ì±„íŒ…ë³´ë‚´ê¸° ìš”ì²­
 		//------------------------------------------------------------
 		case en_PACKET_CS_CHAT_REQ_MESSAGE:
 		{
@@ -407,10 +384,8 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			*pPacket >> AccountNo;
 			*pPacket >> messageLen;
 
-			// ¹öÆÛ Å©±â °ËÁõ
 			if (messageLen > 500 || messageLen == 0)
 			{
-				// ºñÁ¤»ó ÆĞÅ¶ ¡æ ¿¬°á ²÷±â
 				pPacket->SubRef();
 				pServer->Disconnect(pcharacter->_sessionkey);
 				break;
@@ -443,8 +418,6 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 					bool ret = pServer->SendPacket(a.second->_sessionkey, packetToSend);
 					if (!ret)
 					{
-						//printf("[Contents] SendPacket ½ÇÆĞ, ¼¼¼Ç ID : %lld\n", pcharacter->_sessionkey.GetSessionId());
-						//__debugbreak();
 					}
 				}
 
@@ -453,12 +426,11 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			break;
 		}
-			
+
 
 		//------------------------------------------------------------
-		// ÇÏÆ®ºñÆ®
-		// 1.¸¶Áö¸· ¸Ş½ÃÁö ½Ã°£ °»½Å
-		//------------------------------------------------------------	
+		// í•˜íŠ¸ë¹„íŠ¸
+		//------------------------------------------------------------
 		case en_PACKET_CS_CHAT_REQ_HEARTBEAT:
 		{
 			pPacket->SubRef();
@@ -473,8 +445,8 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 			break;
 		}
 		//-----------------------------------------------------------
-		// Å¸ÀÌ¸Ó ½º·¹µå°¡ 
-		// ÇÃ·¹ÀÌ¾î ¸ÊÀ» »ìÇÉ ÈÄ 40ÃÊ ÀÌ»ó °æ°úµÇ¾î ÇÃ·¹ÀÌ¾î °¨Áö
+		// íƒ€ì´ë¨¸ ìŠ¤ë ˆë“œê°€
+		// í”Œë ˆì´ì–´ ë§ˆì§€ë§‰ ìˆ˜ì‹  í›„ 40ì´ˆ ì´ìƒ ê²½ê³¼ë˜ì–´ í”Œë ˆì´ì–´ í‚¥
 		//-----------------------------------------------------------
 		case en_PACKET_SS_TIMER_TICK:
 		{
@@ -495,16 +467,13 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 
 			for (SessionKey& sk : expiredList)
 			{
-				// ³×Æ®¿öÅ© ¼¼¼ÇºÎÅÍ ²÷¾î¾ß ÇÔ
-				// Disconnect ¡æ OnClientLeave ¡æ PQCS(Session_Release) ¡æ DeleteCharacter ¼ø¼­·Î Èå¸§
 				pServer->Disconnect(sk);
 			}
 
 			break;
 		}
 		//-----------------------------------------------------------
-		// ³×Æ®¿öÅ© ½º·¹µå°¡ ¾Ë·ÁÁÖ´Â »èÁ¦µÈ ¼¼¼Ç 
-		// ÄÁÅÙÃ÷¿¡¼­ ¼¼¼ÇÀ» »èÁ¦ÇÑ´Ù.
+		// ë„¤íŠ¸ì›Œí¬ ìŠ¤ë ˆë“œê°€ ì•Œë ¤ì£¼ëŠ” ì„¸ì…˜ì˜ ì¢…ë£Œ
 		//-----------------------------------------------------------
 		case en_PACKET_SS_Session_Release:
 		{
@@ -516,45 +485,104 @@ unsigned int __stdcall ChattingServer::ContentsThread(LPVOID arg)
 		{
 			pPacket->SubRef();
 			pServer->CreateCharacter(sessionkey);
-			//printf("[Contents] ¼¼¼Ç ID : %lld Ä³¸¯ÅÍ »ı¼º\n", sessionkey.GetSessionId());
 			break;
 		}
 
 		default:
-			//¸»µµ ¾ÈµÇ´Â Å¸ÀÔÀÌ ³ª¿Ô´Ù?
-			//Àß¸øµÈ ÆĞÅ¶ÀÌ µé¾î¿Ô°Å³ª ÀÎÄÚµù ·ÎÁ÷¿¡ ÈŞ¸Õ ¿¡·¯
 			__debugbreak();
 			break;
 		}
 	}
 
-	
+
 	return 0;
 }
 
-//Æ¯Á¤ ÁÖ±â¸¶´Ù ÄÁÅÙÃ÷ ½º·¹µå¸¦ ±ú¿ì´Â ¸Ş½ÃÁö¸¦ ¹ß»ı½ÃÅ°±â À§ÇÑ ½º·¹µå
-//¾ê°¡ ±×³É ÇÃ·¹ÀÌ¾î Á×¾ú´ÂÁö Ã¼Å©ÇÏ°í Flag¼¼¿î ´ÙÀ½¿¡ ±ú¿öµµ µÇ°Ú´Âµ¥?
+//------------------------------------------------------------
+// íƒ€ì´ë¨¸ ìŠ¤ë ˆë“œ
+// [ë³€ê²½] 1ì´ˆ ì£¼ê¸°ë¡œ ëª¨ë‹ˆí„°ë§ ë°ì´í„° ì „ì†¡ ì¶”ê°€
+//------------------------------------------------------------
 unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 {
 	ChattingServer* pServer = (ChattingServer*)arg;
-	CPacket* ppacket = CPacket::Alloc();
-	
-	*ppacket << (short)en_PACKET_SS_TIMER_TICK;
 
-	bool bWakeContentsThread = false;
+	int tickCount = 0;
 
 	while (pServer->_bIsTimerThreadAlive)
 	{
-		//__debugbreak();
-		Sleep(20000); // 20ÃÊ ÁÖ±â
-		//ppacket->AddRef();
+		Sleep(1000);
+		tickCount++;
 
-		//PostQueuedCompletionStatus(
-		//	pServer->hContentCompletionPort,
-		//	1,//byte
-		//	-1,//id
-		//	(LPOVERLAPPED)ppacket
-		//);
+		//------------------------------------------------------------
+		// [ì¶”ê°€] 1ì´ˆë§ˆë‹¤ ëª¨ë‹ˆí„°ë§ ë°ì´í„° ì „ì†¡
+		//------------------------------------------------------------
+		if (pServer->_monitorClient.IsConnected())
+		{
+			int now = (int)time(NULL);
+
+			// ì±„íŒ…ì„œë²„ ë™ì‘ ì—¬ë¶€
+			pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN, 1, now);
+
+			// ì±„íŒ…ì„œë²„ CPU ì‚¬ìš©ë¥ 
+			{
+				PDH_FMT_COUNTERVALUE counterVal;
+				PdhCollectQueryData(pServer->_cpuQuery);
+				PdhGetFormattedCounterValue(pServer->_cpuCounter, PDH_FMT_LONG, NULL, &counterVal);
+				pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_SERVER_CPU, (int)counterVal.longValue, now);
+			}
+
+			// ì±„íŒ…ì„œë²„ ë©”ëª¨ë¦¬ ì‚¬ìš©ëŸ‰ (MByte)
+			{
+				PROCESS_MEMORY_COUNTERS pmc;
+				GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
+				pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_SERVER_MEM, (int)(pmc.WorkingSetSize / (1024 * 1024)), now);
+			}
+
+			// ì±„íŒ…ì„œë²„ ì„¸ì…˜ ìˆ˜
+			pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_SESSION, pServer->GetSessionCount(), now);
+
+			// ì±„íŒ…ì„œë²„ ì¸ì¦ì„±ê³µ í”Œë ˆì´ì–´ ìˆ˜
+			pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_PLAYER, (int)umapCharacter.size(), now);
+
+			// ì±„íŒ…ì„œë²„ UPDATE TPS
+			{
+				int tps = InterlockedExchange(&pServer->_updateCount, 0);
+				pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_UPDATE_TPS, tps, now);
+			}
+
+			// ì±„íŒ…ì„œë²„ íŒ¨í‚·í’€ ì‚¬ìš©ëŸ‰
+			{
+				int useCount = (int)CPacket::packetPool.GetUseCount();
+				if (useCount < 0) useCount = 0;
+				pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_PACKET_POOL, useCount, now);
+			}
+
+			// ì±„íŒ…ì„œë²„ UPDATE MSG í ì‚¬ì´ì¦ˆ
+			{
+				int queueSize = pServer->_msgQueueSize;
+				if (queueSize < 0) queueSize = 0;
+				pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_UPDATEMSG_POOL, queueSize, now);
+			}
+		}
+
+		//------------------------------------------------------------
+		// 20ì´ˆë§ˆë‹¤ í•˜íŠ¸ë¹„íŠ¸ íƒ€ì´ë¨¸ í‹±
+		//------------------------------------------------------------
+		if (tickCount >= 20)
+		{
+			tickCount = 0;
+
+			CPacket* ppacket = CPacket::Alloc();
+			ppacket->AddRef();
+			*ppacket << (short)en_PACKET_SS_TIMER_TICK;
+
+			PostQueuedCompletionStatus(
+				pServer->hContentCompletionPort,
+				1,
+				(ULONG_PTR)-1,
+				(LPOVERLAPPED)ppacket
+			);
+		}
 	}
 	return 0;
 }
