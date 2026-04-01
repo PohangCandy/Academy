@@ -157,7 +157,7 @@ void SystemMonitor::Update()
     if (GetPerformanceInfo(&pi, sizeof(pi)))
     {
         SIZE_T availBytes = pi.PhysicalAvailable * pi.PageSize;
-        _availMem = (int)(availBytes / 1024); // KB
+        _availMem = (int)(availBytes / (1024 * 1024)); // MB
     }
 
 

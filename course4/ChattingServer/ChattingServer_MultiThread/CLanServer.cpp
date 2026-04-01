@@ -117,6 +117,7 @@ unsigned int __stdcall CLanServer::AcceptThread(LPVOID arg)
 		}
 
 		pServer->_acceptCount.fetch_add(1, std::memory_order_relaxed);
+		pServer->_totalAcceptCount.fetch_add(1, std::memory_order_relaxed);
 
 		LINGER optval;
 		optval.l_onoff = 1;

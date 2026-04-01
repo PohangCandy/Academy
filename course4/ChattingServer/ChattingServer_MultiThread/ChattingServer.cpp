@@ -575,9 +575,10 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 				"----------------------------------------------------------------------");
 
 			// TPS
+			long long totalAccept = pServer->getTotalAcceptCount();
 			sprintf_s(line, sizeof(line),
-				"  Update TPS: %d    Accept TPS: %d",
-				updateTPS, acceptTPS);
+				"  Update TPS: %d    Accept TPS: %d    Total Accept: %lld",
+				updateTPS, acceptTPS, totalAccept);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
 			// 패킷풀 + 캐릭터풀

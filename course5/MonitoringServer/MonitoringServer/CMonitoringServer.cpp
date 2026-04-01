@@ -6,6 +6,7 @@
 #include "SystemMonitor.h"
 #include <ws2tcpip.h>
 #include <cstring>
+#include <ctime>
 #include <conio.h>
 
 #define dfSERVER_NO_MACHINE 0
@@ -119,6 +120,7 @@ void CMonitoringServer::CLanServerImpl::OnRecv(SessionKey s, CPacket* pPacket)
 	default:
 		LOG(L"MonitoringServer", CSystemLog::LEVEL_ERROR,
 			L"[LAN] Unknown packet type: %d (Session:%llu)", type, s.GetSessionId());
+		_pOwner->_lanServer.Disconnect(s);
 		break;
 	}
 }
@@ -169,6 +171,7 @@ void CMonitoringServer::CNetServerImpl::OnRecv(SessionKey s, CPacket* pPacket)
 	default:
 		LOG(L"MonitoringServer", CSystemLog::LEVEL_ERROR,
 			L"[NET] Unknown packet type: %d (Session:%llu)", type, s.GetSessionId());
+		_pOwner->_netServer.Disconnect(s);
 		break;
 	}
 }
@@ -255,6 +258,7 @@ void CMonitoringServer::Handle_CS_MONITOR_TOOL_REQ_LOGIN(SessionKey netSession, 
 	}
 
 	CPacket* resPacket = CPacket::Alloc();
+	resPacket->AddRef();
 	resPacket->_MsgheaderSize = dfNET_HEADERSIZE;
 	char dummy[dfNET_HEADERSIZE] = {};
 	resPacket->PutData(dummy, dfNET_HEADERSIZE);
@@ -281,6 +285,7 @@ void CMonitoringServer::BroadcastToMonitorClients(BYTE serverNo, BYTE dataType, 
 	}
 
 	CPacket* pPacket = CPacket::Alloc();
+	pPacket->AddRef();
 	pPacket->_MsgheaderSize = dfNET_HEADERSIZE;
 	char dummy[dfNET_HEADERSIZE] = {};
 	pPacket->PutData(dummy, dfNET_HEADERSIZE);
@@ -293,7 +298,6 @@ void CMonitoringServer::BroadcastToMonitorClients(BYTE serverNo, BYTE dataType, 
 
 	for (auto& session : _authedNetSessions)
 	{
-		pPacket->AddRef();
 		if (_netServer.SendPacket(session, pPacket))
 		{
 			InterlockedIncrement(&_netBroadcastCount);
@@ -411,6 +415,12 @@ unsigned int __stdcall CMonitoringServer::DisplayThread(LPVOID arg)
 			"  NET Send/s: %ld   |   NET Fail/s: %ld", netBroadcast, netFail);
 		pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
+		int poolUse = CPacket::packetPool.GetUseCount();
+		int poolCap = CPacket::packetPool.GetCapacityCount();
+		sprintf_s(line, sizeof(line),
+			"  PacketPool Use: %d / %d", poolUse, poolCap);
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
 		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
 			"%-*s\n", LINE_WIDTH,
 			"----------------------------------------------------------------------");
@@ -420,6 +430,8 @@ unsigned int __stdcall CMonitoringServer::DisplayThread(LPVOID arg)
 		{
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, "");
 		}
+
+
 
 		// 콘솔에 한번에 출력
 		COORD origin = { 0, 0 };
@@ -455,7 +467,7 @@ unsigned int __stdcall CMonitoringServer::MonitorThread(LPVOID arg)
 		int netSend = SystemMonitor::GetNetworkSendBytes();
 		int availMem = SystemMonitor::GetAvailableMemory();
 
-		int timeStamp = GetTickCount64();
+		int timeStamp = (int)time(NULL);
 
 		// 3️ 브로드캐스트
 		pServer->BroadcastToMonitorClients(MACHINE_NO, dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL, cpu, timeStamp);

@@ -57,11 +57,13 @@ private:
 	std::atomic<int> _sessionCount{ 0 };
 	std::atomic<int> _acceptCount{ 0 };
 	std::atomic<int> _acceptTPS{ 0 };
+	std::atomic<long long> _totalAcceptCount{ 0 };
 	int _recvMessageTPS = 0;
 	int _sendMessageTPS = 0;
 
 public:
 	int getAcceptTPS() { return _acceptTPS; }
+	long long getTotalAcceptCount() { return _totalAcceptCount.load(std::memory_order_relaxed); }
 	int getRecvMessageTPS() { return _recvMessageTPS; }
 	int getSendMessageTPS() { return _sendMessageTPS; }
 };
