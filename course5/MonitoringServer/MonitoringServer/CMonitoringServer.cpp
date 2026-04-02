@@ -83,6 +83,14 @@ bool CMonitoringServer::Start()
 
 void CMonitoringServer::Stop()
 {
+	printf("[MonitoringServer] Shutting down...\n");
+
+	// 1. 신규 접속 차단 + 기존 세션 Disconnect + 워커 스레드 종료
+	_lanServer.Stop();
+	_netServer.Stop();
+	printf("[MonitoringServer] All sessions disconnected\n");
+
+	// 2. 내부 스레드 종료
 	_bDisplayAlive = false;
 	_bMonitorAlive = false;
 	_bDBWriteAlive = false;
@@ -106,10 +114,33 @@ void CMonitoringServer::Stop()
 		_hDBWriteThread = NULL;
 	}
 
-	DisconnectDB();
+	// 3. 남은 누적 데이터 DB에 저장
+	if (_bDBConnected)
+	{
+		int insertCount = 0;
+		AcquireSRWLockExclusive(&_accumLock);
+		for (int s = 0; s < dfMAX_SERVER_NO; s++)
+		{
+			for (int t = 0; t < dfMAX_DATA_TYPE; t++)
+			{
+				if (_accumData[s][t].count == 0) continue;
 
-	_lanServer.Stop();
-	_netServer.Stop();
+				int avg = (int)(_accumData[s][t].sum / _accumData[s][t].count);
+				SaveMonitorDataToDB(s, t, avg, _accumData[s][t].vmin, _accumData[s][t].vmax);
+				insertCount++;
+			}
+		}
+		ReleaseSRWLockExclusive(&_accumLock);
+
+		if (insertCount > 0)
+		{
+			printf("[DB] Saved %d remaining records before shutdown\n", insertCount);
+		}
+	}
+
+	// 4. DB 연결 해제
+	DisconnectDB();
+	printf("[MonitoringServer] Shutdown complete\n");
 }
 
 //=============================================================

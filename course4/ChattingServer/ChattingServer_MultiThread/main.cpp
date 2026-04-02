@@ -22,7 +22,7 @@ int main()
 	// Start()는 non-blocking (accept가 별도 스레드)
 	chatserver.Start(21501, 20000);
 
-	// 메인 스레드 대기
+	// 메인 스레드 대기 ('q' 키로 Graceful Shutdown)
 	while (true)
 	{
 		if (_kbhit())
@@ -33,6 +33,10 @@ int main()
 		}
 		Sleep(100);
 	}
+
+	printf("[ChatServer] Shutting down...\n");
+	chatserver.Stop();
+	printf("[ChatServer] Shutdown complete\n");
 
 	return 0;
 }

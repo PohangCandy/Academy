@@ -99,6 +99,13 @@ void cSessionMap::FreeSession(SOCKETINFO* psession)
 	LeaveCriticalSection(&_sessionMap_cs);
 }
 
+SOCKETINFO* cSessionMap::GetSessionptrByIndex(int index)
+{
+	if (index < 0 || index >= _capacity)
+		return nullptr;
+	return &_sessionArray[index];
+}
+
 SOCKETINFO* cSessionMap::GetSessionptr(SessionKey key)
 {
 	uint32_t index = key.GetIndex();

@@ -1,11 +1,11 @@
 #ifdef _WIN32_WINNT
 #undef _WIN32_WINNT
 #endif
-#define _WIN32_WINNT 0x0600 // Vista ÀÌ»ó (FreeMibTable »ç¿ë °¡´É)
+#define _WIN32_WINNT 0x0600 // Vista ï¿½Ì»ï¿½ (FreeMibTable ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
 
 #include "SystemMonitor.h"
 
-#include <winsock2.h> // iphlpapi.h º¸´Ù ¸ÕÀú Æ÷ÇÔÇÏ´Â °ÍÀÌ ¾ÈÀüÇÕ´Ï´Ù.
+#include <winsock2.h> // iphlpapi.h ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï´ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Õ´Ï´ï¿½.
 #include <ws2tcpip.h>
 #include <Windows.h>
 #include <iphlpapi.h>
@@ -26,7 +26,7 @@ static PDH_HCOUNTER g_nonPagedCounter = NULL;
 
 
 // ============================================================
-// static º¯¼ö
+// static ï¿½ï¿½ï¿½ï¿½
 // ============================================================
 
 bool SystemMonitor::_initialized = false;
@@ -50,7 +50,7 @@ int SystemMonitor::_availMem = 0;
 
 
 // ============================================================
-// À¯Æ¿
+// ï¿½ï¿½Æ¿
 // ============================================================
 
 static unsigned long long FileTimeToULL(const FILETIME& ft)
@@ -60,7 +60,7 @@ static unsigned long long FileTimeToULL(const FILETIME& ft)
 
 
 // ============================================================
-// Network (64bit, ¾ÈÀü)
+// Network (64bit, ï¿½ï¿½ï¿½ï¿½)
 // ============================================================
 
 static bool GetNetworkTotal(unsigned long long& outRecv, unsigned long long& outSend)
@@ -77,8 +77,13 @@ static bool GetNetworkTotal(unsigned long long& outRecv, unsigned long long& out
     {
         const MIB_IF_ROW2& row = table->Table[i];
 
-        // »óÅÂ UP ÀÎÅÍÆäÀÌ½º¸¸ (±âº» ÇÊÅÍ)
         if (row.OperStatus != IfOperStatusUp)
+            continue;
+        if (row.Type == IF_TYPE_SOFTWARE_LOOPBACK)
+            continue;
+        if (row.Type == IF_TYPE_TUNNEL)
+            continue;
+        if (row.InterfaceAndOperStatusFlags.FilterInterface)
             continue;
 
         totalRecv += row.InOctets;
@@ -105,9 +110,9 @@ bool SystemMonitor::Initialize()
     if (PdhAddCounter(g_query, L"\\Memory\\Pool Nonpaged Bytes", 0, &g_nonPagedCounter) != ERROR_SUCCESS)
         return false;
 
-    // ÃÊ±â »ùÇÃ 2¹ø (Áß¿ä)
+    // ï¿½Ê±ï¿½ ï¿½ï¿½ï¿½ï¿½ 2ï¿½ï¿½ (ï¿½ß¿ï¿½)
     PdhCollectQueryData(g_query);
-    Sleep(100);  // »ùÇÃ °£°Ý È®º¸
+    Sleep(100);  // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ È®ï¿½ï¿½
     PdhCollectQueryData(g_query);
 
     _lastTick = GetTickCount64();
@@ -175,9 +180,9 @@ void SystemMonitor::Update()
                 PDH_FMT_LARGE,
                 NULL,
                 &value) == ERROR_SUCCESS
-                && value.CStatus == ERROR_SUCCESS)   // »óÅÂ Ã¼Å© Ãß°¡
+                && value.CStatus == ERROR_SUCCESS)   // ï¿½ï¿½ï¿½ï¿½ Ã¼Å© ï¿½ß°ï¿½
             {
-                _nonPaged = (int)(value.largeValue / (1024 * 1024)); // KB
+                _nonPaged = (int)(value.largeValue / (1024 * 1024)); // MB
             }
         }
     }

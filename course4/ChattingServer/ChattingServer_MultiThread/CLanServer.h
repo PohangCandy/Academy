@@ -53,17 +53,28 @@ private:
 	HANDLE _hWorkerThreadIOCP;
 	SOCKET _listenSock;
 	cSessionMap* _pSessionMap;
+	int _maxSession = 0;
+	int _workerThreadCount = 0;
+
+	// 스레드 핸들 (종료 대기용)
+	static const int MAX_WORKER_THREADS = 64;
+	HANDLE _hWorkerThreads[MAX_WORKER_THREADS];
+	HANDLE _hAcceptThread = NULL;
+	HANDLE _hMonitorThread = NULL;
+	volatile bool _isRunning = false;
 
 	std::atomic<int> _sessionCount{ 0 };
 	std::atomic<int> _acceptCount{ 0 };
 	std::atomic<int> _acceptTPS{ 0 };
 	std::atomic<long long> _totalAcceptCount{ 0 };
+	alignas(64) volatile long _sendBufferFullCount = 0;
 	int _recvMessageTPS = 0;
 	int _sendMessageTPS = 0;
 
 public:
 	int getAcceptTPS() { return _acceptTPS; }
 	long long getTotalAcceptCount() { return _totalAcceptCount.load(std::memory_order_relaxed); }
+	long getSendBufferFullCount() { return InterlockedExchange(&_sendBufferFullCount, 0); }
 	int getRecvMessageTPS() { return _recvMessageTPS; }
 	int getSendMessageTPS() { return _sendMessageTPS; }
 };

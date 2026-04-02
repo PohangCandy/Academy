@@ -59,6 +59,9 @@ ChattingServer::ChattingServer()
 
 ChattingServer::~ChattingServer()
 {
+	// 모니터링 클라이언트 먼저 종료 (워커 스레드 정리 → purecall 방지)
+	_monitorClient.Stop();
+
 	// 타이머 스레드 종료 신호
 	_bIsTimerThreadAlive = false;
 
@@ -594,6 +597,12 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 			sprintf_s(line, sizeof(line),
 				"  Session Use: %d    Player: %d",
 				sessionCount, playerCount);
+			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
+			long sendBufFullDisconnect = pServer->getSendBufferFullCount();
+			sprintf_s(line, sizeof(line),
+				"  SendBuf Full Disconnect/s: %ld",
+				sendBufFullDisconnect);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos,

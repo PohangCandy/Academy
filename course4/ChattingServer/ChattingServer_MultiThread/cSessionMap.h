@@ -21,6 +21,7 @@ public:
 
 	SOCKETINFO* AllocSessionptr(SOCKET sock);
 	SOCKETINFO* GetSessionptr(SessionKey key);
+	SOCKETINFO* GetSessionptrByIndex(int index);
 	void FreeSession(SOCKETINFO* psession);
 
 	ReleaseResult DecreaseSessionIO(SOCKETINFO* ptr);

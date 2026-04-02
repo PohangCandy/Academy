@@ -30,28 +30,30 @@ bool CNetServer::Start(int port, int maxSession)
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
 
+	_maxSession = maxSession;
 	_pSessionMap = new cSessionMap(maxSession);
 
 	_hWorkerThreadIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 	if (_hWorkerThreadIOCP == NULL) return false;
 
+	_isRunning = true;
+
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
+	_workerThreadCount = (int)si.dwNumberOfProcessors * 2;
 
-	HANDLE hThread = NULL;
 	unsigned int uiThreadID;
+	memset(_hWorkerThreads, 0, sizeof(_hWorkerThreads));
 
-	for (int i = 0; i < (int)si.dwNumberOfProcessors * 2; i++)
+	for (int i = 0; i < _workerThreadCount; i++)
 	{
-		hThread = (HANDLE)_beginthreadex(NULL, 0, WorkerThread, this, 0, &uiThreadID);
-		if (hThread == NULL) return false;
-		CloseHandle(hThread);
+		_hWorkerThreads[i] = (HANDLE)_beginthreadex(NULL, 0, WorkerThread, this, 0, &uiThreadID);
+		if (_hWorkerThreads[i] == NULL) return false;
 	}
 
 	// 모니터 스레드
-	hThread = (HANDLE)_beginthreadex(NULL, 0, MonitorThread, this, 0, &uiThreadID);
-	if (hThread == NULL) return false;
-	CloseHandle(hThread);
+	_hMonitorThread = (HANDLE)_beginthreadex(NULL, 0, MonitorThread, this, 0, &uiThreadID);
+	if (_hMonitorThread == NULL) return false;
 
 	// Listen 소켓
 	_listenSock = socket(AF_INET, SOCK_STREAM, 0);
@@ -71,19 +73,76 @@ bool CNetServer::Start(int port, int maxSession)
 	printf("[NetServer] Listening on port %d\n", port);
 
 	// Accept 스레드
-	hThread = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, &uiThreadID);
-	if (hThread == NULL) return false;
-	CloseHandle(hThread);
+	_hAcceptThread = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, &uiThreadID);
+	if (_hAcceptThread == NULL) return false;
 
 	return true;
 }
 
 void CNetServer::Stop()
 {
+	// 1. 리슨소켓 닫기 → Accept 스레드 종료, 신규 접속 차단
 	if (_listenSock != INVALID_SOCKET)
 	{
 		closesocket(_listenSock);
 		_listenSock = INVALID_SOCKET;
+	}
+
+	// Accept 스레드 종료 대기
+	if (_hAcceptThread != NULL)
+	{
+		WaitForSingleObject(_hAcceptThread, INFINITE);
+		CloseHandle(_hAcceptThread);
+		_hAcceptThread = NULL;
+	}
+
+	// 2. 모든 기존 세션 Disconnect
+	if (_pSessionMap != nullptr)
+	{
+		for (int i = 0; i < _maxSession; i++)
+		{
+			SOCKETINFO* ptr = _pSessionMap->GetSessionptrByIndex(i);
+			if (ptr != nullptr && ptr->_Active)
+			{
+				Disconnect(ptr->_sessionKey);
+			}
+		}
+
+		// 세션이 모두 정리될 때까지 대기
+		int waitCount = 0;
+		while (_sessionCount.load() > 0 && waitCount < 50)
+		{
+			Sleep(100);
+			waitCount++;
+		}
+	}
+
+	// 3. 워커 스레드 종료 (PQCS로 종료 신호) + 실제 종료 대기
+	for (int i = 0; i < _workerThreadCount; i++)
+	{
+		PostQueuedCompletionStatus(_hWorkerThreadIOCP, 0, 0, NULL);
+	}
+	WaitForMultipleObjects(_workerThreadCount, _hWorkerThreads, TRUE, INFINITE);
+	for (int i = 0; i < _workerThreadCount; i++)
+	{
+		CloseHandle(_hWorkerThreads[i]);
+		_hWorkerThreads[i] = NULL;
+	}
+
+	// 4. 모니터 스레드 종료 대기
+	_isRunning = false;
+	if (_hMonitorThread != NULL)
+	{
+		WaitForSingleObject(_hMonitorThread, INFINITE);
+		CloseHandle(_hMonitorThread);
+		_hMonitorThread = NULL;
+	}
+
+	// 5. 리소스 정리
+	if (_hWorkerThreadIOCP != NULL)
+	{
+		CloseHandle(_hWorkerThreadIOCP);
+		_hWorkerThreadIOCP = NULL;
 	}
 	if (_pSessionMap != nullptr)
 	{
@@ -199,7 +258,8 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 		OVERLAPPED_CONTEXT* lpOverlapped;
 		int retval = GetQueuedCompletionStatus(pServer->_hWorkerThreadIOCP, &cbTransferred, (PULONG_PTR)&ptr, (LPOVERLAPPED*)&lpOverlapped, INFINITE);
 
-		if (ptr == nullptr) continue;
+		// PQCS(0, 0, NULL) 종료 신호
+		if (ptr == nullptr) break;
 
 		if (cbTransferred == 0 || retval == 0)
 		{
@@ -534,7 +594,7 @@ bool CNetServer::WsaRecvSession(SOCKETINFO* ptr)
 unsigned int __stdcall CNetServer::MonitorThread(void* arg)
 {
 	CNetServer* server = reinterpret_cast<CNetServer*>(arg);
-	while (1)
+	while (server->_isRunning)
 	{
 		Sleep(1000);
 		int count = server->_acceptCount.exchange(0, std::memory_order_relaxed);

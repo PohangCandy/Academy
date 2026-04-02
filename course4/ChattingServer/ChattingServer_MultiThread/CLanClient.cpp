@@ -32,7 +32,7 @@ CLanClient::CLanClient()
 
 CLanClient::~CLanClient()
 {
-	Disconnect();
+	Stop();
 }
 
 bool CLanClient::Connect(const char* serverIP, int serverPort, int workerThreadCount, bool bNagle)
@@ -99,16 +99,18 @@ bool CLanClient::Connect(const char* serverIP, int serverPort, int workerThreadC
 	CreateIoCompletionPort((HANDLE)_sock, _hIOCP, (ULONG_PTR)this, 0);
 
 	// 워커 스레드
+	_workerThreadCount = workerThreadCount;
+	memset(_hWorkerThreads, 0, sizeof(_hWorkerThreads));
+
 	for (int i = 0; i < workerThreadCount; i++)
 	{
 		unsigned int tid;
-		HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, WorkerThread, this, 0, &tid);
-		if (hThread == NULL)
+		_hWorkerThreads[i] = (HANDLE)_beginthreadex(NULL, 0, WorkerThread, this, 0, &tid);
+		if (_hWorkerThreads[i] == NULL)
 		{
 			Disconnect();
 			return false;
 		}
-		CloseHandle(hThread);
 	}
 
 	// connected
@@ -147,17 +149,30 @@ bool CLanClient::Disconnect()
 	return true;
 }
 
-void CLanClient::Release()
+void CLanClient::Stop()
 {
-	_bConnected = false;
+	// 1. 소켓 닫기 → 진행 중인 I/O 취소
+	Disconnect();
 
-	if (_sock != INVALID_SOCKET)
+	// 2. 워커 스레드 종료 신호 (PQCS) + 대기
+	if (_hIOCP != NULL)
 	{
-		closesocket(_sock);
-		_sock = INVALID_SOCKET;
+		for (int i = 0; i < _workerThreadCount; i++)
+		{
+			PostQueuedCompletionStatus(_hIOCP, 0, 0, NULL);
+		}
+		WaitForMultipleObjects(_workerThreadCount, _hWorkerThreads, TRUE, INFINITE);
+		for (int i = 0; i < _workerThreadCount; i++)
+		{
+			CloseHandle(_hWorkerThreads[i]);
+			_hWorkerThreads[i] = NULL;
+		}
+
+		CloseHandle(_hIOCP);
+		_hIOCP = NULL;
 	}
 
-	// 잔여 Send 패킷 정리
+	// 3. 잔여 리소스 정리
 	if (_sendBuf != nullptr)
 	{
 		_sendBuf->Lock();
@@ -173,6 +188,40 @@ void CLanClient::Release()
 		_sendBuf->MoveFront(remain);
 		_sendBuf->UnLock();
 	}
+
+	delete _recvBuf; _recvBuf = nullptr;
+	delete _sendBuf; _sendBuf = nullptr;
+	delete _recvOverlapped; _recvOverlapped = nullptr;
+	delete _sendOverlapped; _sendOverlapped = nullptr;
+}
+
+void CLanClient::Release()
+{
+	_bConnected = false;
+
+	if (_sock != INVALID_SOCKET)
+	{
+		closesocket(_sock);
+		_sock = INVALID_SOCKET;
+	}
+
+	// Stop()에서 이미 정리된 경우 중복 정리/가상함수 호출 방지
+	if (_sendBuf == nullptr)
+		return;
+
+	// 잔여 Send 패킷 정리
+	_sendBuf->Lock();
+	int remain = _sendBuf->GetUseSize();
+	int front = _sendBuf->GetFront();
+	int cap = _sendBuf->GetBufferSize();
+	CPacket** buf = _sendBuf->GetBufPtr();
+	for (int i = 0; i < remain; i++)
+	{
+		buf[front]->SubRef();
+		front = (front + 1) % cap;
+	}
+	_sendBuf->MoveFront(remain);
+	_sendBuf->UnLock();
 
 	delete _recvBuf; _recvBuf = nullptr;
 	delete _sendBuf; _sendBuf = nullptr;

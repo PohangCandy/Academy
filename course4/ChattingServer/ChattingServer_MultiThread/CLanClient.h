@@ -23,6 +23,7 @@ public:
 	virtual ~CLanClient();
 
 	bool Connect(const char* serverIP, int serverPort, int workerThreadCount = 1, bool bNagle = false);
+	void Stop();
 	bool Disconnect();
 	bool SendPacket(CPacket* cp);
 
@@ -44,6 +45,11 @@ private:
 
 	HANDLE _hIOCP;
 	SOCKET _sock;
+
+	// 스레드 핸들 (종료 대기용)
+	static const int MAX_WORKER_THREADS = 4;
+	HANDLE _hWorkerThreads[MAX_WORKER_THREADS];
+	int _workerThreadCount = 0;
 
 	CRingBuffer* _recvBuf;
 	CPacketRingBuffer* _sendBuf;

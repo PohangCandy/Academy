@@ -52,22 +52,27 @@ namespace myMemorypool
 
 		virtual	~CMemoryPool()
 		{
+			// _pTopNode과 nextNode에는 ABA 방지용 상위 17비트 카운터가
+			// 포함되어 있으므로, 반드시 하위 47비트만 마스킹하여 사용해야 한다.
+			st_STACK_NODE* cur = (st_STACK_NODE*)((long long)_pTopNode & USERBIT);
 			st_STACK_NODE* tempNode = nullptr;
 
-			while (_pTopNode != nullptr)
+			while (cur != nullptr)
 			{
-				tempNode = _pTopNode->nextNode;
+				tempNode = (st_STACK_NODE*)((long long)cur->nextNode & USERBIT);
 
 				if (_bPlacementNew)
 				{
-					_pTopNode->d.~DATA();
+					cur->d.~DATA();
 				}
 
-				free(_pTopNode);
+				free(cur);
 
-				_pTopNode = tempNode;
+				cur = tempNode;
 				_iCapacity--;
 			}
+
+			_pTopNode = nullptr;
 		}
 
 		DATA* Alloc(void)
