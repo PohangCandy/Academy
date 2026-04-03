@@ -281,7 +281,8 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			CRingBuffer* rb = ptr->_recvBuf;
 			if (rb->MoveRear(cbTransferred) == 0)
 			{
-				printf("[LanServer] Recv buffer full\n");
+				LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+					L"[Session:%llu] Recv buffer full", ptr->_sessionKey.GetSessionId());
 				__debugbreak();
 			}
 
@@ -373,7 +374,8 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 		}
 		else
 		{
-			printf("[LanServer] Unknown overlapped op\n");
+			LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+				L"Unknown overlapped op: %d", lpOverlapped->op);
 			__debugbreak();
 		}
 	}
@@ -422,7 +424,8 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	int ret = ptr->_sendBuf->Enqueue(cp);
 	if (!ret)
 	{
-		printf("[LanServer] SendBuf Enqueue failed\n");
+		LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] SendBuf Enqueue failed", ptr->_sessionKey.GetSessionId());
 		__debugbreak();
 	}
 

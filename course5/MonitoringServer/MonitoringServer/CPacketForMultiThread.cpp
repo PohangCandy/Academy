@@ -1,5 +1,6 @@
 #include "CPacketForMultiThread.h"
 #include "CommonProtocol.h"
+#include "CSystemLog.h"
 
 // ============================== 내부 유틸 ==============================
 
@@ -14,7 +15,7 @@ void CPacket::_EnsureCapacity(int requireBytes)
     char* newBuf = new (std::nothrow) char[newSize];
     if (!newBuf)
     {
-        printf("[CPacket] buffer expansion failed\n");
+        LOG(L"CPacket", CSystemLog::LEVEL_ERROR, L"buffer expansion failed");
         return;
     }
 
@@ -49,7 +50,7 @@ void CPacket::EncodeForNet(unsigned char packetCode, unsigned char packetKey)
 
     if (_MsgheaderSize == -1)
     {
-        printf("[CPacket/EncodeForNet] header size not set\n");
+        LOG(L"CPacket", CSystemLog::LEVEL_ERROR, L"EncodeForNet - header size not set");
         __debugbreak();
     }
 
@@ -95,7 +96,7 @@ void CPacket::EncodeForLan()
 
     if (_MsgheaderSize == -1)
     {
-        printf("[CPacket/EncodeForLan] header size not set\n");
+        LOG(L"CPacket", CSystemLog::LEVEL_ERROR, L"EncodeForLan - header size not set");
         __debugbreak();
     }
 
@@ -139,7 +140,6 @@ bool CPacket::DecodeForNet(PacketHeader* pHeader, unsigned char packetKey)
 
     if (pHeader->CheckSum != checksum)
     {
-        printf("[DecodeForNet] checksum mismatch\n");
         return false;
     }
 

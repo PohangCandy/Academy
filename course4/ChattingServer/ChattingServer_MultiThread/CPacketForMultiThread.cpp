@@ -139,7 +139,6 @@ bool CPacket::DecodeForNet(PacketHeader* pHeader, unsigned char packetKey)
 
     if (pHeader->CheckSum != checksum)
     {
-        printf("[DecodeForNet] checksum mismatch\n");
         return false;
     }
 

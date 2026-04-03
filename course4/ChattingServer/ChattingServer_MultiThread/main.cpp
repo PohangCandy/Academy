@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "ChattingServer.h"
 #include "CrashDump.h"
+#include "CSystemLog.h"
 #include <conio.h>
 
 //------------------------------------------------------------
@@ -13,6 +14,11 @@
 int main()
 {
 	CCrashDump::Init();
+
+	// 시스템 로그: 파일에만 기록, 콘솔 출력 끄기 (화면 갱신 방해 방지)
+	SYSLOG_DIRECTORY(L"Log");
+	SYSLOG_LEVEL(CSystemLog::LEVEL_DEBUG);
+	CSystemLog::GetInstance()->SetConsoleOutput(false);
 
 	ChattingServer chatserver;
 

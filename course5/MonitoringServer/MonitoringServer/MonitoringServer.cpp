@@ -7,7 +7,9 @@
 int main()
 {
 	CCrashDump::Init();
-	CSystemLog::GetInstance()->SetLogLevel(CSystemLog::LEVEL_DEBUG);
+	SYSLOG_DIRECTORY(L"Log");
+	SYSLOG_LEVEL(CSystemLog::LEVEL_DEBUG);
+	CSystemLog::GetInstance()->SetConsoleOutput(false);
 
 	CMonitoringServer server;
 

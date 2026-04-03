@@ -3,6 +3,7 @@
 #include "CPacketForMultiThread.h"
 #include "CommonProtocol.h"
 #include "MemoryPoolForLockFree.h"
+#include "CSystemLog.h"
 #include <ctime>
 
 //------------------------------------------------------------
@@ -152,7 +153,9 @@ void ChattingServer::OnRecv(SessionKey sessionkey, CPacket* pPacket)
 		break;
 
 	default:
-		printf("[OnRecv] Unknown packet type: %d\n", type);
+		LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] Unknown packet type: %d - Disconnect",
+			sessionkey.GetSessionId(), type);
 		Disconnect(sessionkey);
 		break;
 	}
@@ -299,9 +302,25 @@ void ChattingServer::Handle_CS_CHAT_REQ_SECTOR_MOVE(SessionKey sessionkey, CPack
 	}
 
 	INT64 AccountNo;
+	WORD newSectorX, newSectorY;
 	*pPacket >> AccountNo;
-	*pPacket >> pcharacter->_SectorX;
-	*pPacket >> pcharacter->_SectorY;
+	*pPacket >> newSectorX;
+	*pPacket >> newSectorY;
+
+	if (newSectorX >= 50 || newSectorY >= 50)
+	{
+		LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] Invalid Sector (%d, %d) - Disconnect",
+			pcharacter->_sessionkey.GetSessionId(), newSectorX, newSectorY);
+		SessionKey charKey = pcharacter->_sessionkey;
+		ReleaseSRWLockExclusive(&_characterLock);
+		Disconnect(charKey);
+		InterlockedDecrement(&_activeInSectorMove);
+		return;
+	}
+
+	pcharacter->_SectorX = newSectorX;
+	pcharacter->_SectorY = newSectorY;
 	_umapCharacterSector[pcharacter->_SectorY][pcharacter->_SectorX].emplace(pcharacter->_sessionkey.GetSessionId(), pcharacter);
 
 	// 응답에 필요한 데이터 복사
@@ -366,6 +385,9 @@ void ChattingServer::Handle_CS_CHAT_REQ_MESSAGE(SessionKey sessionkey, CPacket* 
 
 	if (messageLen > 500 || messageLen == 0)
 	{
+		LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] Invalid MessageLen: %d - Disconnect",
+			pcharacter->_sessionkey.GetSessionId(), messageLen);
 		SessionKey charKey = pcharacter->_sessionkey;
 		ReleaseSRWLockShared(&_characterLock);
 		Disconnect(charKey);
