@@ -330,13 +330,11 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 					break;
 				}
 
-				contentPacket->AddRef();
 				pServer->OnRecv(ptr->_sessionKey, contentPacket);
 				contentPacket->SubRef();
 			}
 
-			if (!pServer->WsaRecvSession(ptr))
-				continue;
+			pServer->WsaRecvSession(ptr);
 
 			SessionKey origin = ptr->_sessionKey;
 			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
@@ -442,8 +440,17 @@ bool CNetServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	if (!ret)
 	{
 		LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
-			L"[Session:%llu] SendBuf Enqueue failed", ptr->_sessionKey.GetSessionId());
-		__debugbreak();
+			L"[Session:%llu] SendBuf Full - Disconnect", ptr->_sessionKey.GetSessionId());
+		ptr->_sendBuf->UnLock();
+		cp->SubRef();
+		shutdown(ptr->_sock, SD_BOTH);
+		SessionKey origin = ptr->_sessionKey;
+		if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
+		{
+			_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+			OnClientLeave(origin);
+		}
+		return false;
 	}
 
 	if (!CanSend(ptr))
@@ -555,6 +562,10 @@ bool CNetServer::WsaRecvSession(SOCKETINFO* ptr)
 	int recvlen = ptr->_recvBuf->GetFreeSize();
 	int retval;
 
+	// 다음 Recv를 위한 IOCount 선증가 (실패 시 WSARecv 걸지 않음)
+	if (!_pSessionMap->IncreaseSessionIO(ptr))
+		return false;
+
 	if (recvlen > ptr->_recvBuf->DirectEnqueueSize())
 	{
 		WSABUF wsabuf[2];
@@ -564,7 +575,6 @@ bool CNetServer::WsaRecvSession(SOCKETINFO* ptr)
 		wsabuf[1].len = recvlen - ptr->_recvBuf->DirectEnqueueSize();
 		DWORD recvbytes;
 		DWORD flags = 0;
-		if (!_pSessionMap->IncreaseSessionIO(ptr)) { __debugbreak(); }
 		retval = WSARecv(ptr->_sock, wsabuf, 2, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->_recvOverlapped, NULL);
 	}
 	else
@@ -574,7 +584,6 @@ bool CNetServer::WsaRecvSession(SOCKETINFO* ptr)
 		wsabuf.len = ptr->_recvBuf->DirectEnqueueSize();
 		DWORD recvbytes;
 		DWORD flags = 0;
-		if (!_pSessionMap->IncreaseSessionIO(ptr)) { __debugbreak(); }
 		retval = WSARecv(ptr->_sock, &wsabuf, 1, &recvbytes, &flags, (LPWSAOVERLAPPED)ptr->_recvOverlapped, NULL);
 	}
 
@@ -587,8 +596,8 @@ bool CNetServer::WsaRecvSession(SOCKETINFO* ptr)
 			{
 				_sessionCount.fetch_sub(1, std::memory_order_relaxed);
 				OnClientLeave(origin);
-				return false;
 			}
+			return false;
 		}
 	}
 	return true;

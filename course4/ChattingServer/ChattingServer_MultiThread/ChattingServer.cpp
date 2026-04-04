@@ -246,6 +246,20 @@ void ChattingServer::Handle_CS_CHAT_REQ_LOGIN(SessionKey sessionkey, CPacket* pP
 		return;
 	}
 
+	// 패킷 크기 검증: Login = AccountNo(8) + ID(40) + Nickname(40) + Token(64) = 152
+	int expectedSize = sizeof(INT64) + sizeof(WCHAR) * 20 + sizeof(WCHAR) * 20 + 64;
+	if (pPacket->GetDataSize() != expectedSize)
+	{
+		LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] Login packet size mismatch (expected:%d, actual:%d) - Disconnect",
+			pcharacter->_sessionkey.GetSessionId(), expectedSize, pPacket->GetDataSize());
+		SessionKey charKey = pcharacter->_sessionkey;
+		ReleaseSRWLockShared(&_characterLock);
+		Disconnect(charKey);
+		InterlockedDecrement(&_activeInLogin);
+		return;
+	}
+
 	*pPacket >> pcharacter->_AccountNo;
 	pPacket->GetData((char*)pcharacter->_ID, sizeof(pcharacter->_ID));
 	pPacket->GetData((char*)pcharacter->_Nickname, sizeof(pcharacter->_Nickname));
@@ -265,7 +279,6 @@ void ChattingServer::Handle_CS_CHAT_REQ_LOGIN(SessionKey sessionkey, CPacket* pP
 	*packetToSend << (BYTE)Status;
 	*packetToSend << (INT64)accountNo;
 
-	packetToSend->AddRef();
 	SendPacket(charKey, packetToSend);
 	packetToSend->SubRef();
 	InterlockedDecrement(&_activeInLogin);
@@ -299,6 +312,20 @@ void ChattingServer::Handle_CS_CHAT_REQ_SECTOR_MOVE(SessionKey sessionkey, CPack
 		{
 			_umapCharacterSector[pcharacter->_SectorY][pcharacter->_SectorX].erase(a);
 		}
+	}
+
+	// 패킷 크기 검증: SectorMove = AccountNo(8) + SectorX(2) + SectorY(2) = 12
+	int expectedSize = sizeof(INT64) + sizeof(WORD) + sizeof(WORD);
+	if (pPacket->GetDataSize() != expectedSize)
+	{
+		LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] SectorMove packet size mismatch (expected:%d, actual:%d) - Disconnect",
+			pcharacter->_sessionkey.GetSessionId(), expectedSize, pPacket->GetDataSize());
+		SessionKey charKey = pcharacter->_sessionkey;
+		ReleaseSRWLockExclusive(&_characterLock);
+		Disconnect(charKey);
+		InterlockedDecrement(&_activeInSectorMove);
+		return;
 	}
 
 	INT64 AccountNo;
@@ -339,7 +366,6 @@ void ChattingServer::Handle_CS_CHAT_REQ_SECTOR_MOVE(SessionKey sessionkey, CPack
 	*packetToSend << (WORD)sectorX;
 	*packetToSend << (WORD)sectorY;
 
-	packetToSend->AddRef();
 	SendPacket(charKey, packetToSend);
 	packetToSend->SubRef();
 	InterlockedDecrement(&_activeInSectorMove);
@@ -383,11 +409,27 @@ void ChattingServer::Handle_CS_CHAT_REQ_MESSAGE(SessionKey sessionkey, CPacket* 
 	*pPacket >> AccountNo;
 	*pPacket >> messageLen;
 
+	// 검증 1: MessageLen 범위 체크
 	if (messageLen > 500 || messageLen == 0)
 	{
 		LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
 			L"[Session:%llu] Invalid MessageLen: %d - Disconnect",
 			pcharacter->_sessionkey.GetSessionId(), messageLen);
+		SessionKey charKey = pcharacter->_sessionkey;
+		ReleaseSRWLockShared(&_characterLock);
+		Disconnect(charKey);
+		InterlockedDecrement(&_activeInChatMsg);
+		return;
+	}
+
+	// 검증 2: 패킷 잔여 크기와 MessageLen 교차 검증
+	// 헤더(Type 2 + AccountNo 8 + MessageLen 2) 이후 남은 데이터 = MessageLen이어야 함
+	int remainSize = pPacket->GetDataSize();
+	if (remainSize != messageLen)
+	{
+		LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] MessageLen mismatch (MessageLen:%d, Remain:%d) - Disconnect",
+			pcharacter->_sessionkey.GetSessionId(), messageLen, remainSize);
 		SessionKey charKey = pcharacter->_sessionkey;
 		ReleaseSRWLockShared(&_characterLock);
 		Disconnect(charKey);
@@ -430,7 +472,6 @@ void ChattingServer::Handle_CS_CHAT_REQ_MESSAGE(SessionKey sessionkey, CPacket* 
 	packetToSend->PutData(Message, messageLen);
 
 	// SendPacket은 lock 밖에서 호출 (데드락 방지)
-	packetToSend->AddRef();
 	for (auto& sk : targets)
 	{
 		SendPacket(sk, packetToSend);
@@ -467,6 +508,16 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 	ChattingServer* pServer = (ChattingServer*)arg;
 
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	// 초기 printf 잔상 제거: 콘솔 전체 클리어
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(hConsole, &csbi);
+	DWORD consoleSize = csbi.dwSize.X * csbi.dwSize.Y;
+	DWORD charsWritten;
+	COORD topLeft = { 0, 0 };
+	FillConsoleOutputCharacterA(hConsole, ' ', consoleSize, topLeft, &charsWritten);
+	FillConsoleOutputAttribute(hConsole, csbi.wAttributes, consoleSize, topLeft, &charsWritten);
+	SetConsoleCursorPosition(hConsole, topLeft);
 
 	// 커서 숨기기
 	CONSOLE_CURSOR_INFO cursorInfo;
@@ -594,10 +645,9 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 				cpuVal, memMB);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
-			// 세션 / 플레이어
+			// 세션
 			sprintf_s(line, sizeof(line),
-				"  Session: %d    Player: %d",
-				sessionCount, playerCount);
+				"  Session: %d", sessionCount);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos,
@@ -611,7 +661,7 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 				updateTPS, acceptTPS, totalAccept);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
-			// 패킷풀 + 캐릭터풀 + 세션
+			// 동적 리소스 (풀 사용량 / 전체 할당량)
 			int packetPoolTotal = (int)CPacket::packetPool.GetCapacityCount();
 			int charPoolUse = (int)characterpool.GetUseCount();
 			int charPoolTotal = (int)characterpool.GetCapacityCount();
@@ -619,28 +669,6 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 			sprintf_s(line, sizeof(line),
 				"  PacketPool: %d/%d   CharPool: %d/%d",
 				packetPoolUse, packetPoolTotal, charPoolUse, charPoolTotal);
-			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
-
-			// 메모리 사용 내역 (MB)
-			int sessionPoolMB = (int)((long long)pServer->_maxSession * 8400 / 1024 / 1024);
-			int packetPoolMB = (int)((long long)packetPoolTotal * 1464 / 1024 / 1024);
-			int charPoolMB = (int)((long long)charPoolTotal * 192 / 1024 / 1024);
-			int sectorMapMB = (int)(sectorBucketTotal * 8 / 1024 / 1024);
-			int memSum = sessionPoolMB + packetPoolMB + charPoolMB + sectorMapMB;
-
-			sprintf_s(line, sizeof(line),
-				"  [Memory] Session:%dMB Packet:%dMB Char:%dMB Sector:%dMB",
-				sessionPoolMB, packetPoolMB, charPoolMB, sectorMapMB);
-			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
-
-			sprintf_s(line, sizeof(line),
-				"  [Memory] Sum:%dMB / Process:%dMB (Other:%dMB)",
-				memSum, memMB, memMB - memSum);
-			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
-
-			sprintf_s(line, sizeof(line),
-				"  Session Use: %d    Player: %d",
-				sessionCount, playerCount);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
 			long sendBufFullDisconnect = pServer->getSendBufferFullCount();
@@ -690,7 +718,7 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 		//------------------------------------------------------------
 		// 20초마다 하트비트 타이머 체크
 		//------------------------------------------------------------
-		if (tickCount >= 20)
+		/*if (tickCount >= 20)
 		{
 			tickCount = 0;
 
@@ -719,7 +747,7 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 				InterlockedIncrement(&pServer->_heartbeatTimeoutCount);
 				pServer->Disconnect(sk);
 			}
-		}
+		}*/
 	}
 
 	// 커서 복원

@@ -178,6 +178,16 @@ void CPacket::Clear(void)
     m_iReadPos = 0;
     m_iWritePos = 0;
     m_iDataSize = 0;
+    mRefCount = 1;	// Alloc한 소유자의 참조 (실무 규칙: Alloc = refCount 1)
+
+    // 팽창된 내부 버퍼를 기본 크기로 복원 (메모리 낭비 방지)
+    // _EnsureCapacity로 커진 버퍼가 풀에 영구히 남는 것을 방지
+    if (m_iBufferSize > eBUFFER_DEFAULT)
+    {
+        delete[] m_chpBuffer;
+        m_chpBuffer = new char[eBUFFER_DEFAULT];
+        m_iBufferSize = eBUFFER_DEFAULT;
+    }
 }
 
 // ============================== Move Pos ==============================

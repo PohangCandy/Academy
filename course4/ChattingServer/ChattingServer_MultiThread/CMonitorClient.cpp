@@ -46,7 +46,6 @@ void CMonitorClient::SendLogin()
 	*pPacket << type;
 	*pPacket << (int)_serverNo;
 
-	pPacket->AddRef();
 	SendPacket(pPacket);
 	pPacket->SubRef();
 }
@@ -65,7 +64,6 @@ void CMonitorClient::SendMonitorData(BYTE dataType, int dataValue, int timeStamp
 	*pPacket << dataValue;
 	*pPacket << timeStamp;
 
-	pPacket->AddRef();
 	SendPacket(pPacket);
 	pPacket->SubRef();
 }
@@ -87,7 +85,7 @@ void CMonitorClient::OnRecv(CPacket* pPacket)
 {
 	WORD type;
 	*pPacket >> type;
-	pPacket->SubRef();
+	// SubRef는 호출자(CLanClient WorkerThread)에서 담당
 }
 
 void CMonitorClient::OnError(int errorcode, const char* msg)

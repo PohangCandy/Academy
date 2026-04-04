@@ -16,6 +16,7 @@ public:
 	static CPacket* Alloc()
 	{
 		CPacket* allocPacket = packetPool.Alloc();
+		if (allocPacket == nullptr) return nullptr;
 		allocPacket->Clear();
 		return allocPacket;
 	}

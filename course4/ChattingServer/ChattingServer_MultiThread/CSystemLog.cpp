@@ -5,7 +5,7 @@
 CSystemLog* CSystemLog::_instance = nullptr;
 
 CSystemLog::CSystemLog()
-	: _logLevel(LEVEL_DEBUG), _bConsoleOutput(true), _logCount(0)
+	: _logLevel(LEVEL_DEBUG), _bConsoleOutput(true), _bSplitByLevel(true), _logCount(0)
 {
 	StringCchCopyW(_szDirectory, 256, L"Log");
 }
@@ -37,6 +37,11 @@ void CSystemLog::SetLogLevel(en_LOG_LEVEL level)
 void CSystemLog::SetConsoleOutput(bool bEnable)
 {
 	_bConsoleOutput = bEnable;
+}
+
+void CSystemLog::SetSplitByLevel(bool bEnable)
+{
+	_bSplitByLevel = bEnable;
 }
 
 void CSystemLog::Log(const WCHAR* szType, en_LOG_LEVEL LogLevel, const WCHAR* szStringFormat, ...)
@@ -82,6 +87,7 @@ void CSystemLog::Log(const WCHAR* szType, en_LOG_LEVEL LogLevel, const WCHAR* sz
 		wprintf(L"%s", szLogLine);
 	}
 
+	// 통합 로그 파일: YYYYMM_TYPE.txt (항상 기록)
 	WCHAR szFileName[512];
 	StringCchPrintfW(szFileName, 512,
 		L"%s\\%04d%02d_%s.txt",
@@ -96,6 +102,25 @@ void CSystemLog::Log(const WCHAR* szType, en_LOG_LEVEL LogLevel, const WCHAR* sz
 	{
 		fwprintf(fp, L"%s", szLogLine);
 		fclose(fp);
+	}
+
+	// 레벨별 분리 파일: YYYYMM_TYPE_ERROR.txt 등
+	if (_bSplitByLevel)
+	{
+		StringCchPrintfW(szFileName, 512,
+			L"%s\\%04d%02d_%s_%s.txt",
+			_szDirectory,
+			t.tm_year + 1900, t.tm_mon + 1,
+			szType,
+			szLevel
+		);
+
+		_wfopen_s(&fp, szFileName, L"a");
+		if (fp != nullptr)
+		{
+			fwprintf(fp, L"%s", szLogLine);
+			fclose(fp);
+		}
 	}
 }
 

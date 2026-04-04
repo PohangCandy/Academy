@@ -4,6 +4,7 @@
 #include "CPacketRingBuffer.h"
 #include "CPacketForMultiThread.h"
 #include "CommonProtocol.h"
+#include "CSystemLog.h"
 
 #define RELEASE_FLAGBIT 31
 #define RELEASE_FLAG      (1u << RELEASE_FLAGBIT)
@@ -43,7 +44,8 @@ SOCKETINFO* cSessionMap::AllocSessionptr(SOCKET sock)
 
 		if (_sessionArray[index_Bit]._Active == true)
 		{
-			printf("[SessionMap] Active session in deleted stack.\n");
+			LOG(L"SessionMap", CSystemLog::LEVEL_ERROR,
+				L"Active session in deleted stack (index:%lld)", index_Bit);
 			__debugbreak();
 		}
 	}
@@ -53,9 +55,10 @@ SOCKETINFO* cSessionMap::AllocSessionptr(SOCKET sock)
 
 		if (index_Bit >= _capacity)
 		{
-			printf("[SessionMap] Session capacity exceeded! (capacity=%d)\n", _capacity);
+			_nextIndex--;	// 증가분 되돌리기
+			LOG(L"SessionMap", CSystemLog::LEVEL_ERROR,
+				L"Session capacity exceeded! (capacity:%d)", _capacity);
 			LeaveCriticalSection(&_sessionMap_cs);
-			__debugbreak();
 			return nullptr;
 		}
 	}

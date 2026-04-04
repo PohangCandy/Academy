@@ -36,15 +36,25 @@ CMonitoringServer::~CMonitoringServer()
 	Stop();
 }
 
-bool CMonitoringServer::Start()
+bool CMonitoringServer::Start(int lanPort, int lanMaxSession,
+	int netPort, int netMaxSession,
+	const char* dbHost, int dbPort,
+	const char* dbUser, const char* dbPass, const char* dbName)
 {
-	if (!_lanServer.Start(dfLAN_SERVER_PORT, dfLAN_SESSION_MAX))
+	// DB 접속 정보 저장
+	_dbHost = dbHost;
+	_dbPort = dbPort;
+	_dbUser = dbUser;
+	_dbPass = dbPass;
+	_dbName = dbName;
+
+	if (!_lanServer.Start(lanPort, lanMaxSession))
 	{
 		printf("[MonitoringServer] LanServer Start failed\n");
 		return false;
 	}
 
-	if (!_netServer.Start(dfNET_SERVER_PORT, dfNET_SESSION_MAX))
+	if (!_netServer.Start(netPort, netMaxSession))
 	{
 		printf("[MonitoringServer] NetServer Start failed\n");
 		return false;
@@ -67,7 +77,7 @@ bool CMonitoringServer::Start()
 	_hDisplayThread = (HANDLE)_beginthreadex(NULL, 0, DisplayThread, this, 0, &tid2);
 
 	// DB 연결 및 저장 스레드 시작
-	if (ConnectDB())
+	if (ConnectDB(dbHost, dbPort, dbUser, dbPass, dbName))
 	{
 		_bDBWriteAlive = true;
 		unsigned int tid3;
@@ -333,7 +343,6 @@ void CMonitoringServer::Handle_CS_MONITOR_TOOL_REQ_LOGIN(SessionKey netSession, 
 	}
 
 	CPacket* resPacket = CPacket::Alloc();
-	resPacket->AddRef();
 	resPacket->_MsgheaderSize = dfNET_HEADERSIZE;
 	char dummy[dfNET_HEADERSIZE] = {};
 	resPacket->PutData(dummy, dfNET_HEADERSIZE);
@@ -360,7 +369,6 @@ void CMonitoringServer::BroadcastToMonitorClients(BYTE serverNo, BYTE dataType, 
 	}
 
 	CPacket* pPacket = CPacket::Alloc();
-	pPacket->AddRef();
 	pPacket->_MsgheaderSize = dfNET_HEADERSIZE;
 	char dummy[dfNET_HEADERSIZE] = {};
 	pPacket->PutData(dummy, dfNET_HEADERSIZE);
@@ -396,6 +404,16 @@ unsigned int __stdcall CMonitoringServer::DisplayThread(LPVOID arg)
 	CMonitoringServer* pServer = (CMonitoringServer*)arg;
 
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	// 초기 printf 잔상 제거: 콘솔 전체 클리어
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(hConsole, &csbi);
+	DWORD consoleSize = csbi.dwSize.X * csbi.dwSize.Y;
+	DWORD charsWritten;
+	COORD topLeft = { 0, 0 };
+	FillConsoleOutputCharacterA(hConsole, ' ', consoleSize, topLeft, &charsWritten);
+	FillConsoleOutputAttribute(hConsole, csbi.wAttributes, consoleSize, topLeft, &charsWritten);
+	SetConsoleCursorPosition(hConsole, topLeft);
 
 	// 커서 숨기기
 	CONSOLE_CURSOR_INFO cursorInfo;
@@ -566,20 +584,23 @@ unsigned int __stdcall CMonitoringServer::MonitorThread(LPVOID arg)
 // DB 연결 / 해제
 //=============================================================
 
-bool CMonitoringServer::ConnectDB()
+bool CMonitoringServer::ConnectDB(const char* host, int port, const char* user, const char* pass, const char* dbName)
 {
 	mysql_init(&_dbConn);
 
 	// 먼저 DB 지정 없이 접속하여 logdb와 템플릿 테이블 생성
-	if (!mysql_real_connect(&_dbConn, "127.0.0.1", "root", "vmfh1234!", NULL, 3306, NULL, 0))
+	if (!mysql_real_connect(&_dbConn, host, user, pass, NULL, port, NULL, 0))
 	{
 		printf("[MonitoringServer] DB Connect failed: %s\n", mysql_error(&_dbConn));
 		_bDBConnected = false;
 		return false;
 	}
 
-	mysql_query(&_dbConn, "CREATE DATABASE IF NOT EXISTS `logdb`");
-	mysql_query(&_dbConn, "USE `logdb`");
+	char dbQuery[256];
+	sprintf_s(dbQuery, "CREATE DATABASE IF NOT EXISTS `%s`", dbName);
+	mysql_query(&_dbConn, dbQuery);
+	sprintf_s(dbQuery, "USE `%s`", dbName);
+	mysql_query(&_dbConn, dbQuery);
 	mysql_query(&_dbConn,
 		"CREATE TABLE IF NOT EXISTS `monitorlog_template` ("
 		"  `no`       BIGINT NOT NULL AUTO_INCREMENT,"

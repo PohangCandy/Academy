@@ -140,6 +140,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CConfigParser.cpp" />
     <ClCompile Include="CLanServer.cpp" />
     <ClCompile Include="CMonitoringServer.cpp" />
     <ClCompile Include="CNetServer.cpp" />
@@ -155,6 +156,7 @@
     <ClCompile Include="SystemMonitor.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CConfigParser.h" />
     <ClInclude Include="CLanServer.h" />
     <ClInclude Include="CMonitoringServer.h" />
     <ClInclude Include="CNetServer.h" />

@@ -27,12 +27,13 @@ namespace myMemorypool
 		st_STACK_NODE* _pTopNode;
 
 
-		CMemoryPool(int iBlockNum, bool bPlacementNew = false)
+		CMemoryPool(int iBlockNum, bool bPlacementNew = false, int iMaxCapacity = 0)
 		{
 			_iCapacity = iBlockNum;
 			_bPlacementNew = bPlacementNew;
 			_iUseCount = 0;
 			_pTopNode = nullptr;
+			_iMaxCapacity = iMaxCapacity;
 
 			for (int i = 0; i < iBlockNum; i++)
 			{
@@ -96,6 +97,13 @@ namespace myMemorypool
 				}
 				else
 				{
+					// 하드 캡 체크: 무제한 팽창으로 인한 메모리 고갈 방지
+					if (_iMaxCapacity > 0 && _iCapacity >= _iMaxCapacity)
+					{
+						printf("[MemoryPool] Max capacity reached (%d) - Alloc denied\n", _iMaxCapacity);
+						return nullptr;
+					}
+
 					newtop = (st_STACK_NODE*)malloc(sizeof(st_STACK_NODE));
 					if (newtop == nullptr)
 					{
@@ -111,6 +119,7 @@ namespace myMemorypool
 					}
 					newtop->owner = this;
 
+					InterlockedIncrement((long*)&_iCapacity);
 					InterlockedIncrement((long*)&_iUseCount);
 					return &newtop->d;
 				}
@@ -181,9 +190,12 @@ namespace myMemorypool
 
 		int		GetCapacityCount(void) { return _iCapacity; }
 		int		GetUseCount(void) { return _iUseCount; }
+		int		GetMaxCapacity(void) { return _iMaxCapacity; }
+		void	SetMaxCapacity(int iMax) { _iMaxCapacity = iMax; }
 
 	private:
 		int cnt = 0;
+		int _iMaxCapacity = 0;	// 0 = 무제한, >0 = 하드 캡
 	};
 }
 

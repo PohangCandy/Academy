@@ -433,7 +433,6 @@ unsigned int __stdcall CLanClient::WorkerThread(LPVOID arg)
 				CPacket* contentPacket = CPacket::Alloc();
 				contentPacket->PutData(tempBuf, header->Len);
 
-				contentPacket->AddRef();
 				pClient->OnRecv(contentPacket);
 				contentPacket->SubRef();
 			}

@@ -29,7 +29,10 @@ public:
 	CMonitoringServer();
 	~CMonitoringServer();
 
-	bool Start();
+	bool Start(int lanPort, int lanMaxSession,
+		int netPort, int netMaxSession,
+		const char* dbHost, int dbPort,
+		const char* dbUser, const char* dbPass, const char* dbName);
 	void Stop();
 
 private:
@@ -114,8 +117,15 @@ private:
 	MYSQL _dbConn;
 	bool _bDBConnected = false;
 
-	bool ConnectDB();
+	bool ConnectDB(const char* host, int port, const char* user, const char* pass, const char* dbName);
 	void DisconnectDB();
+
+	// DB 접속 정보 저장
+	std::string _dbHost;
+	int _dbPort = 3306;
+	std::string _dbUser;
+	std::string _dbPass;
+	std::string _dbName;
 	void SaveMonitorDataToDB(int serverNo, int dataType, int avg, int vmin, int vmax);
 
 	//------------------------------------------------------------

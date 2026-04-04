@@ -20,6 +20,7 @@ public:
 	void SetDirectory(const WCHAR* szDirectory);
 	void SetLogLevel(en_LOG_LEVEL level);
 	void SetConsoleOutput(bool bEnable);
+	void SetSplitByLevel(bool bEnable);
 	void Log(const WCHAR* szType, en_LOG_LEVEL LogLevel, const WCHAR* szStringFormat, ...);
 	void LogHex(const WCHAR* szType, en_LOG_LEVEL LogLevel, const WCHAR* szLog, BYTE* pByte, int iByteLen);
 
@@ -35,6 +36,7 @@ private:
 	WCHAR _szDirectory[256];
 	en_LOG_LEVEL _logLevel;
 	bool _bConsoleOutput;
+	bool _bSplitByLevel;		// true: 레벨별 파일 분리
 
 	alignas(64) long long _logCount;
 };

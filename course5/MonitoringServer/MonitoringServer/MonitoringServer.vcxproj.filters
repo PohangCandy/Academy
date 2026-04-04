@@ -54,6 +54,9 @@
     <ClCompile Include="SystemMonitor.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="CConfigParser.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CLanServer.h">
@@ -105,6 +108,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="SystemMonitor.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CConfigParser.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
