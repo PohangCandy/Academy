@@ -232,6 +232,9 @@ unsigned int __stdcall CLanServer::AcceptThread(LPVOID arg)
 		{
 			if (WSAGetLastError() != ERROR_IO_PENDING)
 			{
+				LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+					L"[Session:%llu] AcceptThread initial WSARecv failed (err:%d)",
+					ptr->_sessionKey.GetSessionId(), WSAGetLastError());
 				SessionKey origin = ptr->_sessionKey;
 				if (pServer->_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 				{
@@ -267,6 +270,13 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 
 		if (cbTransferred == 0 || retval == 0)
 		{
+			if (retval == 0)
+			{
+				int err = GetLastError();
+				LOG(L"LanServer", CSystemLog::LEVEL_DEBUG,
+					L"[Session:%llu] GQCS Failed (err:%d, transferred:%lu)",
+					ptr->_sessionKey.GetSessionId(), err, cbTransferred);
+			}
 			SessionKey origin = ptr->_sessionKey;
 			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{
@@ -444,6 +454,9 @@ bool CLanServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 	if (!ret)
 	{
 		InterlockedIncrement(&_sendBufferFullCount);
+		LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] SendBuf Full - Disconnect",
+			ptr->_sessionKey.GetSessionId());
 		ptr->_sendBuf->UnLock();
 		cp->SubRef();
 		SessionKey origin = ptr->_sessionKey;
@@ -590,6 +603,9 @@ bool CLanServer::WsaRecvSession(SOCKETINFO* ptr)
 	{
 		if (WSAGetLastError() != WSA_IO_PENDING)
 		{
+			LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+				L"[Session:%llu] WsaRecvSession WSARecv failed (err:%d)",
+				ptr->_sessionKey.GetSessionId(), WSAGetLastError());
 			SessionKey origin = ptr->_sessionKey;
 			if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{

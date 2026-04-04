@@ -53,7 +53,9 @@ private:
 	HANDLE _hWorkerThreadIOCP;
 	SOCKET _listenSock;
 	cSessionMap* _pSessionMap;
+protected:
 	int _maxSession = 0;
+private:
 	int _workerThreadCount = 0;
 
 	// 스레드 핸들 (종료 대기용)

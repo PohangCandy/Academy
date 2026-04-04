@@ -135,6 +135,7 @@ private:
 	int _dispAcceptTPS = 0;
 	int _dispMonitorSendCount = 0;
 	bool _dispMonitorConnected = false;
+	volatile LONG _heartbeatTimeoutCount = 0;
 
 	//------------------------------------------------------------
 	// [추가] 스레드 활동 추적 (진단용)

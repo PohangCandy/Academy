@@ -491,6 +491,7 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 		int memMB = 0;
 		int sessionCount = pServer->GetSessionCount();
 		int playerCount = 0;
+		long long sectorBucketTotal = 0;
 		int updateTPS = InterlockedExchange(&pServer->_updateCount, 0);
 		int packetPoolUse = (int)CPacket::packetPool.GetUseCount();
 		if (packetPoolUse < 0) packetPoolUse = 0;
@@ -523,6 +524,10 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 			InterlockedIncrement(&pServer->_activeInTimerLock);
 			AcquireSRWLockShared(&pServer->_characterLock);
 			playerCount = (int)pServer->_umapCharacter.size();
+			sectorBucketTotal = 0;
+			for (int sy = 0; sy < 50; sy++)
+				for (int sx = 0; sx < 50; sx++)
+					sectorBucketTotal += pServer->_umapCharacterSector[sy][sx].bucket_count();
 			ReleaseSRWLockShared(&pServer->_characterLock);
 			InterlockedDecrement(&pServer->_activeInTimerLock);
 		}
@@ -616,15 +621,33 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 				packetPoolUse, packetPoolTotal, charPoolUse, charPoolTotal);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
+			// 메모리 사용 내역 (MB)
+			int sessionPoolMB = (int)((long long)pServer->_maxSession * 8400 / 1024 / 1024);
+			int packetPoolMB = (int)((long long)packetPoolTotal * 1464 / 1024 / 1024);
+			int charPoolMB = (int)((long long)charPoolTotal * 192 / 1024 / 1024);
+			int sectorMapMB = (int)(sectorBucketTotal * 8 / 1024 / 1024);
+			int memSum = sessionPoolMB + packetPoolMB + charPoolMB + sectorMapMB;
+
+			sprintf_s(line, sizeof(line),
+				"  [Memory] Session:%dMB Packet:%dMB Char:%dMB Sector:%dMB",
+				sessionPoolMB, packetPoolMB, charPoolMB, sectorMapMB);
+			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
+			sprintf_s(line, sizeof(line),
+				"  [Memory] Sum:%dMB / Process:%dMB (Other:%dMB)",
+				memSum, memMB, memMB - memSum);
+			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
 			sprintf_s(line, sizeof(line),
 				"  Session Use: %d    Player: %d",
 				sessionCount, playerCount);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
 			long sendBufFullDisconnect = pServer->getSendBufferFullCount();
+			long heartbeatTimeout = pServer->_heartbeatTimeoutCount;
 			sprintf_s(line, sizeof(line),
-				"  SendBuf Full Disconnect/s: %ld",
-				sendBufFullDisconnect);
+				"  SendBufFull: %ld    HeartbeatTimeout: %ld",
+				sendBufFullDisconnect, heartbeatTimeout);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos,
@@ -690,6 +713,10 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 
 			for (SessionKey& sk : expiredList)
 			{
+				LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
+					L"[Session:%llu] Heartbeat Timeout - Disconnect",
+					sk.GetSessionId());
+				InterlockedIncrement(&pServer->_heartbeatTimeoutCount);
 				pServer->Disconnect(sk);
 			}
 		}
