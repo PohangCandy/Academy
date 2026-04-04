@@ -1,1 +1,4 @@
 .claude/
+course4/ChattingServer/ChattingServer_MultiThread/Log/
+*.log
+*.txt
