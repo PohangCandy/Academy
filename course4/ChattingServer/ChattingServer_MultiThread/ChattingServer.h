@@ -102,6 +102,9 @@ private:
 	std::unordered_map<uint64_t, Character*> _umapCharacter;
 	std::unordered_map<uint64_t, Character*> _umapCharacterSector[50][50];
 
+	// AccountNo → SessionKey 매핑 (중복 로그인 감지용)
+	std::unordered_map<INT64, SessionKey> _umapAccountSession;
+
 	//------------------------------------------------------------
 	// [추가] 모니터링 클라이언트
 	//------------------------------------------------------------

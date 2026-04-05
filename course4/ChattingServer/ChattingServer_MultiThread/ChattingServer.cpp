@@ -31,6 +31,7 @@ ChattingServer::ChattingServer()
 
 	// unordered_map 사전 예약 (rehash 방지, 메모리 급증 방지)
 	_umapCharacter.reserve(20000);
+	_umapAccountSession.reserve(20000);
 
 	// 타이머 스레드 생성
 	unsigned int uiThreadID;
@@ -85,6 +86,7 @@ ChattingServer::~ChattingServer()
 		characterpool.Free(ch);
 	}
 	_umapCharacter.clear();
+	_umapAccountSession.clear();
 	ReleaseSRWLockExclusive(&_characterLock);
 }
 
@@ -201,7 +203,19 @@ bool ChattingServer::DeleteCharacter(SessionKey sessionkey)
 		sectorMap.erase(pcharacter->_sessionkey.GetSessionId());
 	}
 
-	// 2. 전체 캐릭터 맵에서 제거
+	// 2. AccountNo 맵에서 제거 (로그인 완료된 캐릭터만)
+	if (pcharacter->_AccountNo != -1)
+	{
+		auto itAccount = _umapAccountSession.find(pcharacter->_AccountNo);
+		// 세션키가 일치하는 경우에만 제거 (다른 세션이 같은 AccountNo로 등록된 경우 방지)
+		if (itAccount != _umapAccountSession.end() &&
+			itAccount->second.GetSessionId() == pcharacter->_sessionkey.GetSessionId())
+		{
+			_umapAccountSession.erase(itAccount);
+		}
+	}
+
+	// 3. 전체 캐릭터 맵에서 제거
 	_umapCharacter.erase(pcharacter->_sessionkey.GetSessionId());
 
 	ReleaseSRWLockExclusive(&_characterLock);
@@ -229,19 +243,20 @@ bool ChattingServer::CreateCharacter(SessionKey sessionkey)
 }
 
 //------------------------------------------------------------
-// 로그인 요청 처리 (Shared Lock)
+// 로그인 요청 처리 (Exclusive Lock - 중복 로그인 감지를 위해)
+// 정책: "kick old, accept new" - 이미 로그인된 AccountNo면 기존 세션 끊기
 //------------------------------------------------------------
 void ChattingServer::Handle_CS_CHAT_REQ_LOGIN(SessionKey sessionkey, CPacket* pPacket)
 {
 	InterlockedIncrement(&_activeInLogin);
 	PacketHeader header;
 
-	AcquireSRWLockShared(&_characterLock);
+	AcquireSRWLockExclusive(&_characterLock);
 
 	Character* pcharacter = FindCharacter(sessionkey);
 	if (pcharacter == nullptr)
 	{
-		ReleaseSRWLockShared(&_characterLock);
+		ReleaseSRWLockExclusive(&_characterLock);
 		InterlockedDecrement(&_activeInLogin);
 		return;
 	}
@@ -254,7 +269,7 @@ void ChattingServer::Handle_CS_CHAT_REQ_LOGIN(SessionKey sessionkey, CPacket* pP
 			L"[Session:%llu] Login packet size mismatch (expected:%d, actual:%d) - Disconnect",
 			pcharacter->_sessionkey.GetSessionId(), expectedSize, pPacket->GetDataSize());
 		SessionKey charKey = pcharacter->_sessionkey;
-		ReleaseSRWLockShared(&_characterLock);
+		ReleaseSRWLockExclusive(&_characterLock);
 		Disconnect(charKey);
 		InterlockedDecrement(&_activeInLogin);
 		return;
@@ -268,7 +283,34 @@ void ChattingServer::Handle_CS_CHAT_REQ_LOGIN(SessionKey sessionkey, CPacket* pP
 	SessionKey charKey = pcharacter->_sessionkey;
 	INT64 accountNo = pcharacter->_AccountNo;
 
-	ReleaseSRWLockShared(&_characterLock);
+	//------------------------------------------------------------
+	// 중복 로그인 감지: 같은 AccountNo가 이미 로그인되어 있으면
+	// 기존 세션을 끊고, 새 세션을 받아들임
+	//------------------------------------------------------------
+	SessionKey oldSessionKey = {};
+	auto itAccount = _umapAccountSession.find(accountNo);
+	if (itAccount != _umapAccountSession.end())
+	{
+		oldSessionKey = itAccount->second;
+		LOG(L"ChattingServer", CSystemLog::LEVEL_ERROR,
+			L"[Session:%llu] Duplicate login - kick old session:%llu (AccountNo:%lld)",
+			charKey.GetSessionId(), oldSessionKey.GetSessionId(), accountNo);
+
+		// 맵에서 기존 세션 키를 새 세션으로 덮어쓰기
+		itAccount->second = charKey;
+	}
+	else
+	{
+		_umapAccountSession.emplace(accountNo, charKey);
+	}
+
+	ReleaseSRWLockExclusive(&_characterLock);
+
+	// 기존 세션 끊기 (락 밖에서 — Disconnect → OnClientLeave → Exclusive Lock 데드락 방지)
+	if (oldSessionKey.GetSessionId() != 0)
+	{
+		Disconnect(oldSessionKey);
+	}
 
 	BYTE Status = 1;
 
