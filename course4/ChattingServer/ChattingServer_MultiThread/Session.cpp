@@ -42,7 +42,7 @@ void SOCKETINFO::Inintialize(SOCKET sock, SessionKey sessionKey)
 	_sock = sock;
 	_sessionKey = sessionKey;
 	_IsSending = 0;
-	_IOCount = 0;
+	_IOCount = 1;	// AcceptThread 소유권 (초기화 완료까지 세션 해제 방지)
 
 	ZeroMemory(_recvOverlapped, sizeof(OVERLAPPED));
 	ZeroMemory(_sendOverlapped, sizeof(OVERLAPPED));
