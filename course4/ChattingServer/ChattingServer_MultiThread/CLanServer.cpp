@@ -289,13 +289,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 
 		if (cbTransferred == 0 || retval == 0)
 		{
-			if (retval == 0)
-			{
-				int err = GetLastError();
-				LOG(L"LanServer", CSystemLog::LEVEL_DEBUG,
-					L"[Session:%llu] GQCS Failed (err:%d, transferred:%lu)",
-					ptr->_sessionKey.GetSessionId(), err, cbTransferred);
-			}
+			// 정상 종료 / 클라 연결 끊김 — 로그 생략 (재접속 더미로 인한 폭증 방지)
 			SessionKey origin = ptr->_sessionKey;
 			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{
@@ -327,18 +321,14 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 					// 패킷 코드 검증
 					if (header->Code != dfPACKET_CODE)
 					{
-						LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
-							L"[Session:%llu] Invalid PacketCode: 0x%02X (expected: 0x%02X)",
-							ptr->_sessionKey.GetSessionId(), header->Code, dfPACKET_CODE);
+						InterlockedIncrement(&pServer->_invalidPacketCodeCount);
 						pServer->Disconnect(ptr->_sessionKey);
 						break;
 					}
 
 					if (header->Len == 0 || header->Len > 500)
 					{
-						LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
-							L"[Session:%llu] Invalid Packet Len: %d",
-							ptr->_sessionKey.GetSessionId(), header->Len);
+						InterlockedIncrement(&pServer->_invalidPacketLenCount);
 						pServer->Disconnect(ptr->_sessionKey);
 						break;
 					}
@@ -357,9 +347,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 					// NET 복호화
 					if (!contentPacket->DecodeForNet(header, dfPACKET_KEY))
 					{
-						LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
-							L"[Session:%llu] DecodeForNet failed (checksum mismatch)",
-							ptr->_sessionKey.GetSessionId());
+						InterlockedIncrement(&pServer->_decodeForNetFailCount);
 						contentPacket->SubRef();
 						pServer->Disconnect(ptr->_sessionKey);
 						break;
@@ -626,11 +614,17 @@ bool CLanServer::WsaRecvSession(SOCKETINFO* ptr)
 
 	if (retval == SOCKET_ERROR)
 	{
-		if (WSAGetLastError() != WSA_IO_PENDING)
+		int wsaErr = WSAGetLastError();
+		if (wsaErr != WSA_IO_PENDING)
 		{
-			LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
-				L"[Session:%llu] WsaRecvSession WSARecv failed (err:%d)",
-				ptr->_sessionKey.GetSessionId(), WSAGetLastError());
+			// 정상 종료성 에러는 로그 생략 (10054: ConnReset, 10053: ConnAborted, 64: NetnameDeleted, 1236: ConnectionAborted)
+			if (wsaErr != WSAECONNRESET && wsaErr != WSAECONNABORTED &&
+				wsaErr != ERROR_NETNAME_DELETED && wsaErr != ERROR_CONNECTION_ABORTED)
+			{
+				LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+					L"[Session:%llu] WsaRecvSession WSARecv failed (err:%d)",
+					ptr->_sessionKey.GetSessionId(), wsaErr);
+			}
 			SessionKey origin = ptr->_sessionKey;
 			if (_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{

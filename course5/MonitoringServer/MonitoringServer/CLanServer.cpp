@@ -297,9 +297,7 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 
 					if (header->Len == 0 || header->Len > 500)
 					{
-						LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
-							L"[Session:%llu] Invalid Packet Len: %d",
-							ptr->_sessionKey.GetSessionId(), header->Len);
+						InterlockedIncrement(&pServer->_invalidPacketLenCount);
 						pServer->Disconnect(ptr->_sessionKey);
 						break;
 					}

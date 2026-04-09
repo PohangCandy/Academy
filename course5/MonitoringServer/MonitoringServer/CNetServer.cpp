@@ -294,18 +294,14 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 					// 패킷 코드 검증
 					if (header->Code != dfNET_PACKET_CODE)
 					{
-						LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
-							L"[Session:%llu] Invalid PacketCode: %d",
-							ptr->_sessionKey.GetSessionId(), header->Code);
+						InterlockedIncrement(&pServer->_invalidPacketCodeCount);
 						pServer->Disconnect(ptr->_sessionKey);
 						break;
 					}
 
 					if (header->Len == 0 || header->Len > 500)
 					{
-						LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
-							L"[Session:%llu] Invalid Packet Len: %d",
-							ptr->_sessionKey.GetSessionId(), header->Len);
+						InterlockedIncrement(&pServer->_invalidPacketLenCount);
 						pServer->Disconnect(ptr->_sessionKey);
 						break;
 					}
@@ -324,9 +320,7 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 					// NET 디코딩 (복호화 + 체크섬 검증)
 					if (!contentPacket->DecodeForNet(header, dfNET_PACKET_KEY))
 					{
-						LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
-							L"[Session:%llu] DecodeForNet failed (checksum mismatch)",
-							ptr->_sessionKey.GetSessionId());
+						InterlockedIncrement(&pServer->_decodeForNetFailCount);
 						contentPacket->SubRef();
 						pServer->Disconnect(ptr->_sessionKey);
 						break;

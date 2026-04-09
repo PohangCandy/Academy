@@ -720,6 +720,15 @@ unsigned int __stdcall ChattingServer::TimerThread(LPVOID arg)
 				sendBufFullDisconnect, heartbeatTimeout);
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
+			// 공격성 패킷 누적 카운터
+			long invCode = pServer->getInvalidPacketCodeCount();
+			long invLen = pServer->getInvalidPacketLenCount();
+			long decodeFail = pServer->getDecodeForNetFailCount();
+			sprintf_s(line, sizeof(line),
+				"  InvCode:%ld  InvLen:%ld  DecodeFail:%ld",
+				invCode, invLen, decodeFail);
+			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos,
 				"%-*s\n", LINE_WIDTH,
 				"----------------------------------------------------------------------");

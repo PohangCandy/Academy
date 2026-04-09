@@ -5,7 +5,7 @@
 CSystemLog* CSystemLog::_instance = nullptr;
 
 CSystemLog::CSystemLog()
-	: _logLevel(LEVEL_DEBUG), _bConsoleOutput(true), _bSplitByLevel(true), _logCount(0)
+	: _logLevel(LEVEL_DEBUG), _bConsoleOutput(true), _bSplitByLevel(false), _logCount(0)
 {
 	StringCchCopyW(_szDirectory, 256, L"Log");
 }

@@ -514,12 +514,25 @@ unsigned int __stdcall CMonitoringServer::DisplayThread(LPVOID arg)
 			"  PacketPool Use: %d / %d", poolUse, poolCap);
 		pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
 
+		// 공격성 패킷 누적 카운터
+		long lanInvLen = pServer->_lanServer.getInvalidPacketLenCount();
+		long netInvCode = pServer->_netServer.getInvalidPacketCodeCount();
+		long netInvLen = pServer->_netServer.getInvalidPacketLenCount();
+		long netDecodeFail = pServer->_netServer.getDecodeForNetFailCount();
+		sprintf_s(line, sizeof(line),
+			"  [LAN] InvLen:%ld", lanInvLen);
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+		sprintf_s(line, sizeof(line),
+			"  [NET] InvCode:%ld  InvLen:%ld  DecodeFail:%ld",
+			netInvCode, netInvLen, netDecodeFail);
+		pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, line);
+
 		pos += sprintf_s(buf + pos, sizeof(buf) - pos,
 			"%-*s\n", LINE_WIDTH,
 			"----------------------------------------------------------------------");
 
 		// 빈 줄로 나머지 채우기 (이전 출력 잔상 제거)
-		for (int i = 0; i < 5; i++)
+		for (int i = 0; i < 3; i++)
 		{
 			pos += sprintf_s(buf + pos, sizeof(buf) - pos, "%-*s\n", LINE_WIDTH, "");
 		}

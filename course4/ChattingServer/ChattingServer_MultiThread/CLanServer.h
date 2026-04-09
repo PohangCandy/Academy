@@ -70,13 +70,20 @@ private:
 	std::atomic<int> _acceptTPS{ 0 };
 	std::atomic<long long> _totalAcceptCount{ 0 };
 	alignas(64) volatile long _sendBufferFullCount = 0;
+	// 누적 카운터 (공격 패킷)
+	alignas(64) volatile long _invalidPacketCodeCount = 0;
+	alignas(64) volatile long _invalidPacketLenCount = 0;
+	alignas(64) volatile long _decodeForNetFailCount = 0;
 	int _recvMessageTPS = 0;
 	int _sendMessageTPS = 0;
 
 public:
 	int getAcceptTPS() { return _acceptTPS; }
 	long long getTotalAcceptCount() { return _totalAcceptCount.load(std::memory_order_relaxed); }
-	long getSendBufferFullCount() { return InterlockedExchange(&_sendBufferFullCount, 0); }
+	long getSendBufferFullCount() { return _sendBufferFullCount; }
+	long getInvalidPacketCodeCount() { return _invalidPacketCodeCount; }
+	long getInvalidPacketLenCount() { return _invalidPacketLenCount; }
+	long getDecodeForNetFailCount() { return _decodeForNetFailCount; }
 	int getRecvMessageTPS() { return _recvMessageTPS; }
 	int getSendMessageTPS() { return _sendMessageTPS; }
 };

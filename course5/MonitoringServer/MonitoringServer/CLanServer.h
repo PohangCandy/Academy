@@ -66,6 +66,8 @@ private:
 	std::atomic<int> _sessionCount{ 0 };
 	std::atomic<int> _acceptCount{ 0 };
 	std::atomic<int> _acceptTPS{ 0 };
+	// 누적 카운터 (공격 패킷)
+	alignas(64) volatile long _invalidPacketLenCount = 0;
 	int _recvMessageTPS = 0;
 	int _sendMessageTPS = 0;
 
@@ -73,4 +75,5 @@ public:
 	int getAcceptTPS() { return _acceptTPS; }
 	int getRecvMessageTPS() { return _recvMessageTPS; }
 	int getSendMessageTPS() { return _sendMessageTPS; }
+	long getInvalidPacketLenCount() { return _invalidPacketLenCount; }
 };
