@@ -282,42 +282,45 @@ unsigned int __stdcall CLanServer::WorkerThread(LPVOID arg)
 			if (rb->MoveRear(cbTransferred) == 0)
 			{
 				LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
-					L"[Session:%llu] Recv buffer full", ptr->_sessionKey.GetSessionId());
-				__debugbreak();
+					L"[Session:%llu] RecvBuf overflow - Disconnect",
+					ptr->_sessionKey.GetSessionId());
+				pServer->Disconnect(ptr->_sessionKey);
 			}
-
-			// LAN 패킷 파싱 (단순 WORD Len 헤더)
-			while (rb->GetUseSize() >= dfLAN_HEADERSIZE)
+			else
 			{
-				char tempHead[dfLAN_HEADERSIZE];
-				rb->Peek(tempHead, dfLAN_HEADERSIZE);
-				LanPacketHeader* header = (LanPacketHeader*)tempHead;
-
-				if (header->Len > 500)
+				// LAN 패킷 파싱 (단순 WORD Len 헤더)
+				while (rb->GetUseSize() >= dfLAN_HEADERSIZE)
 				{
-					LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
-						L"[Session:%llu] Oversized Packet Len: %d",
-						ptr->_sessionKey.GetSessionId(), header->Len);
-					pServer->Disconnect(ptr->_sessionKey);
-					break;
+					char tempHead[dfLAN_HEADERSIZE];
+					rb->Peek(tempHead, dfLAN_HEADERSIZE);
+					LanPacketHeader* header = (LanPacketHeader*)tempHead;
+
+					if (header->Len == 0 || header->Len > 500)
+					{
+						LOG(L"LanServer", CSystemLog::LEVEL_ERROR,
+							L"[Session:%llu] Invalid Packet Len: %d",
+							ptr->_sessionKey.GetSessionId(), header->Len);
+						pServer->Disconnect(ptr->_sessionKey);
+						break;
+					}
+
+					if (rb->GetUseSize() < dfLAN_HEADERSIZE + header->Len)
+						break;
+
+					rb->MoveFront(dfLAN_HEADERSIZE);
+
+					char tempBuf[500];
+					rb->Dequeue(tempBuf, header->Len);
+
+					CPacket* contentPacket = CPacket::Alloc();
+					contentPacket->PutData(tempBuf, header->Len);
+
+					pServer->OnRecv(ptr->_sessionKey, contentPacket);
+					contentPacket->SubRef();
 				}
 
-				if (rb->GetUseSize() < dfLAN_HEADERSIZE + header->Len)
-					break;
-
-				rb->MoveFront(dfLAN_HEADERSIZE);
-
-				char tempBuf[500];
-				rb->Dequeue(tempBuf, header->Len);
-
-				CPacket* contentPacket = CPacket::Alloc();
-				contentPacket->PutData(tempBuf, header->Len);
-
-				pServer->OnRecv(ptr->_sessionKey, contentPacket);
-				contentPacket->SubRef();
+				pServer->WsaRecvSession(ptr);
 			}
-
-			pServer->WsaRecvSession(ptr);
 
 			SessionKey origin = ptr->_sessionKey;
 			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)

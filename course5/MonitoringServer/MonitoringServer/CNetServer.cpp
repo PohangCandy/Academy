@@ -278,63 +278,66 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 			if (rb->MoveRear(cbTransferred) == 0)
 			{
 				LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
-					L"[Session:%llu] Recv buffer full", ptr->_sessionKey.GetSessionId());
-				__debugbreak();
+					L"[Session:%llu] RecvBuf overflow - Disconnect",
+					ptr->_sessionKey.GetSessionId());
+				pServer->Disconnect(ptr->_sessionKey);
 			}
-
-			// NET 패킷 파싱 (5바이트 암호화 헤더)
-			while (rb->GetUseSize() >= dfNET_HEADERSIZE)
+			else
 			{
-				char tempHead[dfNET_HEADERSIZE];
-				rb->Peek(tempHead, dfNET_HEADERSIZE);
-				PacketHeader* header = (PacketHeader*)tempHead;
-
-				// 패킷 코드 검증
-				if (header->Code != dfNET_PACKET_CODE)
+				// NET 패킷 파싱 (5바이트 암호화 헤더)
+				while (rb->GetUseSize() >= dfNET_HEADERSIZE)
 				{
-					LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
-						L"[Session:%llu] Invalid PacketCode: %d",
-						ptr->_sessionKey.GetSessionId(), header->Code);
-					pServer->Disconnect(ptr->_sessionKey);
-					break;
-				}
+					char tempHead[dfNET_HEADERSIZE];
+					rb->Peek(tempHead, dfNET_HEADERSIZE);
+					PacketHeader* header = (PacketHeader*)tempHead;
 
-				if (header->Len > 500)
-				{
-					LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
-						L"[Session:%llu] Oversized Packet Len: %d",
-						ptr->_sessionKey.GetSessionId(), header->Len);
-					pServer->Disconnect(ptr->_sessionKey);
-					break;
-				}
+					// 패킷 코드 검증
+					if (header->Code != dfNET_PACKET_CODE)
+					{
+						LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
+							L"[Session:%llu] Invalid PacketCode: %d",
+							ptr->_sessionKey.GetSessionId(), header->Code);
+						pServer->Disconnect(ptr->_sessionKey);
+						break;
+					}
 
-				if (rb->GetUseSize() < dfNET_HEADERSIZE + header->Len)
-					break;
+					if (header->Len == 0 || header->Len > 500)
+					{
+						LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
+							L"[Session:%llu] Invalid Packet Len: %d",
+							ptr->_sessionKey.GetSessionId(), header->Len);
+						pServer->Disconnect(ptr->_sessionKey);
+						break;
+					}
 
-				rb->MoveFront(dfNET_HEADERSIZE);
+					if (rb->GetUseSize() < dfNET_HEADERSIZE + header->Len)
+						break;
 
-				char tempBuf[500];
-				rb->Dequeue(tempBuf, header->Len);
+					rb->MoveFront(dfNET_HEADERSIZE);
 
-				CPacket* contentPacket = CPacket::Alloc();
-				contentPacket->PutData(tempBuf, header->Len);
+					char tempBuf[500];
+					rb->Dequeue(tempBuf, header->Len);
 
-				// NET 디코딩 (복호화 + 체크섬 검증)
-				if (!contentPacket->DecodeForNet(header, dfNET_PACKET_KEY))
-				{
-					LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
-						L"[Session:%llu] DecodeForNet failed (checksum mismatch)",
-						ptr->_sessionKey.GetSessionId());
+					CPacket* contentPacket = CPacket::Alloc();
+					contentPacket->PutData(tempBuf, header->Len);
+
+					// NET 디코딩 (복호화 + 체크섬 검증)
+					if (!contentPacket->DecodeForNet(header, dfNET_PACKET_KEY))
+					{
+						LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
+							L"[Session:%llu] DecodeForNet failed (checksum mismatch)",
+							ptr->_sessionKey.GetSessionId());
+						contentPacket->SubRef();
+						pServer->Disconnect(ptr->_sessionKey);
+						break;
+					}
+
+					pServer->OnRecv(ptr->_sessionKey, contentPacket);
 					contentPacket->SubRef();
-					pServer->Disconnect(ptr->_sessionKey);
-					break;
 				}
 
-				pServer->OnRecv(ptr->_sessionKey, contentPacket);
-				contentPacket->SubRef();
+				pServer->WsaRecvSession(ptr);
 			}
-
-			pServer->WsaRecvSession(ptr);
 
 			SessionKey origin = ptr->_sessionKey;
 			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
