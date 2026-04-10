@@ -25,9 +25,9 @@
 #include "CMonitorClient.h"
 #include <vector>
 
-// MySQL forward
-struct st_mysql;
-typedef st_mysql MYSQL;
+// MySQL 헤더: forward 선언은 typedef 충돌(struct MYSQL vs struct st_mysql) 로
+// 정의/선언이 서로 다른 타입으로 인식되는 문제가 있어 실제 헤더를 포함한다.
+#include "C:\Program Files\MySQL\MySQL Server 8.0\include\mysql.h"
 
 class LoginServer : public CNetServer
 {

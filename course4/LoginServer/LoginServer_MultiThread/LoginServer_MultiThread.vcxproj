@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{AF739F9E-809F-480D-B1E5-487073B77A61}</ProjectGuid>
+    <ProjectGuid>{CA46A458-9C43-4A9D-B79C-BA91D42EE308}</ProjectGuid>
     <RootNamespace>LoginServerMultiThread</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>

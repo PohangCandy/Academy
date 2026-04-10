@@ -4,10 +4,12 @@
 
 #include <Windows.h>
 #include <DbgHelp.h>
+#include <Psapi.h>
 #include <stdio.h>
 #include <time.h>
 
 #pragma comment(lib, "DbgHelp.lib")
+#pragma comment(lib, "Psapi.lib")
 
 class CCrashDump
 {

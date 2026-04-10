@@ -1,6 +1,10 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #pragma comment(lib, "ws2_32")
 
+// WSASend 호출 1회에 묶을 수 있는 WSABUF 개수 상한.
+// CLanClient.cpp 와 동일한 값을 사용한다.
+#define dfSEND_WSABUF_MAX	(128)
+
 #include "CNetServer.h"
 #include "CommonProtocol.h"
 #include "cSessionMap.h"

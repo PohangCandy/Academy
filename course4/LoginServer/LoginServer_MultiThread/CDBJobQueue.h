@@ -1,17 +1,21 @@
 #pragma once
 //------------------------------------------------------------
-// CDBJobQueue - DB 워커 스레드용 MPSC/MPMC 작업 큐
+// CDBJobQueue - DB 워커 스레드용 작업 큐
 //
 // IOCP 워커 스레드는 동기 mysql_query 를 호출하면 묶이므로,
 // 받은 LOGIN 요청을 이 큐에 enqueue 만 하고 빠져나간다.
 // 별도의 DB 워커 스레드들이 큐에서 pop 하여 처리한다.
 //
-// 동기화: CRITICAL_SECTION + CONDITION_VARIABLE
+// 동기화: std::mutex + std::condition_variable (C++11)
+//   -> Win32 CONDITION_VARIABLE 보다 이식성/빌드 안정성 우수
 //------------------------------------------------------------
 
 #include "stdafx.h"
-#include "SessionKey.h"
 #include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <cstdint>
+#include "SessionKey.h"
 
 enum eDBJobType
 {
@@ -41,11 +45,11 @@ public:
 	// 모든 대기 워커를 깨워서 종료시킴
 	void Stop();
 
-	int GetSize();
+	int  GetSize();
 
 private:
-	CRITICAL_SECTION   _cs;
-	CONDITION_VARIABLE _cv;
-	std::queue<DBJob>  _q;
-	volatile bool      _bStopped;
+	std::mutex              _mtx;
+	std::condition_variable _cv;
+	std::queue<DBJob>       _q;
+	bool                    _bStopped;
 };

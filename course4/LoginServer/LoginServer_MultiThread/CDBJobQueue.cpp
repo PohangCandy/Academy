@@ -3,59 +3,47 @@
 CDBJobQueue::CDBJobQueue()
 	: _bStopped(false)
 {
-	InitializeCriticalSection(&_cs);
-	InitializeConditionVariable(&_cv);
 }
 
 CDBJobQueue::~CDBJobQueue()
 {
-	DeleteCriticalSection(&_cs);
 }
 
 void CDBJobQueue::Push(const DBJob& job)
 {
-	EnterCriticalSection(&_cs);
-	_q.push(job);
-	LeaveCriticalSection(&_cs);
-
+	{
+		std::lock_guard<std::mutex> lk(_mtx);
+		_q.push(job);
+	}
 	// 한 명만 깨우면 충분 (FIFO 처리)
-	WakeConditionVariable(&_cv);
+	_cv.notify_one();
 }
 
 bool CDBJobQueue::Pop(DBJob& job)
 {
-	EnterCriticalSection(&_cs);
-	while (_q.empty() && !_bStopped)
-	{
-		SleepConditionVariableCS(&_cv, &_cs, INFINITE);
-	}
+	std::unique_lock<std::mutex> lk(_mtx);
+	_cv.wait(lk, [this]() { return !_q.empty() || _bStopped; });
 
 	if (_bStopped && _q.empty())
-	{
-		LeaveCriticalSection(&_cs);
 		return false;
-	}
 
 	job = _q.front();
 	_q.pop();
-	LeaveCriticalSection(&_cs);
 	return true;
 }
 
 void CDBJobQueue::Stop()
 {
-	EnterCriticalSection(&_cs);
-	_bStopped = true;
-	LeaveCriticalSection(&_cs);
-
+	{
+		std::lock_guard<std::mutex> lk(_mtx);
+		_bStopped = true;
+	}
 	// 대기 중인 모든 워커를 깨움
-	WakeAllConditionVariable(&_cv);
+	_cv.notify_all();
 }
 
 int CDBJobQueue::GetSize()
 {
-	EnterCriticalSection(&_cs);
-	int s = (int)_q.size();
-	LeaveCriticalSection(&_cs);
-	return s;
+	std::lock_guard<std::mutex> lk(_mtx);
+	return (int)_q.size();
 }

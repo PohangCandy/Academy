@@ -11,16 +11,13 @@
 #pragma comment(lib, "libmysql.lib")
 
 //------------------------------------------------------------
-// 모니터링 데이터 타입 (MonitorProtocol.h 에서 발췌)
+// 모니터링 데이터 타입은 CommonProtocol.h 의
+// en_PACKET_SS_MONITOR_DATA_UPDATE 에 이미 정의되어 있으므로 그대로 사용.
+//   dfMONITOR_DATA_TYPE_LOGIN_SESSION     (= 1)
+//   dfMONITOR_DATA_TYPE_LOGIN_AUTH_TPS    (= 2)
+//   dfMONITOR_DATA_TYPE_LOGIN_PACKET_POOL (= 3)
+//   dfMONITOR_DATA_TYPE_LOGIN_SERVER_ON   (= 4)
 //------------------------------------------------------------
-enum {
-	dfMONITOR_DATA_TYPE_LOGIN_SERVER_RUN  = 1,
-	dfMONITOR_DATA_TYPE_LOGIN_SERVER_CPU  = 2,
-	dfMONITOR_DATA_TYPE_LOGIN_SERVER_MEM  = 3,
-	dfMONITOR_DATA_TYPE_LOGIN_SESSION     = 4,
-	dfMONITOR_DATA_TYPE_LOGIN_AUTH_TPS    = 5,
-	dfMONITOR_DATA_TYPE_LOGIN_PACKET_POOL = 6,
-};
 
 LoginServer::LoginServer()
 {
@@ -54,19 +51,19 @@ bool LoginServer::StartServer(int port, int maxSession,
 		if (!mysql_real_connect(&initConn, _dbHost.c_str(), _dbUser.c_str(),
 		                        _dbPasswd.c_str(), _dbSchema.c_str(), _dbPort, NULL, 0))
 		{
-			LOG(L"LoginServer", CSystemLog::LEVEL_FATAL,
+			LOG(L"LoginServer", CSystemLog::LEVEL_ERROR,
 			    L"DB init connect failed: %S", mysql_error(&initConn));
 			return false;
 		}
 		if (mysql_query(&initConn, "UPDATE status SET status = 0") != 0)
 		{
-			LOG(L"LoginServer", CSystemLog::LEVEL_FATAL,
+			LOG(L"LoginServer", CSystemLog::LEVEL_ERROR,
 			    L"status init query failed: %S", mysql_error(&initConn));
 			mysql_close(&initConn);
 			return false;
 		}
 		mysql_close(&initConn);
-		LOG(L"LoginServer", CSystemLog::LEVEL_INFO, L"DB status table initialized");
+		LOG(L"LoginServer", CSystemLog::LEVEL_SYSTEM, L"DB status table initialized");
 	}
 
 	//----------------------------------------------------------
@@ -81,13 +78,13 @@ bool LoginServer::StartServer(int port, int maxSession,
 		HANDLE h = (HANDLE)_beginthreadex(NULL, 0, DBWorkerThread, this, 0, &tid);
 		if (h == NULL)
 		{
-			LOG(L"LoginServer", CSystemLog::LEVEL_FATAL,
+			LOG(L"LoginServer", CSystemLog::LEVEL_ERROR,
 			    L"DB worker thread create failed (idx:%d)", i);
 			return false;
 		}
 		_hDBWorkers.push_back(h);
 	}
-	LOG(L"LoginServer", CSystemLog::LEVEL_INFO,
+	LOG(L"LoginServer", CSystemLog::LEVEL_SYSTEM,
 	    L"DB workers started: count=%d", _dbWorkerCount);
 
 	//----------------------------------------------------------
@@ -95,11 +92,11 @@ bool LoginServer::StartServer(int port, int maxSession,
 	//----------------------------------------------------------
 	if (!CNetServer::Start(port, maxSession, netWorkerCount))
 	{
-		LOG(L"LoginServer", CSystemLog::LEVEL_FATAL,
+		LOG(L"LoginServer", CSystemLog::LEVEL_ERROR,
 		    L"CNetServer::Start failed (port:%d)", port);
 		return false;
 	}
-	LOG(L"LoginServer", CSystemLog::LEVEL_INFO,
+	LOG(L"LoginServer", CSystemLog::LEVEL_SYSTEM,
 	    L"NetServer started: port=%d, maxSession=%d, netWorkers=%d",
 	    port, maxSession, netWorkerCount);
 
@@ -108,13 +105,13 @@ bool LoginServer::StartServer(int port, int maxSession,
 	//----------------------------------------------------------
 	if (!_monitorClient.ConnectToMonitor(monitorIP, monitorPort, serverNo))
 	{
-		LOG(L"LoginServer", CSystemLog::LEVEL_WARN,
+		LOG(L"LoginServer", CSystemLog::LEVEL_ERROR,
 		    L"MonitorClient connect failed (%S:%d) - continue without monitor",
 		    monitorIP, monitorPort);
 	}
 	else
 	{
-		LOG(L"LoginServer", CSystemLog::LEVEL_INFO,
+		LOG(L"LoginServer", CSystemLog::LEVEL_SYSTEM,
 		    L"MonitorClient connected (%S:%d serverNo=%d)",
 		    monitorIP, monitorPort, serverNo);
 	}
@@ -127,7 +124,7 @@ bool LoginServer::StartServer(int port, int maxSession,
 	_hTimerThread = (HANDLE)_beginthreadex(NULL, 0, TimerThread, this, 0, &tid);
 	if (_hTimerThread == NULL)
 	{
-		LOG(L"LoginServer", CSystemLog::LEVEL_FATAL, L"TimerThread create failed");
+		LOG(L"LoginServer", CSystemLog::LEVEL_ERROR, L"TimerThread create failed");
 		return false;
 	}
 
@@ -256,7 +253,7 @@ unsigned int __stdcall LoginServer::DBWorkerThread(LPVOID arg)
 	                        pServer->_dbSchema.c_str(),
 	                        pServer->_dbPort, NULL, 0))
 	{
-		LOG(L"LoginServer", CSystemLog::LEVEL_FATAL,
+		LOG(L"LoginServer", CSystemLog::LEVEL_ERROR,
 		    L"DB worker connect failed: %S", mysql_error(&conn));
 		return 0;
 	}
@@ -465,7 +462,7 @@ unsigned int __stdcall LoginServer::TimerThread(LPVOID arg)
 		// monitor 송신
 		//------------------------------------------------------
 		int now = (int)time(NULL);
-		pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_SERVER_RUN, 1, now);
+		pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_SERVER_ON, 1, now);
 		pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_SESSION,    sessionCount, now);
 		pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_AUTH_TPS,   authTPS, now);
 		pServer->_monitorClient.SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_PACKET_POOL,packetPoolUse, now);
