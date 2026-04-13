@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "LoginServer.h"
 #include "CPacketForMultiThread.h"
 #include "CrashDump.h"
@@ -36,7 +36,7 @@ int main()
 	CSystemLog::GetInstance()->SetConsoleOutput(consoleOutput);
 
 	// 서버 설정
-	int loginPort       = config.GetInt   ("LoginServer", "PORT",            21500);
+	int loginPort       = config.GetInt   ("LoginServer", "PORT",            30000);
 	int maxSession      = config.GetInt   ("LoginServer", "MAX_SESSION",     5000);
 	int netWorkerCount  = config.GetInt   ("LoginServer", "NET_WORKER_COUNT", 0);
 
@@ -65,6 +65,8 @@ int main()
 	printf("  Monitor %s:%d  ServerNo:%d\n",
 	    monitorIP, monitorPort, serverNo);
 	printf("  PacketPool max:%d\n", maxPacketPool);
+	printf("  DB %s:%d/%s  DBWorker:%d  Pass:[%s]\n",
+		dbHost, dbPort, dbSchema, dbWorkerCount, dbPass);
 
 	LoginServer loginServer;
 

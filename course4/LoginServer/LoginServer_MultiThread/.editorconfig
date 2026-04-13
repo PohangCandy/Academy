@@ -1,0 +1,28 @@
+# LoginServer_MultiThread 전용 EditorConfig
+# - root = true 로 설정하여 상위 디렉터리(ChatServer 등)의 .editorconfig 탐색을 차단.
+# - 이 폴더 안에서만 동작하므로 ChatServer / MonitoringServer 에는 영향 없음.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{c,cpp,h,hpp}]
+# MSVC 는 /utf-8 옵션이 켜져 있으면 BOM 없이도 UTF-8 로 읽지만,
+# 다른 도구(grep, diff, 외부 에디터)와의 호환성을 위해 BOM 포함으로 저장.
+charset = utf-8-bom
+indent_style = tab
+indent_size = 4
+
+[*.{xml,vcxproj,vcxproj.filters,props,targets}]
+charset = utf-8
+indent_style = space
+indent_size = 2
+
+[*.ini]
+charset = utf-8
+indent_style = space
+indent_size = 4

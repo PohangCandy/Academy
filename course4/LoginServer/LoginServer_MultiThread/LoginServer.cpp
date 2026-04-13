@@ -136,7 +136,7 @@ void LoginServer::StopServer()
 	// 1. NetServer 먼저 종료 (신규 접속 차단 + 기존 세션 정리 + 워커 스레드 join)
 	CNetServer::Stop();
 
-	// 2. DB 워커들에게 종료 신호 → 처리 중인 작업은 마저 끝낸 후 종료
+	// 2. DB 워커들에게 종료 신호 -> 처리 중인 작업은 마저 끝낸 후 종료
 	_dbJobQueue.Stop();
 	if (!_hDBWorkers.empty())
 	{
@@ -184,7 +184,7 @@ void LoginServer::OnRecv(SessionKey s, CPacket* pPacket)
 
 	if (pPacket->GetDataSize() < (int)sizeof(WORD))
 	{
-		// 비정상 패킷 — 헤더만 와있는 케이스. Disconnect
+		// 비정상 패킷 - 헤더만 와있는 케이스. Disconnect
 		Disconnect(s);
 		return;
 	}
@@ -231,7 +231,7 @@ void LoginServer::Handle_CS_LOGIN_REQ_LOGIN(SessionKey s, CPacket* pPacket)
 	*pPacket >> job.accountNo;
 	pPacket->GetData(job.sessionToken, sizeof(job.sessionToken));
 
-	// IOCP 워커 컨텍스트에서는 DB 호출 금지 → 큐로 넘김
+	// IOCP 워커 컨텍스트에서는 DB 호출 금지 -> 큐로 넘김
 	_dbJobQueue.Push(job);
 }
 
@@ -417,7 +417,7 @@ void LoginServer::Process_DBJob_Login(MYSQL* conn, const DBJob& job)
 
 	if (!ret)
 	{
-		// 보내는 사이 클라가 끊겼음 — 정상 가능. 카운터만 누적, 로그 X
+		// 보내는 사이 클라가 끊겼음 - 정상 가능. 카운터만 누적, 로그 X
 		// (Q3 정책: 응답 못 보내는 경우는 그냥 무시)
 	}
 
@@ -429,7 +429,7 @@ void LoginServer::Process_DBJob_Login(MYSQL* conn, const DBJob& job)
 }
 
 //============================================================
-// 타이머 스레드 — 1초마다 콘솔 출력 + monitor 송신
+// 타이머 스레드 - 1초마다 콘솔 출력 + monitor 송신
 //============================================================
 
 unsigned int __stdcall LoginServer::TimerThread(LPVOID arg)

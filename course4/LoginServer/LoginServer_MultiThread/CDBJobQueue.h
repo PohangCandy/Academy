@@ -39,10 +39,8 @@ public:
 
 	void Push(const DBJob& job);
 
-	// true = job 채워짐, false = stop 신호로 깨어남
 	bool Pop(DBJob& job);
 
-	// 모든 대기 워커를 깨워서 종료시킴
 	void Stop();
 
 	int  GetSize();

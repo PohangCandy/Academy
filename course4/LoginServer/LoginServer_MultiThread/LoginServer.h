@@ -11,7 +11,7 @@
 //   [CDBJobQueue] -- DB 워커들이 pop
 //        |
 //        v
-//   [CDBWorker thread × N]
+//   [CDBWorker thread x N]
 //        |  mysql_query (blocking)
 //        v
 //   [CNetServer::SendPacket(sessionKey, resPacket)]  -- 응답

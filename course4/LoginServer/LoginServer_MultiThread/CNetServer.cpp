@@ -101,7 +101,7 @@ bool CNetServer::Start(int port, int maxSession, int workerThreadCount)
 
 void CNetServer::Stop()
 {
-	// 1. 리슨소켓 닫기 → Accept 스레드 종료, 신규 접속 차단
+	// 1. 리슨소켓 닫기 -> Accept 스레드 종료, 신규 접속 차단
 	if (_listenSock != INVALID_SOCKET)
 	{
 		closesocket(_listenSock);
@@ -235,11 +235,11 @@ unsigned int __stdcall CNetServer::AcceptThread(LPVOID arg)
 
 		//------------------------------------------------------------
 		// _IOCount는 AllocSessionptr에서 이미 1로 초기화됨 (AcceptThread 소유권)
-		// WSARecv를 위해 +1 → IOCount = 2
+		// WSARecv를 위해 +1 -> IOCount = 2
 		//------------------------------------------------------------
 		if (!pServer->_pSessionMap->IncreaseSessionIO(ptr))
 		{
-			// 이미 Release된 상태 — 초기 IOCount=1인데 여기서 실패하면 논리 오류
+			// 이미 Release된 상태 - 초기 IOCount=1인데 여기서 실패하면 논리 오류
 			__debugbreak();
 		}
 
@@ -255,7 +255,7 @@ unsigned int __stdcall CNetServer::AcceptThread(LPVOID arg)
 				LOG(L"NetServer", CSystemLog::LEVEL_ERROR,
 					L"[Session:%llu] AcceptThread initial WSARecv failed (err:%d)",
 					ptr->_sessionKey.GetSessionId(), WSAGetLastError());
-				// WSARecv 실패 — WSARecv의 IOCount(+1분) 회수
+				// WSARecv 실패 - WSARecv의 IOCount(+1분) 회수
 				SessionKey origin = ptr->_sessionKey;
 				if (pServer->_pSessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 				{
@@ -267,7 +267,7 @@ unsigned int __stdcall CNetServer::AcceptThread(LPVOID arg)
 
 		//------------------------------------------------------------
 		// AcceptThread 소유권 반환 (초기 IOCount=1 분)
-		// 이 시점에서 모든 초기화 완료 — 세션 해제 허용
+		// 이 시점에서 모든 초기화 완료 - 세션 해제 허용
 		//------------------------------------------------------------
 		{
 			SessionKey origin = ptr->_sessionKey;
@@ -304,7 +304,7 @@ unsigned int __stdcall CNetServer::WorkerThread(LPVOID arg)
 
 		if (cbTransferred == 0 || retval == 0)
 		{
-			// 정상 종료 / 클라 연결 끊김 — 로그 생략 (재접속 더미로 인한 폭증 방지)
+			// 정상 종료 / 클라 연결 끊김 - 로그 생략 (재접속 더미로 인한 폭증 방지)
 			SessionKey origin = ptr->_sessionKey;
 			if (sessionMap->DecreaseSessionIO(ptr) == ReleaseResult::Released)
 			{
@@ -442,7 +442,7 @@ bool CNetServer::Disconnect(SessionKey sessionkey)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
 	{
-		// 재활용된 세션 — IOCount 증가분만 되돌림, Release 로직 금지
+		// 재활용된 세션 - IOCount 증가분만 되돌림, Release 로직 금지
 		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
 		return false;
 	}
@@ -465,7 +465,7 @@ bool CNetServer::SendPacket(SessionKey sessionkey, CPacket* cp)
 
 	if (ptr->_sessionKey.GetSessionId() != sessionkey.GetSessionId())
 	{
-		// 재활용된 세션 — IOCount 증가분만 되돌림, Release 로직 금지
+		// 재활용된 세션 - IOCount 증가분만 되돌림, Release 로직 금지
 		InterlockedDecrement((unsigned long*)&ptr->_IOCount);
 		return false;
 	}
